@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table)",
+      "Bash(\"venv/Scripts/python.exe\" manage.py runserver)",
+      "Bash(npm run *)",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\\\\backend\"; venv\\\\Scripts\\\\activate; python manage.py runserver' -WindowStyle Normal)",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\\\\frontend\"; npm run dev' -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/api/' -TimeoutSec 3 -UseBasicParsing; \"Backend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Backend: $\\($_.Exception.Message\\)\" }; try { $r = Invoke-WebRequest -Uri 'http://localhost:3000' -TimeoutSec 5 -UseBasicParsing; \"Frontend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Frontend: $\\($_.Exception.Message\\)\" })"
+    ]
+  }
+}
