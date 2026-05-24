@@ -106,6 +106,13 @@ export const familyApi = {
 };
 
 // ─────────────────────────────────────────────
+// Audit Logs
+// ─────────────────────────────────────────────
+export const auditLogsApi = {
+  list: (params?: Record<string, unknown>) => api.get('/core/audit-logs/', { params }),
+};
+
+// ─────────────────────────────────────────────
 // Attachments
 // ─────────────────────────────────────────────
 export const attachmentsApi = {
