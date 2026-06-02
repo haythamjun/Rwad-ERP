@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Search, Download, Filter, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, Search, Download, Filter, ChevronRight, ChevronLeft, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { downloadBlob, STATUS_COLORS } from '@/lib/utils';
 import type { PaginatedResponse, Student, StudentFilters } from '@/types';
 import Header from '@/components/layout/Header';
+import ImportModal from '@/components/students/ImportModal';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'كل الحالات' },
@@ -44,8 +45,10 @@ const GENDER_OPTIONS = [
 
 export default function StudentsPage() {
   const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<StudentFilters>({ page: 1 });
   const [exporting, setExporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { data, isLoading } = useQuery<PaginatedResponse<Student>>({
     queryKey: ['students', filters],
@@ -93,10 +96,19 @@ export default function StudentsPage() {
               {exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}
             </button>
             {user?.can_write && (
-              <Link href="/students/new" className="btn-primary">
-                <Plus size={16} />
-                إضافة طالب
-              </Link>
+              <>
+                <button
+                  onClick={() => setImportOpen(true)}
+                  className="btn-secondary"
+                >
+                  <Upload size={16} />
+                  استيراد Excel
+                </button>
+                <Link href="/students/new" className="btn-primary">
+                  <Plus size={16} />
+                  إضافة طالب
+                </Link>
+              </>
             )}
           </>
         }
@@ -239,6 +251,17 @@ export default function StudentsPage() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* Import Modal */}
+        {importOpen && (
+          <ImportModal
+            onClose={() => setImportOpen(false)}
+            onDone={() => {
+              queryClient.invalidateQueries({ queryKey: ['students'] });
+              setImportOpen(false);
+            }}
+          />
         )}
 
         {/* Pagination */}

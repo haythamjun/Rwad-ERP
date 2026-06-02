@@ -330,3 +330,253 @@ class StudentExportView(APIView):
 
         log_action(request, 'export', None, 'تصدير قائمة الطلاب إلى Excel')
         return response
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Import
+# ──────────────────────────────────────────────────────────────────────────────
+
+GENDER_MAP = {'ذكر': 'male', 'أنثى': 'female', 'male': 'male', 'female': 'female'}
+
+STATUS_MAP = {
+    'في انتظار القبول': 'pending', 'pending': 'pending',
+    'نشط': 'active', 'active': 'active',
+    'غير نشط': 'inactive', 'inactive': 'inactive',
+    'خرّيج': 'graduated', 'graduated': 'graduated',
+    'موقوف': 'suspended', 'suspended': 'suspended',
+    'محوّل': 'transferred', 'transferred': 'transferred',
+}
+
+DISABILITY_MAP = {
+    'إعاقة ذهنية': 'intellectual', 'intellectual': 'intellectual',
+    'طيف التوحد': 'autism', 'autism': 'autism',
+    'متلازمة داون': 'down', 'down': 'down',
+    'إعاقة حركية': 'physical', 'physical': 'physical',
+    'إعاقة سمعية': 'hearing', 'hearing': 'hearing',
+    'إعاقة بصرية': 'visual', 'visual': 'visual',
+    'إعاقة لغوية / نطقية': 'speech', 'speech': 'speech',
+    'صعوبات تعلم': 'learning', 'learning': 'learning',
+    'اضطراب سلوكي': 'behavioral', 'behavioral': 'behavioral',
+    'إعاقة مركّبة': 'multiple', 'multiple': 'multiple',
+    'أخرى': 'other', 'other': 'other',
+}
+
+DEGREE_MAP = {
+    'بسيطة': 'mild', 'mild': 'mild',
+    'متوسطة': 'moderate', 'moderate': 'moderate',
+    'شديدة': 'severe', 'severe': 'severe',
+    'شديدة جداً': 'profound', 'profound': 'profound',
+}
+
+EDU_MAP = {
+    'لا يتعلم': 'none', 'none': 'none',
+    'رياض أطفال': 'kindergarten', 'kindergarten': 'kindergarten',
+    'ابتدائي': 'elementary', 'elementary': 'elementary',
+    'متوسط': 'intermediate', 'intermediate': 'intermediate',
+    'ثانوي': 'secondary', 'secondary': 'secondary',
+    'جامعي': 'university', 'university': 'university',
+    'برنامج تربية خاصة': 'special', 'special': 'special',
+}
+
+REFERRAL_MAP = {
+    'مستشفى / عيادة': 'hospital', 'hospital': 'hospital',
+    'مدرسة': 'school', 'school': 'school',
+    'الأسرة مباشرة': 'family', 'family': 'family',
+    'جمعية / مؤسسة': 'ngo', 'ngo': 'ngo',
+    'وزارة / جهة حكومية': 'ministry', 'ministry': 'ministry',
+    'طبيب / معالج': 'specialist', 'specialist': 'specialist',
+    'أخرى': 'other', 'other': 'other',
+}
+
+
+def _cell(row, idx):
+    val = row[idx].value
+    return str(val).strip() if val is not None else ''
+
+
+class StudentImportView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from datetime import date as date_type
+
+        if not request.user.can_write:
+            return Response({'detail': 'ليس لديك صلاحية الاستيراد.'}, status=status.HTTP_403_FORBIDDEN)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'لم يتم إرفاق ملف.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            wb = openpyxl.load_workbook(file, data_only=True)
+            ws = wb.active
+        except Exception:
+            return Response({'detail': 'تعذّر قراءة الملف. تأكد أنه ملف Excel صحيح.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rows = list(ws.iter_rows(min_row=2))
+        if not rows:
+            return Response({'detail': 'الملف فارغ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        created, skipped, errors = 0, 0, []
+
+        for i, row in enumerate(rows, start=2):
+            if len(row) < 5:
+                continue
+
+            full_name   = _cell(row, 0)
+            national_id = _cell(row, 1)
+            dob_raw     = _cell(row, 2)
+            gender_raw  = _cell(row, 3)
+            nationality = _cell(row, 4)
+
+            if not any([full_name, national_id, dob_raw]):
+                continue  # صف فارغ
+
+            row_errors = []
+
+            if not full_name:
+                row_errors.append('الاسم الكامل مطلوب')
+            if not national_id:
+                row_errors.append('رقم الهوية مطلوب')
+            elif not national_id.isdigit() or len(national_id) != 10:
+                row_errors.append('رقم الهوية يجب أن يكون 10 أرقام')
+            if not nationality:
+                row_errors.append('الجنسية مطلوبة')
+
+            gender = GENDER_MAP.get(gender_raw)
+            if not gender:
+                row_errors.append(f'الجنس غير صحيح: "{gender_raw}" — استخدم: ذكر أو أنثى')
+
+            try:
+                if isinstance(row[2].value, date_type):
+                    dob = row[2].value
+                else:
+                    from datetime import datetime
+                    dob = datetime.strptime(dob_raw, '%Y-%m-%d').date()
+                today = date_type.today()
+                if dob > today:
+                    row_errors.append('تاريخ الميلاد في المستقبل')
+                elif dob < today.replace(year=today.year - 100):
+                    row_errors.append('تاريخ الميلاد أكبر من 100 سنة')
+            except (ValueError, TypeError):
+                row_errors.append(f'تاريخ الميلاد غير صحيح: "{dob_raw}" — الصيغة المطلوبة: YYYY-MM-DD')
+                dob = None
+
+            if row_errors:
+                errors.append({'row': i, 'name': full_name or '—', 'errors': row_errors})
+                skipped += 1
+                continue
+
+            if Student.objects.filter(national_id=national_id).exists():
+                errors.append({'row': i, 'name': full_name, 'errors': [f'رقم الهوية {national_id} مسجّل مسبقاً']})
+                skipped += 1
+                continue
+
+            status_val        = STATUS_MAP.get(_cell(row, 5) if len(row) > 5 else '', 'pending') or 'pending'
+            reg_date_raw      = _cell(row, 6) if len(row) > 6 else ''
+            disability_raw    = _cell(row, 7) if len(row) > 7 else ''
+            degree_raw        = _cell(row, 8) if len(row) > 8 else ''
+            diagnosis         = _cell(row, 9) if len(row) > 9 else ''
+            edu_raw           = _cell(row, 10) if len(row) > 10 else ''
+            school_name       = _cell(row, 11) if len(row) > 11 else ''
+            grade             = _cell(row, 12) if len(row) > 12 else ''
+            referral_raw      = _cell(row, 13) if len(row) > 13 else ''
+            notes             = _cell(row, 14) if len(row) > 14 else ''
+
+            from datetime import date as date_type2
+            try:
+                if len(row) > 6 and isinstance(row[6].value, date_type2):
+                    reg_date = row[6].value
+                elif reg_date_raw:
+                    from datetime import datetime
+                    reg_date = datetime.strptime(reg_date_raw, '%Y-%m-%d').date()
+                else:
+                    reg_date = date_type2.today()
+            except (ValueError, TypeError):
+                reg_date = date_type2.today()
+
+            Student.objects.create(
+                full_name         = full_name,
+                national_id       = national_id,
+                date_of_birth     = dob,
+                gender            = gender,
+                nationality       = nationality,
+                status            = status_val,
+                registration_date = reg_date,
+                disability_type   = DISABILITY_MAP.get(disability_raw, ''),
+                disability_degree = DEGREE_MAP.get(degree_raw, ''),
+                diagnosis         = diagnosis,
+                educational_level = EDU_MAP.get(edu_raw, ''),
+                school_name       = school_name,
+                grade             = grade,
+                referral_source   = REFERRAL_MAP.get(referral_raw, ''),
+                notes             = notes,
+                created_by        = request.user,
+            )
+            created += 1
+
+        log_action(request, 'create', None, f'استيراد {created} طالب من Excel')
+        return Response({
+            'created': created,
+            'skipped': skipped,
+            'errors':  errors,
+        }, status=status.HTTP_200_OK)
+
+
+class StudentImportTemplateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'قالب استيراد الطلاب'
+        ws.sheet_view.rightToLeft = True
+
+        headers = [
+            'الاسم الكامل *',
+            'رقم الهوية * (10 أرقام)',
+            'تاريخ الميلاد * (YYYY-MM-DD)',
+            'الجنس * (ذكر/أنثى)',
+            'الجنسية *',
+            'الحالة (نشط / في انتظار القبول / غير نشط / خرّيج / موقوف / محوّل)',
+            'تاريخ التسجيل (YYYY-MM-DD)',
+            'نوع الإعاقة (إعاقة ذهنية / طيف التوحد / متلازمة داون / إعاقة حركية / إعاقة سمعية / إعاقة بصرية / إعاقة لغوية / نطقية / صعوبات تعلم / اضطراب سلوكي / إعاقة مركّبة / أخرى)',
+            'درجة الإعاقة (بسيطة / متوسطة / شديدة / شديدة جداً)',
+            'التشخيص التفصيلي',
+            'المستوى التعليمي (لا يتعلم / رياض أطفال / ابتدائي / متوسط / ثانوي / جامعي / برنامج تربية خاصة)',
+            'اسم المدرسة',
+            'الصف / المرحلة',
+            'جهة الإحالة (مستشفى / عيادة / مدرسة / الأسرة مباشرة / جمعية / مؤسسة / وزارة / جهة حكومية / طبيب / معالج / أخرى)',
+            'ملاحظات',
+        ]
+
+        header_fill = PatternFill(start_color='1E3A5F', end_color='1E3A5F', fill_type='solid')
+        header_font = Font(color='FFFFFF', bold=True, size=11)
+        ws.row_dimensions[1].height = 30
+
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            ws.column_dimensions[cell.column_letter].width = 22
+
+        # صف مثال
+        example = [
+            'محمد أحمد العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
+            'نشط', '2024-01-10', 'طيف التوحد', 'متوسطة', 'تشخيص طيف التوحد درجة 2',
+            'برنامج تربية خاصة', 'مدرسة الأمل', 'الثالث الابتدائي', 'مستشفى / عيادة', '',
+        ]
+        ex_fill = PatternFill(start_color='EEF2F8', end_color='EEF2F8', fill_type='solid')
+        for col, val in enumerate(example, 1):
+            cell = ws.cell(row=2, column=col, value=val)
+            cell.fill = ex_fill
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="import_template_rwad.xlsx"'
+        wb.save(response)
+        return response

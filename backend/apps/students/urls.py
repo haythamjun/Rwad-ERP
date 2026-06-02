@@ -8,11 +8,15 @@ from .views import (
     StudentAttachmentListView,
     StudentAttachmentDeleteView,
     StudentExportView,
+    StudentImportView,
+    StudentImportTemplateView,
 )
 
 urlpatterns = [
     path('students/', StudentListCreateView.as_view(), name='student-list'),
     path('students/export/', StudentExportView.as_view(), name='student-export'),
+    path('students/import/', StudentImportView.as_view(), name='student-import'),
+    path('students/import/template/', StudentImportTemplateView.as_view(), name='student-import-template'),
     path('students/<int:pk>/', StudentDetailView.as_view(), name='student-detail'),
     # Guardians
     path('students/<int:student_pk>/guardians/', GuardianListCreateView.as_view(), name='guardian-list'),

@@ -79,6 +79,12 @@ export const studentsApi = {
   delete: (id: number) => api.delete(`/students/${id}/`),
   export: () =>
     api.get('/students/export/', { responseType: 'blob' }),
+  importExcel: (data: FormData) =>
+    api.post('/students/import/', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importTemplate: () =>
+    api.get('/students/import/template/', { responseType: 'blob' }),
 };
 
 // ─────────────────────────────────────────────
