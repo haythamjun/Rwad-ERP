@@ -325,7 +325,7 @@ class StudentExportView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename="students_rwad.xlsx"'
+        response['Content-Disposition'] = 'attachment; filename="students_roya.xlsx"'
         wb.save(response)
 
         log_action(request, 'export', None, 'تصدير قائمة الطلاب إلى Excel')
@@ -577,6 +577,6 @@ class StudentImportTemplateView(APIView):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename="import_template_rwad.xlsx"'
+        response['Content-Disposition'] = 'attachment; filename="import_template_roya.xlsx"'
         wb.save(response)
         return response

@@ -15,7 +15,7 @@ class Command(BaseCommand):
                 'password': 'Admin@1234',
                 'first_name': 'Admin',
                 'last_name': 'System',
-                'email': 'admin@rwad-erp.com',
+                'email': 'admin@roya-erp.com',
                 'role': 'admin',
                 'is_staff': True,
                 'is_superuser': True,
@@ -25,7 +25,7 @@ class Command(BaseCommand):
                 'password': 'Manager@1234',
                 'first_name': 'Manager',
                 'last_name': 'User',
-                'email': 'manager@rwad-erp.com',
+                'email': 'manager@roya-erp.com',
                 'role': 'manager',
             },
             {
@@ -33,7 +33,7 @@ class Command(BaseCommand):
                 'password': 'Specialist@1234',
                 'first_name': 'Specialist',
                 'last_name': 'User',
-                'email': 'specialist@rwad-erp.com',
+                'email': 'specialist@roya-erp.com',
                 'role': 'specialist',
             },
             {
@@ -41,7 +41,7 @@ class Command(BaseCommand):
                 'password': 'Reception@1234',
                 'first_name': 'Reception',
                 'last_name': 'User',
-                'email': 'reception@rwad-erp.com',
+                'email': 'reception@roya-erp.com',
                 'role': 'reception',
             },
         ]

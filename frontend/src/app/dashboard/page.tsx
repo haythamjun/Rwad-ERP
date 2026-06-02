@@ -57,7 +57,7 @@ export default function DashboardPage() {
           مرحباً، {user?.full_name} 👋
         </h2>
         <p className="text-white/80 text-sm mt-1">
-          نظام Rwad ERP — مركز التأهيل | {new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          نظام Roya - رؤية | مركز التأهيل — {new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
 

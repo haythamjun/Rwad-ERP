@@ -3,8 +3,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-admin.site.site_header = 'نظام Rwad ERP'
-admin.site.site_title = 'Rwad ERP'
+admin.site.site_header = 'نظام Roya - رؤية'
+admin.site.site_title = 'Roya - رؤية'
 admin.site.index_title = 'لوحة التحكم'
 
 urlpatterns = [

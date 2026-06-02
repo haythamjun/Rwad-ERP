@@ -34,7 +34,7 @@ export default function ImportModal({ onClose, onDone }: Props) {
     setDownloadingTemplate(true);
     try {
       const res = await studentsApi.importTemplate();
-      downloadBlob(res.data, 'import_template_rwad.xlsx');
+      downloadBlob(res.data, 'import_template_roya.xlsx');
       toast.success('تم تحميل القالب');
     } catch {
       toast.error('فشل تحميل القالب');

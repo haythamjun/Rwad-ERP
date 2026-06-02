@@ -55,7 +55,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-2xl shadow-lg mb-4">
             <span className="text-3xl font-extrabold text-brand">ر</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">نظام Rwad ERP</h1>
+          <h1 className="text-2xl font-bold text-white">نظام Roya - رؤية</h1>
           <p className="text-white/70 text-sm mt-1">مركز التأهيل — نظام الإدارة المتكامل</p>
         </div>
 
@@ -127,7 +127,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-white/50 text-xs mt-6">
-          Rwad ERP v1.0 — جميع الحقوق محفوظة
+          Roya - رؤية v1.0 — جميع الحقوق محفوظة
         </p>
       </div>
     </div>

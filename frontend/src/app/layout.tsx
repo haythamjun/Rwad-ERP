@@ -4,8 +4,8 @@ import Providers from '@/components/Providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Rwad ERP', template: '%s | Rwad ERP' },
-  description: 'نظام إدارة مركز التأهيل - رواد',
+  title: { default: 'Roya - رؤية', template: '%s | Roya - رؤية' },
+  description: 'نظام إدارة مركز التأهيل - رؤية',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

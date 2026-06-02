@@ -56,7 +56,7 @@ export default function Sidebar() {
             <span className="text-brand font-extrabold text-lg">ر</span>
           </div>
           <div>
-            <p className="font-bold text-white text-base leading-none">Rwad ERP</p>
+            <p className="font-bold text-white text-base leading-none">Roya - رؤية</p>
             <p className="text-white/60 text-xs mt-0.5">مركز التأهيل</p>
           </div>
         </div>
