@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Student, Guardian, FamilyInfo, StudentAttachment
+from datetime import date
 
 
 class GuardianSerializer(serializers.ModelSerializer):
@@ -15,6 +16,16 @@ class GuardianSerializer(serializers.ModelSerializer):
             'is_primary_contact', 'notes', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'student', 'created_at', 'updated_at']
+
+    def validate_phone(self, value):
+        if not value.isdigit() or len(value) != 10:
+            raise serializers.ValidationError('رقم الجوال يجب أن يكون 10 أرقام.')
+        return value
+
+    def validate_phone_alt(self, value):
+        if value and (not value.isdigit() or len(value) != 10):
+            raise serializers.ValidationError('رقم الجوال الإضافي يجب أن يكون 10 أرقام.')
+        return value
 
 
 class FamilyInfoSerializer(serializers.ModelSerializer):
@@ -42,6 +53,16 @@ class FamilyInfoSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'student', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        family_size   = attrs.get('family_size',   getattr(self.instance, 'family_size',   None))
+        sibling_order = attrs.get('sibling_order', getattr(self.instance, 'sibling_order', None))
+        if family_size is not None and sibling_order is not None:
+            if sibling_order > family_size:
+                raise serializers.ValidationError(
+                    {'sibling_order': 'ترتيب المستفيد لا يمكن أن يكون أكبر من عدد أفراد الأسرة.'}
+                )
+        return attrs
 
 
 class StudentAttachmentSerializer(serializers.ModelSerializer):
@@ -151,6 +172,20 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             # حالة
             'status', 'registration_date', 'notes',
         ]
+
+    def validate_national_id(self, value):
+        if not value.isdigit() or len(value) != 10:
+            raise serializers.ValidationError('رقم الهوية يجب أن يكون 10 أرقام.')
+        return value
+
+    def validate_date_of_birth(self, value):
+        today = date.today()
+        if value > today:
+            raise serializers.ValidationError('تاريخ الميلاد لا يمكن أن يكون في المستقبل.')
+        min_date = today.replace(year=today.year - 100)
+        if value < min_date:
+            raise serializers.ValidationError('تاريخ الميلاد غير صحيح (أكثر من 100 سنة).')
+        return value
 
     def create(self, validated_data):
         request = self.context.get('request')

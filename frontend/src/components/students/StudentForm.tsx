@@ -10,8 +10,25 @@ import type { StudentFormData } from '@/types';
 const schema = z.object({
   // أساسية
   full_name:         z.string().min(2, 'الاسم مطلوب').max(200),
-  national_id:       z.string().min(5, 'رقم الهوية مطلوب'),
-  date_of_birth:     z.string().min(1, 'تاريخ الميلاد مطلوب'),
+  national_id: z
+    .string()
+    .min(1, 'رقم الهوية مطلوب')
+    .regex(/^\d{10}$/, 'رقم الهوية يجب أن يكون 10 أرقام'),
+  date_of_birth: z
+    .string()
+    .min(1, 'تاريخ الميلاد مطلوب')
+    .refine((val) => {
+      const dob = new Date(val);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return dob <= today;
+    }, 'تاريخ الميلاد لا يمكن أن يكون في المستقبل')
+    .refine((val) => {
+      const dob = new Date(val);
+      const minDate = new Date();
+      minDate.setFullYear(minDate.getFullYear() - 100);
+      return dob >= minDate;
+    }, 'تاريخ الميلاد غير صحيح (أكثر من 100 سنة)'),
   gender:            z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
   nationality:       z.string().min(2, 'الجنسية مطلوبة'),
   // إعاقة
@@ -167,13 +184,20 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
 
           <div>
             <label className="form-label">رقم الهوية / الإقامة <span className="text-red-500">*</span></label>
-            <input {...register('national_id')} className="form-input font-mono" placeholder="1XXXXXXXXX" dir="ltr" />
+            <input {...register('national_id')} className="form-input font-mono" placeholder="1XXXXXXXXX" dir="ltr" maxLength={10} inputMode="numeric" />
             {errors.national_id && <p className="text-red-500 text-xs mt-1">{errors.national_id.message}</p>}
           </div>
 
           <div>
             <label className="form-label">تاريخ الميلاد <span className="text-red-500">*</span></label>
-            <input {...register('date_of_birth')} type="date" className="form-input" dir="ltr" />
+            <input
+              {...register('date_of_birth')}
+              type="date"
+              className="form-input"
+              dir="ltr"
+              max={new Date().toISOString().split('T')[0]}
+              min={new Date(new Date().setFullYear(new Date().getFullYear() - 100)).toISOString().split('T')[0]}
+            />
             {errors.date_of_birth && <p className="text-red-500 text-xs mt-1">{errors.date_of_birth.message}</p>}
           </div>
 

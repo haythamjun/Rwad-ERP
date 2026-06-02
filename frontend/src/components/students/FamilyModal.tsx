@@ -15,7 +15,13 @@ const schema = z.object({
   housing_type:        z.string().optional(),
   other_special_needs: z.boolean().optional(),
   social_notes:        z.string().optional(),
-});
+}).refine(
+  (data) => data.sibling_order <= data.family_size,
+  {
+    message: 'ترتيب المستفيد لا يمكن أن يكون أكبر من عدد أفراد الأسرة',
+    path: ['sibling_order'],
+  }
+);
 
 type FormValues = z.infer<typeof schema>;
 

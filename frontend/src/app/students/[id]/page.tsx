@@ -7,9 +7,9 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Edit, Trash2, Plus, Phone, Mail, MapPin,
-  User, Users, Home, Paperclip, AlertCircle,
+  User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X,
 } from 'lucide-react';
-import { studentsApi, guardiansApi, familyApi } from '@/lib/api';
+import { studentsApi, guardiansApi, familyApi, attachmentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS } from '@/lib/utils';
 import type { Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData } from '@/types';
@@ -26,6 +26,9 @@ export default function StudentDetailPage() {
   const [guardianModal, setGuardianModal] = useState<{ open: boolean; guardian?: Guardian }>({ open: false });
   const [familyModal, setFamilyModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'guardians' | 'family' | 'attachments'>('info');
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachType, setAttachType] = useState('');
+  const [attachName, setAttachName] = useState('');
 
   const { data: student, isLoading } = useQuery<Student>({
     queryKey: ['student', id],
@@ -75,6 +78,39 @@ export default function StudentDetailPage() {
     },
     onError: () => toast.error('حدث خطأ في الحفظ'),
   });
+
+  const attachUploadMutation = useMutation({
+    mutationFn: (formData: FormData) => attachmentsApi.upload(Number(id), formData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
+      setAttachFile(null);
+      setAttachType('');
+      setAttachName('');
+      toast.success('تم رفع المرفق بنجاح');
+    },
+    onError: () => toast.error('فشل رفع المرفق'),
+  });
+
+  const attachDeleteMutation = useMutation({
+    mutationFn: (attId: number) => attachmentsApi.delete(Number(id), attId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
+      toast.success('تم حذف المرفق');
+    },
+    onError: () => toast.error('فشل حذف المرفق'),
+  });
+
+  const handleAttachUpload = () => {
+    if (!attachFile || !attachType || !attachName.trim()) {
+      toast.error('يرجى تعبئة جميع الحقول واختيار ملف');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', attachFile);
+    formData.append('attachment_type', attachType);
+    formData.append('name', attachName.trim());
+    attachUploadMutation.mutate(formData);
+  };
 
   if (isLoading) {
     return (
@@ -328,30 +364,141 @@ export default function StudentDetailPage() {
       )}
 
       {activeTab === 'attachments' && (
-        <div className="card">
-          <h3 className="section-title">المرفقات</h3>
-          {(student.attachments || []).length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-8">لا توجد مرفقات</p>
-          ) : (
-            <div className="space-y-2">
-              {student.attachments!.map((att) => (
-                <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm text-gray-800">{att.name}</p>
-                    <p className="text-xs text-gray-400">{att.attachment_type_display} — {formatDate(att.created_at)}</p>
-                  </div>
-                  <a
-                    href={`${process.env.NEXT_PUBLIC_MEDIA_URL}${att.file}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-secondary py-1 px-2 text-xs"
+        <div className="space-y-4">
+
+          {/* نموذج الرفع */}
+          {user?.can_write && (
+            <div className="card">
+              <h3 className="section-title">رفع مرفق جديد</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                <div className="sm:col-span-2">
+                  <label className="form-label">نوع المرفق <span className="text-red-500">*</span></label>
+                  <select
+                    className="form-input"
+                    value={attachType}
+                    onChange={(e) => setAttachType(e.target.value)}
                   >
-                    تنزيل
-                  </a>
+                    <option value="">-- اختر نوع المرفق --</option>
+                    <option value="national_id">صورة الهوية</option>
+                    <option value="birth_certificate">شهادة الميلاد</option>
+                    <option value="medical_report">تقرير طبي</option>
+                    <option value="psychological_report">تقرير نفسي</option>
+                    <option value="disability_card">بطاقة إعاقة</option>
+                    <option value="referral_letter">خطاب إحالة</option>
+                    <option value="other">أخرى</option>
+                  </select>
                 </div>
-              ))}
+
+                <div className="sm:col-span-2">
+                  <label className="form-label">اسم المرفق <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="مثال: تقرير طبي من مستشفى الملك فهد"
+                    value={attachName}
+                    onChange={(e) => setAttachName(e.target.value)}
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="form-label">الملف <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary-400 transition-colors bg-gray-50">
+                      <Upload size={16} className="text-gray-400 flex-shrink-0" />
+                      <span className="text-sm text-gray-500 truncate">
+                        {attachFile ? attachFile.name : 'اختر ملف PDF أو صورة...'}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf,image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] || null;
+                          setAttachFile(f);
+                          if (f && !attachName) setAttachName(f.name.replace(/\.[^/.]+$/, ''));
+                        }}
+                      />
+                    </label>
+                    {attachFile && (
+                      <button
+                        type="button"
+                        onClick={() => setAttachFile(null)}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">PDF، JPG، PNG — حد أقصى 10 ميجا</p>
+                </div>
+
+              </div>
+              <div className="flex justify-end mt-4">
+                <button
+                  onClick={handleAttachUpload}
+                  disabled={attachUploadMutation.isPending}
+                  className="btn-primary"
+                >
+                  {attachUploadMutation.isPending ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                      </svg>
+                      جارٍ الرفع...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2"><Upload size={15}/> رفع المرفق</span>
+                  )}
+                </button>
+              </div>
             </div>
           )}
+
+          {/* قائمة المرفقات */}
+          <div className="card">
+            <h3 className="section-title">المرفقات المضافة ({(student.attachments || []).length})</h3>
+            {(student.attachments || []).length === 0 ? (
+              <p className="text-gray-400 text-sm text-center py-8">لا توجد مرفقات</p>
+            ) : (
+              <div className="space-y-2">
+                {student.attachments!.map((att) => (
+                  <div key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <FileText size={18} className="text-primary-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-gray-800 truncate">{att.name}</p>
+                        <p className="text-xs text-gray-400">{att.attachment_type_display} — {formatDate(att.created_at)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <a
+                        href={`${process.env.NEXT_PUBLIC_MEDIA_URL}${att.file}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-secondary py-1 px-2 text-xs"
+                      >
+                        تنزيل
+                      </a>
+                      {user?.can_delete && (
+                        <button
+                          onClick={() => {
+                            if (confirm('حذف هذا المرفق؟')) attachDeleteMutation.mutate(att.id);
+                          }}
+                          className="btn-danger py-1 px-2"
+                          disabled={attachDeleteMutation.isPending}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 

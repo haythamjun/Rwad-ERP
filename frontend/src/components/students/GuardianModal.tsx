@@ -10,8 +10,15 @@ const schema = z.object({
   full_name: z.string().min(2, 'الاسم مطلوب'),
   relationship: z.enum(['father', 'mother', 'brother', 'sister', 'grandfather', 'grandmother', 'uncle', 'aunt', 'other']),
   national_id: z.string().optional(),
-  phone: z.string().min(7, 'رقم الجوال مطلوب'),
-  phone_alt: z.string().optional(),
+  phone: z
+    .string()
+    .min(1, 'رقم الجوال مطلوب')
+    .regex(/^\d{10}$/, 'رقم الجوال يجب أن يكون 10 أرقام'),
+  phone_alt: z
+    .string()
+    .regex(/^\d{10}$/, 'رقم الجوال الإضافي يجب أن يكون 10 أرقام')
+    .optional()
+    .or(z.literal('')),
   email: z.string().email('بريد إلكتروني غير صحيح').optional().or(z.literal('')),
   address: z.string().optional(),
   is_primary_contact: z.boolean(),
@@ -97,13 +104,14 @@ export default function GuardianModal({ guardian, onClose, onSave, loading }: Pr
 
             <div>
               <label className="form-label">رقم الجوال <span className="text-red-500">*</span></label>
-              <input {...register('phone')} className="form-input" dir="ltr" placeholder="05XXXXXXXX" />
+              <input {...register('phone')} className="form-input" dir="ltr" placeholder="05XXXXXXXX" maxLength={10} inputMode="numeric" />
               {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
             </div>
 
             <div>
               <label className="form-label">رقم جوال إضافي</label>
-              <input {...register('phone_alt')} className="form-input" dir="ltr" />
+              <input {...register('phone_alt')} className="form-input" dir="ltr" placeholder="05XXXXXXXX" maxLength={10} inputMode="numeric" />
+              {errors.phone_alt && <p className="text-red-500 text-xs mt-1">{errors.phone_alt.message}</p>}
             </div>
 
             <div className="sm:col-span-2">
