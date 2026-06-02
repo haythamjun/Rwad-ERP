@@ -1,38 +1,34 @@
-# Rwad ERP — نظام إدارة ذوي الإعاقة
+# Roya - رؤية | نظام إدارة مركز التأهيل
 
-نظام ERP متكامل لإدارة طلاب ذوي الإعاقة، مبني بتقنيات حديثة ويدعم اللغة العربية بالكامل.
+نظام ERP متكامل لإدارة ملفات ذوي الإعاقة، مبني بتقنيات حديثة ويدعم اللغة العربية بالكامل.
 
 ---
 
 ## هيكل المشروع
 
 ```
-Rwad_ERP - LAST/
+Roya ERP/
 ├── backend/                    ← Django REST API
-│   ├── rwad_erp/              ← إعدادات المشروع
-│   │   ├── settings/base.py   ← إعدادات Django
-│   │   ├── urls.py            ← مسارات الـ API
-│   │   ├── wsgi.py
-│   │   └── asgi.py
+│   ├── rwad_erp/
+│   │   ├── settings/
+│   │   │   ├── base.py
+│   │   │   ├── development.py
+│   │   │   └── production.py
+│   │   └── urls.py
 │   ├── apps/
-│   │   ├── accounts/          ← المستخدمون والصلاحيات
-│   │   ├── students/          ← إدارة الطلاب
-│   │   └── core/              ← مرافق عامة وـ Audit Logging
+│   │   ├── accounts/           ← المستخدمون والصلاحيات
+│   │   ├── students/           ← إدارة المستفيدين
+│   │   └── core/               ← سجلات المراجعة والمرافق
 │   ├── manage.py
-│   ├── requirements.txt
-│   └── .env
+│   └── requirements.txt
 │
 └── frontend/                   ← Next.js Web App
     └── src/
-        ├── app/               ← الصفحات (App Router)
-        │   ├── login/
-        │   ├── dashboard/
-        │   ├── students/
-        │   └── users/
-        ├── components/        ← المكونات القابلة لإعادة الاستخدام
-        ├── lib/               ← API client ومرافق
-        ├── store/             ← Zustand state
-        └── types/             ← TypeScript interfaces
+        ├── app/                ← الصفحات (App Router)
+        ├── components/         ← المكونات
+        ├── lib/                ← API client
+        ├── store/              ← Zustand state
+        └── types/              ← TypeScript interfaces
 ```
 
 ---
@@ -44,326 +40,230 @@ Rwad_ERP - LAST/
 | العنصر | التقنية |
 |--------|---------|
 | اللغة | Python 3.11+ |
-| الإطار | Django 4.2.13 |
-| REST API | Django REST Framework 3.15.2 |
+| الإطار | Django 4.2 |
+| REST API | Django REST Framework 3.15 |
 | قاعدة البيانات | PostgreSQL 15+ |
-| المصادقة | JWT — djangorestframework-simplejwt 5.3.1 |
-| CORS | django-cors-headers 4.3.1 |
-| تصدير Excel | openpyxl 3.1.5 |
-| توليد PDF | reportlab 4.2.2 |
-| معالجة الصور | Pillow 10.4.0 |
-| إدارة الملفات | django-storages 1.14.3 |
-| المنفذ | http://localhost:8000 |
+| المصادقة | JWT — simplejwt |
+| تصدير/استيراد Excel | openpyxl |
+| توليد PDF | reportlab |
+| معالجة الصور | Pillow |
+| الملفات الثابتة | WhiteNoise |
+| النشر | Gunicorn + Railway |
 
 ### Frontend
 
 | العنصر | التقنية |
 |--------|---------|
-| اللغة | TypeScript 5.5.3 |
-| الإطار | Next.js 15.3.3 (App Router) |
-| مكتبة الواجهة | React 18.3.1 |
-| التصميم | Tailwind CSS 3.4.6 |
-| State Management | Zustand 4.5.4 + TanStack Query 5.51.1 |
-| النماذج | React Hook Form 7.52.1 + Zod 3.23.8 |
-| HTTP Client | Axios 1.7.2 مع JWT interceptors |
-| الأيقونات | Lucide React |
+| اللغة | TypeScript 5.5 |
+| الإطار | Next.js 15 (App Router) |
+| مكتبة الواجهة | React 18 |
+| التصميم | Tailwind CSS 3.4 |
+| State Management | Zustand + TanStack Query |
+| النماذج | React Hook Form + Zod |
+| HTTP Client | Axios مع JWT interceptors |
 | الإشعارات | React Hot Toast |
-| المنفذ | http://localhost:3000 |
 
 ---
 
-## قاعدة البيانات
+## نموذج البيانات
 
-**الحالة: تم إنشاؤها وتطبيق جميع الـ Migrations**
-
-```
-Database:  rwad_erp_db
-User:      postgres
-Password:  postgres
-Host:      localhost
-Port:      5432
-```
-
-### الجداول الرئيسية
-
-| التطبيق | الـ Migrations | الحالة |
-|---------|---------------|--------|
-| accounts | 0001_initial | مكتمل |
-| students | 0001_initial, 0002_alter | مكتمل |
-| core | 0001_initial | مكتمل |
-| auth / admin / sessions | جداول Django الافتراضية | مكتمل |
-
-### النماذج الرئيسية
-
-#### العلاقة بين الجداول
+### العلاقات
 
 ```
 Student (1)
-  ├── Guardian (many)          ← أولياء أمور متعددين
-  ├── FamilyInfo (1)           ← أسرة واحدة فقط
-  └── StudentAttachment (many) ← مرفقات متعددة
+  ├── Guardian (many)           ← أولياء أمور
+  ├── FamilyInfo (1)            ← دراسة الحالة الاجتماعية
+  └── StudentAttachment (many)  ← مرفقات
 ```
 
----
-
-#### Student — الطالب
+### Student — المستفيد
 
 | الحقل | النوع | الوصف |
 |-------|-------|-------|
-| `file_number` | CharField (unique) | رقم الملف (يُولَّد تلقائياً: RW-YYYY-XXXX) |
-| `registration_date` | DateField | تاريخ التسجيل |
+| `file_number` | CharField unique | رقم الملف — يُولَّد تلقائياً: RY-YYYY-XXXX |
 | `full_name` | CharField | الاسم الكامل |
-| `national_id` | CharField (unique) | رقم الهوية / الإقامة |
+| `national_id` | CharField unique | رقم الهوية (10 أرقام) |
 | `date_of_birth` | DateField | تاريخ الميلاد |
-| `gender` | CharField | الجنس (ذكر / أنثى) |
+| `gender` | CharField | ذكر / أنثى |
 | `nationality` | CharField | الجنسية |
-| `photo` | ImageField | صورة المستفيد |
+| `photo` | ImageField | الصورة الشخصية |
 | `disability_type` | CharField | نوع الإعاقة (11 خيار) |
-| `disability_degree` | CharField | درجة الإعاقة (بسيطة / متوسطة / شديدة / شديدة جداً) |
+| `disability_degree` | CharField | درجة الإعاقة (4 درجات) |
 | `diagnosis` | TextField | التشخيص التفصيلي |
 | `educational_level` | CharField | المستوى التعليمي |
 | `school_name` | CharField | اسم المدرسة |
 | `grade` | CharField | الصف / المرحلة |
 | `referral_source` | CharField | جهة الإحالة |
-| `status` | CharField | الحالة (معلّق / نشط / غير نشط / متخرج / موقوف / محوّل) |
+| `status` | CharField | الحالة (6 حالات) |
 | `notes` | TextField | ملاحظات |
 | `created_by` | FK → User | أُضيف بواسطة |
-| `created_at` | DateTimeField | تاريخ الإنشاء |
 
----
+### Guardian — ولي الأمر
 
-#### Guardian — ولي الأمر
+| الحقل | الوصف |
+|-------|-------|
+| `full_name` | الاسم |
+| `relationship` | صلة القرابة (9 خيارات) |
+| `national_id` | رقم الهوية |
+| `phone` | رقم الجوال (10 أرقام) |
+| `phone_alt` | رقم جوال إضافي (10 أرقام) |
+| `is_primary_contact` | جهة التواصل الرئيسية |
 
-مرتبط بالطالب بـ ForeignKey — طالب واحد يمكن أن يكون له أكثر من ولي أمر.
+### FamilyInfo — دراسة الحالة الاجتماعية
 
-| الحقل | النوع | الوصف |
-|-------|-------|-------|
-| `student` | FK → Student | الطالب المرتبط |
-| `full_name` | CharField | اسم ولي الأمر |
-| `relationship` | CharField | صلة القرابة (أب / أم / أخ / أخت / جد / جدة / عم / عمة / أخرى) |
-| `national_id` | CharField | رقم الهوية |
-| `phone` | CharField | رقم الجوال |
-| `phone_alt` | CharField | رقم جوال إضافي |
-| `email` | EmailField | البريد الإلكتروني |
-| `address` | TextField | العنوان |
-| `is_primary_contact` | BooleanField | جهة التواصل الرئيسية |
-| `notes` | TextField | ملاحظات |
+| الحقل | الوصف |
+|-------|-------|
+| `family_size` | عدد أفراد الأسرة |
+| `sibling_order` | ترتيب المستفيد (لا يتجاوز عدد الأفراد) |
+| `parents_status` | حالة الوالدين (6 خيارات) |
+| `income_range` | الدخل التقريبي (5 شرائح) |
+| `monthly_income` | الدخل بالرقم |
+| `housing_type` | نوع السكن (5 خيارات) |
+| `other_special_needs` | وجود أفراد آخرين بحاجات خاصة |
 
----
+### StudentAttachment — المرفقات
 
-#### FamilyInfo — بيانات الأسرة
-
-مرتبط بالطالب بـ OneToOneField — أسرة واحدة لكل طالب.
-
-| الحقل | النوع | الوصف |
-|-------|-------|-------|
-| `student` | OneToOne → Student | الطالب المرتبط |
-| `family_size` | PositiveIntegerField | عدد أفراد الأسرة |
-| `sibling_order` | PositiveIntegerField | ترتيب المستفيد بين إخوته |
-| `parents_status` | CharField | حالة الوالدين (متزوجان / مطلقان / الأب متوفى / الأم متوفاة / كلاهما / منفصلان) |
-| `income_range` | CharField | الدخل الشهري التقريبي (5 شرائح) |
-| `monthly_income` | PositiveIntegerField | الدخل الشهري بالرقم |
-| `housing_type` | CharField | نوع السكن (ملك / إيجار / أقارب / حكومي / أخرى) |
-| `other_special_needs` | BooleanField | يوجد أفراد آخرون بحاجات خاصة في الأسرة |
-| `social_notes` | TextField | ملاحظات اجتماعية |
-
----
-
-#### StudentAttachment — المرفقات
-
-مرتبط بالطالب بـ ForeignKey — طالب واحد يمكن أن يكون له مرفقات متعددة.
-
-| الحقل | النوع | الوصف |
-|-------|-------|-------|
-| `student` | FK → Student | الطالب المرتبط |
-| `attachment_type` | CharField | نوع المرفق (هوية / شهادة ميلاد / تقرير طبي / تقرير نفسي / بطاقة إعاقة / خطاب إحالة / أخرى) |
-| `file` | FileField | الملف المرفق |
-| `name` | CharField | اسم المرفق |
-| `uploaded_by` | FK → User | رُفع بواسطة |
-| `created_at` | DateTimeField | تاريخ الرفع |
-
----
-
-#### User — المستخدم
-
-| الحقل | النوع | الوصف |
-|-------|-------|-------|
-| `username` | CharField | اسم المستخدم |
-| `role` | CharField | الدور (admin / manager / specialist / reception / viewer) |
-| `avatar` | ImageField | الصورة الشخصية |
-| `phone` | CharField | رقم الجوال |
+| الحقل | الوصف |
+|-------|-------|
+| `attachment_type` | النوع (هوية / شهادة ميلاد / تقرير طبي / تقرير نفسي / بطاقة إعاقة / خطاب إحالة / أخرى) |
+| `file` | الملف (PDF أو صورة — حد أقصى 10 MB) |
+| `name` | اسم المرفق |
 
 ---
 
 ## الأدوار والصلاحيات
 
-| الدور | الوصف |
-|-------|-------|
-| admin | مدير النظام — صلاحيات كاملة |
-| manager | مدير — إدارة الطلاب والتقارير |
-| specialist | أخصائي — إدارة ملفات الطلاب |
-| reception | استقبال — تسجيل الطلاب |
-| viewer | مشاهد فقط |
+| الدور | القراءة | الإضافة والتعديل | الحذف | إدارة المستخدمين |
+|-------|---------|-----------------|-------|-----------------|
+| admin | ✅ | ✅ | ✅ | ✅ |
+| manager | ✅ | ✅ | ✅ | ❌ |
+| specialist | ✅ | ✅ | ❌ | ❌ |
+| reception | ✅ | ✅ | ❌ | ❌ |
+| viewer | ✅ | ❌ | ❌ | ❌ |
 
 ---
 
-## المتطلبات الأساسية للتشغيل
+## قواعد التحقق (Validation)
 
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 15+
-
----
-
-## إعداد وتشغيل المشروع
-
-### 1. إعداد Backend
-
-```bash
-cd backend
-
-# إنشاء البيئة الافتراضية
-python -m venv venv
-
-# تفعيل البيئة (Windows)
-venv\Scripts\activate
-
-# تفعيل البيئة (Linux/Mac)
-source venv/bin/activate
-
-# تثبيت المكتبات
-pip install -r requirements.txt
-```
-
-### 2. إعداد قاعدة البيانات (PostgreSQL)
-
-```sql
-CREATE DATABASE rwad_erp_db;
-CREATE USER rwad_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE rwad_erp_db TO rwad_user;
-```
-
-### 3. إعداد ملف البيئة
-
-```bash
-cp .env.example .env
-```
-
-ثم عدّل `.env` بالقيم الصحيحة:
-
-```env
-SECRET_KEY=django-insecure-rwad-erp-dev-key-change-in-production
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-DATABASE_NAME=rwad_erp_db
-DATABASE_USER=postgres
-DATABASE_PASSWORD=postgres
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-
-MEDIA_ROOT=media/
-MEDIA_URL=/media/
-```
-
-### 4. تشغيل الـ Migrations
-
-```bash
-python manage.py makemigrations accounts
-python manage.py makemigrations core
-python manage.py makemigrations students
-python manage.py migrate
-```
-
-### 5. إنشاء المستخدمين الافتراضيين
-
-```bash
-python manage.py create_default_users
-```
-
-### 6. تشغيل Backend
-
-```bash
-python manage.py runserver
-```
-
-API متاح على: http://localhost:8000/api/
+| الحقل | القاعدة |
+|-------|---------|
+| رقم الهوية | 10 أرقام بالضبط |
+| رقم الجوال | 10 أرقام بالضبط |
+| تاريخ الميلاد | لا يكون في المستقبل، ولا أكثر من 100 سنة |
+| ترتيب المستفيد | لا يتجاوز عدد أفراد الأسرة |
 
 ---
 
-### 7. إعداد وتشغيل Frontend
+## API Endpoints
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+### المصادقة — `/api/auth/`
 
-الواجهة متاحة على: http://localhost:3000
+| الطريقة | المسار | الوصف | الصلاحية |
+|---------|--------|-------|---------|
+| POST | `login/` | تسجيل الدخول | عام |
+| POST | `logout/` | تسجيل الخروج | مسجّل |
+| POST | `token/refresh/` | تجديد التوكن | عام |
+| GET/PATCH | `profile/` | الملف الشخصي | مسجّل |
+| POST | `change-password/` | تغيير كلمة المرور | مسجّل |
+| GET | `users/` | قائمة المستخدمين | مسجّل |
+| POST | `users/` | إضافة مستخدم | admin |
+| GET/PATCH/DELETE | `users/{id}/` | تفاصيل مستخدم | admin |
 
----
+### المستفيدون — `/api/students/`
 
-## بيانات الدخول الافتراضية
-
-| المستخدم | كلمة المرور | الدور |
-|----------|------------|-------|
-| admin | Admin@1234 | مدير النظام |
-| manager | Manager@1234 | مدير |
-| specialist | Specialist@1234 | أخصائي |
-| reception | Reception@1234 | استقبال |
-
----
-
-## API Endpoints الرئيسية
-
-### المصادقة
-
-| الطريقة | المسار | الوصف |
-|---------|--------|-------|
-| POST | `/api/auth/login/` | تسجيل الدخول |
-| POST | `/api/auth/logout/` | تسجيل الخروج |
-| POST | `/api/auth/token/refresh/` | تجديد التوكن |
-| GET/PATCH | `/api/auth/profile/` | الملف الشخصي |
-
-### الطلاب
-
-| الطريقة | المسار | الوصف |
-|---------|--------|-------|
-| GET | `/api/students/` | قائمة الطلاب (مع بحث وفلترة) |
-| POST | `/api/students/` | إضافة طالب جديد |
-| GET | `/api/students/{id}/` | تفاصيل طالب |
-| PATCH | `/api/students/{id}/` | تعديل طالب |
-| DELETE | `/api/students/{id}/` | حذف طالب |
-| GET | `/api/students/export/` | تصدير Excel |
+| الطريقة | المسار | الوصف | الصلاحية |
+|---------|--------|-------|---------|
+| GET | `students/` | قائمة مع بحث وفلترة | مسجّل |
+| POST | `students/` | إضافة مستفيد | can_write |
+| GET | `students/{id}/` | تفاصيل مستفيد | مسجّل |
+| PATCH | `students/{id}/` | تعديل مستفيد | can_write |
+| DELETE | `students/{id}/` | حذف مستفيد | can_delete |
+| GET | `students/export/` | تصدير Excel | مسجّل |
+| POST | `students/import/` | استيراد من Excel | can_write |
+| GET | `students/import/template/` | تحميل قالب الاستيراد | مسجّل |
 
 ### أولياء الأمور
 
 | الطريقة | المسار | الوصف |
 |---------|--------|-------|
-| GET | `/api/students/{id}/guardians/` | قائمة أولياء الأمور |
-| POST | `/api/students/{id}/guardians/` | إضافة ولي أمر |
-| PATCH | `/api/students/{id}/guardians/{gid}/` | تعديل ولي أمر |
-| DELETE | `/api/students/{id}/guardians/{gid}/` | حذف ولي أمر |
+| GET | `students/{id}/guardians/` | قائمة |
+| POST | `students/{id}/guardians/` | إضافة |
+| PATCH | `students/{id}/guardians/{gid}/` | تعديل |
+| DELETE | `students/{id}/guardians/{gid}/` | حذف |
 
-### بيانات الأسرة
+### دراسة الحالة الاجتماعية
 
 | الطريقة | المسار | الوصف |
 |---------|--------|-------|
-| GET/POST/PUT | `/api/students/{id}/family/` | بيانات الأسرة |
+| GET | `students/{id}/family/` | عرض |
+| POST | `students/{id}/family/` | إنشاء |
+| PUT | `students/{id}/family/` | تعديل |
 
 ### المرفقات
 
 | الطريقة | المسار | الوصف |
 |---------|--------|-------|
-| GET | `/api/students/{id}/attachments/` | قائمة المرفقات |
-| POST | `/api/students/{id}/attachments/` | رفع مرفق |
-| DELETE | `/api/students/{id}/attachments/{aid}/` | حذف مرفق |
+| GET | `students/{id}/attachments/` | قائمة |
+| POST | `students/{id}/attachments/` | رفع ملف |
+| DELETE | `students/{id}/attachments/{aid}/` | حذف |
+
+### سجل العمليات
+
+| الطريقة | المسار | الوصف | الصلاحية |
+|---------|--------|-------|---------|
+| GET | `core/audit-logs/` | قائمة السجلات | manager فأعلى |
 
 ---
 
-## إعدادات الـ JWT
+## فلاتر البحث
+
+`GET /api/students/?search=...&status=active&gender=male&disability_type=autism`
+
+| الفلتر | الوصف |
+|--------|-------|
+| `search` | بحث في الاسم، رقم الهوية، رقم الملف |
+| `status` | pending / active / inactive / graduated / suspended / transferred |
+| `gender` | male / female |
+| `disability_type` | intellectual / autism / down / physical / hearing / visual / speech / learning / behavioral / multiple / other |
+| `disability_degree` | mild / moderate / severe / profound |
+| `nationality` | نص حر |
+| `registration_from` | تاريخ البداية (YYYY-MM-DD) |
+| `registration_to` | تاريخ النهاية (YYYY-MM-DD) |
+| `ordering` | full_name / registration_date / created_at / file_number |
+
+---
+
+## استيراد البيانات من Excel
+
+١. تحميل القالب: `GET /api/students/import/template/`
+٢. تعبئة البيانات ابتداءً من الصف الثاني
+٣. رفع الملف: `POST /api/students/import/`
+
+**الحقول المطلوبة في القالب:**
+
+| العمود | الحقل | مثال |
+|--------|-------|------|
+| A | الاسم الكامل * | محمد أحمد العتيبي |
+| B | رقم الهوية * | 1234567890 |
+| C | تاريخ الميلاد * | 2010-05-15 |
+| D | الجنس * | ذكر |
+| E | الجنسية * | سعودي |
+| F | الحالة | نشط |
+| G | تاريخ التسجيل | 2024-01-10 |
+| H | نوع الإعاقة | طيف التوحد |
+| I | درجة الإعاقة | متوسطة |
+| J | التشخيص | — |
+| K | المستوى التعليمي | برنامج تربية خاصة |
+| L | اسم المدرسة | — |
+| M | الصف | — |
+| N | جهة الإحالة | مستشفى / عيادة |
+| O | ملاحظات | — |
+
+الاستجابة تُعيد: `{ created, skipped, errors: [{row, name, errors[]}] }`
+
+---
+
+## إعدادات JWT
 
 | الإعداد | القيمة |
 |---------|--------|
@@ -373,25 +273,18 @@ npm run dev
 
 ---
 
-## مستقبل تطبيق الجوال
+## إعداد بيئة التطوير
 
-البنية الحالية **مهيأة لدعم الجوال** لأن:
-
-- الـ Backend منفصل تماماً كـ REST API — أي تطبيق جوال يمكنه الاتصال به مباشرة
-- يدعم CORS مما يسهّل الاتصال من تطبيقات خارجية
-- JWT Authentication يعمل بسلاسة مع تطبيقات الجوال
-
-| الخيار | الوصف | الجهد |
-|--------|-------|-------|
-| PWA | تحويل الموقع الحالي لتطبيق جوال | منخفض جداً |
-| React Native | الأقرب للـ frontend الحالي (TypeScript/React) | متوسط |
-| Flutter | أداء عالي، لغة Dart | متوسط-عالي |
+راجع [SETUP.md](SETUP.md) للتعليمات التفصيلية.
 
 ---
 
-## الإعدادات العامة
+## النشر على Railway
 
-- اللغة: العربية (ar)
-- المنطقة الزمنية: Asia/Riyadh
-- الحد الأقصى لرفع الملفات: 10 MB
-- الصفحات: 20 عنصر في الصفحة
+الملف `backend/railway.json` يشغّل تلقائياً عند كل deploy:
+1. `migrate` — تطبيق migrations جديدة
+2. `collectstatic` — جمع الملفات الثابتة
+3. `create_default_users` — إنشاء المستخدمين الافتراضيين (إذا لم يكونوا موجودين)
+4. `gunicorn` — تشغيل الخادم
+
+> قاعدة البيانات **لا تُحذف** عند التحديث — البيانات محفوظة.

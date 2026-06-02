@@ -1,6 +1,6 @@
-# Rwad ERP — دليل الإعداد والتشغيل
+# Roya - رؤية | دليل الإعداد والتشغيل
 
-## المتطلبات الأساسية
+## المتطلبات
 
 - Python 3.11+
 - Node.js 18+
@@ -10,14 +10,16 @@
 
 ## 1. إعداد Backend
 
-### إنشاء قاعدة البيانات (PostgreSQL)
+### إنشاء قاعدة البيانات
+
 ```sql
-CREATE DATABASE rwad_erp_db;
-CREATE USER rwad_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE rwad_erp_db TO rwad_user;
+CREATE DATABASE roya_erp_db;
+CREATE USER roya_user WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE roya_erp_db TO roya_user;
 ```
 
 ### تثبيت المكتبات
+
 ```bash
 cd backend
 python -m venv venv
@@ -31,32 +33,47 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### إعداد المتغيرات البيئية
+### إعداد ملف البيئة
+
 ```bash
-# انسخ ملف المثال
 cp .env.example .env
-# ثم عدّل .env بمعلومات قاعدة البيانات الصحيحة
+```
+
+عدّل `.env`:
+
+```env
+SECRET_KEY=your-secret-key-here
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+DATABASE_NAME=roya_erp_db
+DATABASE_USER=roya_user
+DATABASE_PASSWORD=your_password
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+
+CORS_ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 ### تشغيل Migrations
+
 ```bash
-python manage.py makemigrations accounts
-python manage.py makemigrations core
-python manage.py makemigrations students
 python manage.py migrate
 ```
 
 ### إنشاء المستخدمين الافتراضيين
+
 ```bash
 python manage.py create_default_users
 ```
 
 ### تشغيل الخادم
+
 ```bash
 python manage.py runserver
 ```
 
-الـ API متاح على: http://localhost:8000/api/
+API متاح على: `http://localhost:8000/api/`
 
 ---
 
@@ -68,47 +85,62 @@ npm install
 npm run dev
 ```
 
-الواجهة متاحة على: http://localhost:3000
+الواجهة متاحة على: `http://localhost:3000`
 
 ---
 
 ## بيانات الدخول الافتراضية
 
-| المستخدم   | كلمة المرور   | الدور          |
-|-----------|--------------|----------------|
-| admin     | Admin@1234   | مدير النظام     |
-| manager   | Manager@1234 | مدير            |
-| specialist| Specialist@1234 | أخصائي       |
-| reception | Reception@1234 | استقبال        |
+| المستخدم | كلمة المرور | الدور |
+|----------|------------|-------|
+| admin | Admin@1234 | مدير النظام |
+| manager | Manager@1234 | مدير |
+| specialist | Specialist@1234 | أخصائي |
+| reception | Reception@1234 | استقبال |
 
 ---
 
-## API Endpoints الرئيسية
+## المتغيرات البيئية (Production)
 
-### المصادقة
-- `POST /api/auth/login/` — تسجيل الدخول
-- `POST /api/auth/logout/` — تسجيل الخروج
-- `POST /api/auth/token/refresh/` — تجديد التوكن
-- `GET/PATCH /api/auth/profile/` — الملف الشخصي
+| المتغير | الوصف |
+|---------|-------|
+| `SECRET_KEY` | مفتاح Django السري |
+| `DATABASE_URL` | رابط PostgreSQL (Railway يوفره تلقائياً) |
+| `ALLOWED_HOSTS` | النطاقات المسموح بها |
+| `CORS_ALLOWED_ORIGINS` | عناوين Frontend المسموح بها |
+| `DJANGO_SETTINGS_MODULE` | `rwad_erp.settings.production` |
 
-### الطلاب
-- `GET /api/students/` — قائمة الطلاب (مع بحث وفلترة)
-- `POST /api/students/` — إضافة طالب
-- `GET /api/students/{id}/` — تفاصيل طالب
-- `PATCH /api/students/{id}/` — تعديل طالب
-- `DELETE /api/students/{id}/` — حذف طالب
-- `GET /api/students/export/` — تصدير Excel
+---
 
-### أولياء الأمور
-- `GET /api/students/{id}/guardians/` — قائمة أولياء الأمور
-- `POST /api/students/{id}/guardians/` — إضافة ولي أمر
-- `PATCH /api/students/{id}/guardians/{gid}/` — تعديل
-- `DELETE /api/students/{id}/guardians/{gid}/` — حذف
+## الصفحات الرئيسية
 
-### الأسرة
-- `GET/POST/PUT /api/students/{id}/family/` — بيانات الأسرة
+| المسار | الوصف | الصلاحية |
+|--------|-------|---------|
+| `/login` | تسجيل الدخول | عام |
+| `/dashboard` | لوحة التحكم والإحصاءات | مسجّل |
+| `/students` | قائمة المستفيدين | مسجّل |
+| `/students/new` | إضافة مستفيد | can_write |
+| `/students/{id}` | ملف المستفيد | مسجّل |
+| `/students/{id}/edit` | تعديل المستفيد | can_write |
+| `/users` | إدارة المستخدمين | admin |
+| `/audit-logs` | سجل العمليات | manager+ |
 
-### المرفقات
-- `GET /api/students/{id}/attachments/` — قائمة المرفقات
-- `POST /api/students/{id}/attachments/` — رفع مرفق
-- `DELETE /api/students/{id}/attachments/{aid}/` — حذف مرفق
+---
+
+## API Endpoints السريع
+
+```
+POST   /api/auth/login/
+POST   /api/auth/logout/
+GET    /api/students/
+POST   /api/students/
+GET    /api/students/{id}/
+PATCH  /api/students/{id}/
+DELETE /api/students/{id}/
+GET    /api/students/export/
+POST   /api/students/import/
+GET    /api/students/import/template/
+GET    /api/core/audit-logs/
+```
+
+للتوثيق الكامل راجع [README.md](README.md).
