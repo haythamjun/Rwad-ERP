@@ -194,6 +194,12 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('تاريخ الميلاد غير صحيح (أكثر من 100 سنة).')
         return value
 
+    def validate_registration_date(self, value):
+        today = date.today()
+        if value > today:
+            raise serializers.ValidationError('تاريخ التسجيل لا يمكن أن يكون في المستقبل.')
+        return value
+
     def create(self, validated_data):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
