@@ -33,7 +33,7 @@ const schema = z.object({
       return dob >= minDate;
     }, 'تاريخ الميلاد غير صحيح (أكثر من 100 سنة)'),
   gender:            z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
-  nationality:       z.string().min(2, 'الجنسية مطلوبة'),
+  nationality:       z.string().min(1, 'الجنسية مطلوبة'),
   // إعاقة
   disability_type:   z.string().optional(),
   disability_degree: z.string().optional(),
@@ -47,7 +47,15 @@ const schema = z.object({
   referral_source_detail: z.string().optional(),
   // حالة
   status:            z.enum(['pending','active','inactive','graduated','suspended','transferred']),
-  registration_date: z.string().min(1, 'تاريخ التسجيل مطلوب'),
+  registration_date: z
+    .string()
+    .min(1, 'تاريخ التسجيل مطلوب')
+    .refine((val) => {
+      const d = new Date(val);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return d <= today;
+    }, 'تاريخ التسجيل لا يمكن أن يكون في المستقبل'),
   notes:             z.string().optional(),
 });
 
@@ -90,6 +98,29 @@ const EDUCATIONAL_LEVELS = [
   { value: 'secondary',    label: 'ثانوي' },
   { value: 'university',   label: 'جامعي' },
   { value: 'special',      label: 'برنامج تربية خاصة' },
+];
+
+const NATIONALITIES = [
+  'سعودي', 'سعودية',
+  'يمني', 'يمنية',
+  'مصري', 'مصرية',
+  'سوري', 'سورية',
+  'أردني', 'أردنية',
+  'فلسطيني', 'فلسطينية',
+  'عراقي', 'عراقية',
+  'لبناني', 'لبنانية',
+  'سوداني', 'سودانية',
+  'موريتاني', 'موريتانية',
+  'باكستاني', 'باكستانية',
+  'هندي', 'هندية',
+  'بنغلاديشي', 'بنغلاديشية',
+  'فلبيني', 'فلبينية',
+  'إندونيسي', 'إندونيسية',
+  'إثيوبي', 'إثيوبية',
+  'نيجيري', 'نيجيرية',
+  'أمريكي', 'أمريكية',
+  'بريطاني', 'بريطانية',
+  'أخرى',
 ];
 
 const REFERRAL_SOURCES = [
@@ -234,13 +265,24 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
 
           <div>
             <label className="form-label">الجنسية <span className="text-red-500">*</span></label>
-            <input {...register('nationality')} className="form-input" />
+            <select {...register('nationality')} className="form-input">
+              <option value="">-- اختر --</option>
+              {NATIONALITIES.map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
             {errors.nationality && <p className="text-red-500 text-xs mt-1">{errors.nationality.message}</p>}
           </div>
 
           <div>
             <label className="form-label">تاريخ التسجيل <span className="text-red-500">*</span></label>
-            <input {...register('registration_date')} type="date" className="form-input" dir="ltr" />
+            <input
+              {...register('registration_date')}
+              type="date"
+              className="form-input"
+              dir="ltr"
+              max={new Date().toISOString().split('T')[0]}
+            />
             {errors.registration_date && <p className="text-red-500 text-xs mt-1">{errors.registration_date.message}</p>}
           </div>
 
