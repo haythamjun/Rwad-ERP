@@ -1,9 +1,19 @@
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
+export type ModuleKey = 'students' | 'reports' | 'audit_logs' | 'users' | 'settings';
+
+export interface ModulePermission {
+  module: ModuleKey;
+  can_view: boolean;
+  can_edit: boolean;
+}
+
 export interface User {
   id: number;
   username: string;
+  first_name: string;
+  last_name: string;
   full_name: string;
   email: string;
   role: 'admin' | 'manager' | 'specialist' | 'reception' | 'viewer';
@@ -15,6 +25,7 @@ export interface User {
   avatar?: string;
   is_active: boolean;
   created_at: string;
+  permissions?: ModulePermission[];
 }
 
 export interface AuthTokens { access: string; refresh: string; }

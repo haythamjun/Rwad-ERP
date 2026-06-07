@@ -45,8 +45,6 @@ class LogoutView(APIView):
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserSerializer
-
     def get_object(self):
         return self.request.user
 
@@ -72,7 +70,7 @@ class ChangePasswordView(APIView):
 
 
 class UserListCreateView(generics.ListCreateAPIView):
-    queryset = User.objects.all().order_by('-date_joined')
+    queryset = User.objects.prefetch_related('module_permissions').order_by('-date_joined')
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -84,12 +82,32 @@ class UserListCreateView(generics.ListCreateAPIView):
             return [IsAdmin()]
         return [IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        serializer = UserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        log_action(request, 'create', user, str(user))
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = User.objects.all()
+    queryset = User.objects.prefetch_related('module_permissions').all()
     permission_classes = [IsAdmin]
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
             return UserUpdateSerializer
         return UserSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = UserUpdateSerializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        log_action(request, 'update', user, str(user))
+        return Response(UserSerializer(user).data)
+
+    def perform_destroy(self, instance):
+        log_action(self.request, 'delete', instance, str(instance))
+        instance.delete()

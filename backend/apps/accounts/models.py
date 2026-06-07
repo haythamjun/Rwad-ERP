@@ -50,3 +50,28 @@ class User(AbstractUser):
     @property
     def can_delete(self):
         return self.role in [self.Role.ADMIN, self.Role.MANAGER]
+
+
+class UserModulePermission(models.Model):
+    class Module(models.TextChoices):
+        STUDENTS   = 'students',   'ملفات الطلاب'
+        REPORTS    = 'reports',    'التقارير'
+        AUDIT_LOGS = 'audit_logs', 'سجل العمليات'
+        USERS      = 'users',      'المستخدمون'
+        SETTINGS   = 'settings',   'الإعدادات'
+
+    user     = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='module_permissions', verbose_name='المستخدم',
+    )
+    module   = models.CharField(max_length=20, choices=Module.choices, verbose_name='الوحدة')
+    can_view = models.BooleanField(default=False, verbose_name='عرض')
+    can_edit = models.BooleanField(default=False, verbose_name='تعديل')
+
+    class Meta:
+        unique_together = ('user', 'module')
+        verbose_name = 'صلاحية وحدة'
+        verbose_name_plural = 'صلاحيات الوحدات'
+
+    def __str__(self):
+        return f"{self.user.username} — {self.get_module_display()}"

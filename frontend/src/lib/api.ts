@@ -57,6 +57,7 @@ export const authApi = {
   users: () => api.get('/auth/users/'),
   createUser: (data: unknown) => api.post('/auth/users/', data),
   updateUser: (id: number, data: unknown) => api.patch(`/auth/users/${id}/`, data),
+  deleteUser: (id: number) => api.delete(`/auth/users/${id}/`),
 };
 
 // ─────────────────────────────────────────────
