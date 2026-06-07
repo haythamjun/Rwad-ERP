@@ -21,9 +21,9 @@ class AttachmentInline(admin.TabularInline):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display  = ['file_number', 'full_name', 'national_id', 'disability_type', 'gender', 'status', 'registration_date']
+    list_display  = ['file_number', 'first_name', 'family_name', 'national_id', 'disability_type', 'gender', 'status', 'registration_date']
     list_filter   = ['status', 'gender', 'nationality', 'disability_type', 'disability_degree', 'educational_level', 'referral_source']
-    search_fields = ['full_name', 'national_id', 'file_number', 'diagnosis']
+    search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number', 'diagnosis']
     readonly_fields = ['file_number', 'created_by', 'created_at', 'updated_at']
     inlines       = [GuardianInline, FamilyInfoInline, AttachmentInline]
     ordering      = ['-created_at']
@@ -33,7 +33,7 @@ class StudentAdmin(admin.ModelAdmin):
             'fields': ('file_number', 'registration_date', 'status'),
         }),
         ('البيانات الشخصية', {
-            'fields': ('full_name', 'national_id', 'date_of_birth', 'gender', 'nationality', 'photo'),
+            'fields': ('first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'date_of_birth', 'gender', 'nationality', 'photo'),
         }),
         ('الإعاقة والتشخيص', {
             'fields': ('disability_type', 'disability_degree', 'diagnosis'),
@@ -65,17 +65,17 @@ class StudentAdmin(admin.ModelAdmin):
 class GuardianAdmin(admin.ModelAdmin):
     list_display  = ['full_name', 'relationship', 'phone', 'student', 'is_primary_contact']
     list_filter   = ['relationship', 'is_primary_contact']
-    search_fields = ['full_name', 'phone', 'student__full_name']
+    search_fields = ['full_name', 'phone', 'student__first_name', 'student__family_name']
 
 
 @admin.register(FamilyInfo)
 class FamilyInfoAdmin(admin.ModelAdmin):
     list_display  = ['student', 'family_size', 'parents_status', 'income_range', 'monthly_income']
-    search_fields = ['student__full_name']
+    search_fields = ['student__first_name', 'student__family_name']
 
 
 @admin.register(StudentAttachment)
 class StudentAttachmentAdmin(admin.ModelAdmin):
     list_display  = ['name', 'attachment_type', 'student', 'uploaded_by', 'created_at']
     list_filter   = ['attachment_type']
-    search_fields = ['name', 'student__full_name']
+    search_fields = ['name', 'student__first_name', 'student__family_name']

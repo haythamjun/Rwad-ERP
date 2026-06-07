@@ -9,7 +9,10 @@ import type { StudentFormData } from '@/types';
 
 const schema = z.object({
   // أساسية
-  full_name:         z.string().min(2, 'الاسم مطلوب').max(200),
+  first_name:       z.string().min(2, 'الاسم الأول مطلوب').max(50),
+  middle_name:      z.string().min(2, 'اسم الأب مطلوب').max(50),
+  grandfather_name: z.string().min(2, 'اسم الجد مطلوب').max(50),
+  family_name:      z.string().min(2, 'اسم العائلة مطلوب').max(50),
   national_id: z
     .string()
     .min(1, 'رقم الهوية مطلوب')
@@ -176,10 +179,28 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="form-label">الاسم الكامل <span className="text-red-500">*</span></label>
-            <input {...register('full_name')} className="form-input" placeholder="مثال: محمد أحمد العتيبي" />
-            {errors.full_name && <p className="text-red-500 text-xs mt-1">{errors.full_name.message}</p>}
+          <div>
+            <label className="form-label">الاسم الأول <span className="text-red-500">*</span></label>
+            <input {...register('first_name')} className="form-input" placeholder="مثال: محمد" />
+            {errors.first_name && <p className="text-red-500 text-xs mt-1">{errors.first_name.message}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">اسم الأب <span className="text-red-500">*</span></label>
+            <input {...register('middle_name')} className="form-input" placeholder="مثال: أحمد" />
+            {errors.middle_name && <p className="text-red-500 text-xs mt-1">{errors.middle_name.message}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">اسم الجد <span className="text-red-500">*</span></label>
+            <input {...register('grandfather_name')} className="form-input" placeholder="مثال: سعد" />
+            {errors.grandfather_name && <p className="text-red-500 text-xs mt-1">{errors.grandfather_name.message}</p>}
+          </div>
+
+          <div>
+            <label className="form-label">اسم العائلة <span className="text-red-500">*</span></label>
+            <input {...register('family_name')} className="form-input" placeholder="مثال: العتيبي" />
+            {errors.family_name && <p className="text-red-500 text-xs mt-1">{errors.family_name.message}</p>}
           </div>
 
           <div>

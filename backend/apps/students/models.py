@@ -61,7 +61,10 @@ class Student(models.Model):
     )
 
     # ── البيانات الشخصية ───────────────────────────────────────────────
-    full_name   = models.CharField(max_length=200, verbose_name='الاسم الكامل')
+    first_name       = models.CharField(max_length=50, verbose_name='الاسم الأول')
+    middle_name      = models.CharField(max_length=50, blank=True, default='', verbose_name='اسم الأب')
+    grandfather_name = models.CharField(max_length=50, blank=True, default='', verbose_name='اسم الجد')
+    family_name      = models.CharField(max_length=50, verbose_name='اسم العائلة')
     national_id = models.CharField(
         max_length=20, unique=True, verbose_name='رقم الهوية / الإقامة'
     )
@@ -133,9 +136,15 @@ class Student(models.Model):
             models.Index(fields=['file_number']),
             models.Index(fields=['national_id']),
             models.Index(fields=['status']),
-            models.Index(fields=['full_name']),
+            models.Index(fields=['first_name']),
+            models.Index(fields=['family_name']),
             models.Index(fields=['disability_type']),
         ]
+
+    @property
+    def full_name(self):
+        parts = [self.first_name, self.middle_name, self.grandfather_name, self.family_name]
+        return ' '.join(p for p in parts if p)
 
     def __str__(self):
         return f"{self.full_name} ({self.file_number})"

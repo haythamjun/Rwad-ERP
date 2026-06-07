@@ -30,8 +30,8 @@ class StudentListCreateView(generics.ListCreateAPIView):
     )
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = StudentFilter
-    search_fields = ['full_name', 'national_id', 'file_number']
-    ordering_fields = ['full_name', 'registration_date', 'created_at', 'file_number']
+    search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number']
+    ordering_fields = ['first_name', 'family_name', 'registration_date', 'created_at', 'file_number']
     ordering = ['-created_at']
 
     def get_serializer_class(self):
@@ -230,9 +230,9 @@ class StudentExportView(APIView):
 
         # ── Group headers (row 1) ──────────────────────────────────────
         GROUP_HEADERS = [
-            ('بيانات المستفيد',          1,  12),
-            ('بيانات ولي الأمر',         13, 21),
-            ('دراسة الحالة الاجتماعية',  22, 28),
+            ('بيانات المستفيد',          1,  15),
+            ('بيانات ولي الأمر',         16, 24),
+            ('دراسة الحالة الاجتماعية',  25, 31),
         ]
         group_fill = PatternFill(start_color='0F2A47', end_color='0F2A47', fill_type='solid')
         group_font = Font(color='FFFFFF', bold=True, size=13)
@@ -247,8 +247,8 @@ class StudentExportView(APIView):
         # ── Column headers (row 2) ─────────────────────────────────────
         headers = [
             # بيانات المستفيد
-            'رقم الملف', 'تاريخ التسجيل', 'الاسم الكامل', 'رقم الهوية',
-            'تاريخ الميلاد', 'الجنس', 'الجنسية', 'الحالة',
+            'رقم الملف', 'تاريخ التسجيل', 'الاسم الأول', 'اسم الأب', 'اسم الجد', 'اسم العائلة',
+            'رقم الهوية', 'تاريخ الميلاد', 'الجنس', 'الجنسية', 'الحالة',
             'نوع الإعاقة', 'درجة الإعاقة', 'التشخيص', 'جهة الإحالة',
             # بيانات ولي الأمر
             'اسم ولي الأمر', 'صلة القرابة', 'رقم هوية ولي الأمر',
@@ -287,7 +287,10 @@ class StudentExportView(APIView):
                 # بيانات المستفيد
                 student.file_number,
                 str(student.registration_date),
-                student.full_name,
+                student.first_name,
+                student.middle_name,
+                student.grandfather_name,
+                student.family_name,
                 student.national_id,
                 str(student.date_of_birth),
                 student.get_gender_display(),
@@ -421,22 +424,27 @@ class StudentImportView(APIView):
         created, skipped, errors = 0, 0, []
 
         for i, row in enumerate(rows, start=2):
-            if len(row) < 5:
+            if len(row) < 8:
                 continue
 
-            full_name   = _cell(row, 0)
-            national_id = _cell(row, 1)
-            dob_raw     = _cell(row, 2)
-            gender_raw  = _cell(row, 3)
-            nationality = _cell(row, 4)
+            first_name       = _cell(row, 0)
+            middle_name      = _cell(row, 1)
+            grandfather_name = _cell(row, 2)
+            family_name      = _cell(row, 3)
+            national_id      = _cell(row, 4)
+            dob_raw          = _cell(row, 5)
+            gender_raw       = _cell(row, 6)
+            nationality      = _cell(row, 7)
 
-            if not any([full_name, national_id, dob_raw]):
+            if not any([first_name, family_name, national_id, dob_raw]):
                 continue  # صف فارغ
 
             row_errors = []
 
-            if not full_name:
-                row_errors.append('الاسم الكامل مطلوب')
+            if not first_name:
+                row_errors.append('الاسم الأول مطلوب')
+            if not family_name:
+                row_errors.append('اسم العائلة مطلوب')
             if not national_id:
                 row_errors.append('رقم الهوية مطلوب')
             elif not national_id.isdigit() or len(national_id) != 10:
@@ -449,8 +457,8 @@ class StudentImportView(APIView):
                 row_errors.append(f'الجنس غير صحيح: "{gender_raw}" — استخدم: ذكر أو أنثى')
 
             try:
-                if isinstance(row[2].value, date_type):
-                    dob = row[2].value
+                if isinstance(row[5].value, date_type):
+                    dob = row[5].value
                 else:
                     from datetime import datetime
                     dob = datetime.strptime(dob_raw, '%Y-%m-%d').date()
@@ -463,31 +471,33 @@ class StudentImportView(APIView):
                 row_errors.append(f'تاريخ الميلاد غير صحيح: "{dob_raw}" — الصيغة المطلوبة: YYYY-MM-DD')
                 dob = None
 
+            full_name_display = f"{first_name} {family_name}".strip()
+
             if row_errors:
-                errors.append({'row': i, 'name': full_name or '—', 'errors': row_errors})
+                errors.append({'row': i, 'name': full_name_display or '—', 'errors': row_errors})
                 skipped += 1
                 continue
 
             if Student.objects.filter(national_id=national_id).exists():
-                errors.append({'row': i, 'name': full_name, 'errors': [f'رقم الهوية {national_id} مسجّل مسبقاً']})
+                errors.append({'row': i, 'name': full_name_display, 'errors': [f'رقم الهوية {national_id} مسجّل مسبقاً']})
                 skipped += 1
                 continue
 
-            status_val        = STATUS_MAP.get(_cell(row, 5) if len(row) > 5 else '', 'pending') or 'pending'
-            reg_date_raw      = _cell(row, 6) if len(row) > 6 else ''
-            disability_raw    = _cell(row, 7) if len(row) > 7 else ''
-            degree_raw        = _cell(row, 8) if len(row) > 8 else ''
-            diagnosis         = _cell(row, 9) if len(row) > 9 else ''
-            edu_raw           = _cell(row, 10) if len(row) > 10 else ''
-            school_name       = _cell(row, 11) if len(row) > 11 else ''
-            grade             = _cell(row, 12) if len(row) > 12 else ''
-            referral_raw      = _cell(row, 13) if len(row) > 13 else ''
-            notes             = _cell(row, 14) if len(row) > 14 else ''
+            status_val        = STATUS_MAP.get(_cell(row, 8) if len(row) > 8 else '', 'pending') or 'pending'
+            reg_date_raw      = _cell(row, 9) if len(row) > 9 else ''
+            disability_raw    = _cell(row, 10) if len(row) > 10 else ''
+            degree_raw        = _cell(row, 11) if len(row) > 11 else ''
+            diagnosis         = _cell(row, 12) if len(row) > 12 else ''
+            edu_raw           = _cell(row, 13) if len(row) > 13 else ''
+            school_name       = _cell(row, 14) if len(row) > 14 else ''
+            grade             = _cell(row, 15) if len(row) > 15 else ''
+            referral_raw      = _cell(row, 16) if len(row) > 16 else ''
+            notes             = _cell(row, 17) if len(row) > 17 else ''
 
             from datetime import date as date_type2
             try:
-                if len(row) > 6 and isinstance(row[6].value, date_type2):
-                    reg_date = row[6].value
+                if len(row) > 9 and isinstance(row[9].value, date_type2):
+                    reg_date = row[9].value
                 elif reg_date_raw:
                     from datetime import datetime
                     reg_date = datetime.strptime(reg_date_raw, '%Y-%m-%d').date()
@@ -497,7 +507,10 @@ class StudentImportView(APIView):
                 reg_date = date_type2.today()
 
             Student.objects.create(
-                full_name         = full_name,
+                first_name        = first_name,
+                middle_name       = middle_name,
+                grandfather_name  = grandfather_name,
+                family_name       = family_name,
                 national_id       = national_id,
                 date_of_birth     = dob,
                 gender            = gender,
@@ -534,7 +547,10 @@ class StudentImportTemplateView(APIView):
         ws.sheet_view.rightToLeft = True
 
         headers = [
-            'الاسم الكامل *',
+            'الاسم الأول *',
+            'اسم الأب *',
+            'اسم الجد',
+            'اسم العائلة *',
             'رقم الهوية * (10 أرقام)',
             'تاريخ الميلاد * (YYYY-MM-DD)',
             'الجنس * (ذكر/أنثى)',
@@ -564,7 +580,7 @@ class StudentImportTemplateView(APIView):
 
         # صف مثال
         example = [
-            'محمد أحمد العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
+            'محمد', 'أحمد', 'سعد', 'العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
             'نشط', '2024-01-10', 'طيف التوحد', 'متوسطة', 'تشخيص طيف التوحد درجة 2',
             'برنامج تربية خاصة', 'مدرسة الأمل', 'الثالث الابتدائي', 'مستشفى / عيادة', '',
         ]

@@ -83,6 +83,7 @@ class StudentAttachmentSerializer(serializers.ModelSerializer):
 
 
 class StudentListSerializer(serializers.ModelSerializer):
+    full_name                = serializers.CharField(read_only=True)
     status_display           = serializers.CharField(source='get_status_display',           read_only=True)
     gender_display           = serializers.CharField(source='get_gender_display',           read_only=True)
     disability_type_display  = serializers.CharField(source='get_disability_type_display',  read_only=True)
@@ -93,7 +94,9 @@ class StudentListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Student
         fields = [
-            'id', 'file_number', 'full_name', 'national_id',
+            'id', 'file_number',
+            'first_name', 'middle_name', 'grandfather_name', 'family_name', 'full_name',
+            'national_id',
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'status', 'status_display',
             'disability_type', 'disability_type_display',
@@ -113,6 +116,7 @@ class StudentListSerializer(serializers.ModelSerializer):
 
 
 class StudentDetailSerializer(serializers.ModelSerializer):
+    full_name                = serializers.CharField(read_only=True)
     guardians                = GuardianSerializer(many=True, read_only=True)
     family_info              = FamilyInfoSerializer(read_only=True)
     attachments              = StudentAttachmentSerializer(many=True, read_only=True)
@@ -128,7 +132,9 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Student
         fields = [
-            'id', 'file_number', 'full_name', 'national_id',
+            'id', 'file_number',
+            'first_name', 'middle_name', 'grandfather_name', 'family_name', 'full_name',
+            'national_id',
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'photo',
             # إعاقة
@@ -161,7 +167,8 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Student
         fields = [
-            'full_name', 'national_id', 'date_of_birth', 'gender', 'nationality',
+            'first_name', 'middle_name', 'grandfather_name', 'family_name',
+            'national_id', 'date_of_birth', 'gender', 'nationality',
             'photo',
             # إعاقة
             'disability_type', 'disability_degree', 'diagnosis',

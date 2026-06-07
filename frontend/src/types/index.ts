@@ -46,6 +46,10 @@ export type ReferralSource =
 export interface Student {
   id: number;
   file_number: string;
+  first_name: string;
+  middle_name: string;
+  grandfather_name: string;
+  family_name: string;
   full_name: string;
   national_id: string;
   date_of_birth: string;
@@ -86,7 +90,10 @@ export interface Student {
 }
 
 export interface StudentFormData {
-  full_name: string;
+  first_name: string;
+  middle_name: string;
+  grandfather_name: string;
+  family_name: string;
   national_id: string;
   date_of_birth: string;
   gender: Gender | '';

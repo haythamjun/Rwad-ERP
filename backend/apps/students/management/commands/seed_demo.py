@@ -8,7 +8,7 @@ User = get_user_model()
 
 STUDENTS = [
     {
-        'full_name': 'محمد عبدالله الغامدي',
+        'first_name': 'محمد', 'middle_name': 'عبدالله', 'grandfather_name': '', 'family_name': 'الغامدي',
         'national_id': '1056789012',
         'date_of_birth': '2015-03-12',
         'gender': 'male',
@@ -45,7 +45,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'نورة خالد القحطاني',
+        'first_name': 'نورة', 'middle_name': 'خالد', 'grandfather_name': '', 'family_name': 'القحطاني',
         'national_id': '1067890123',
         'date_of_birth': '2017-07-22',
         'gender': 'female',
@@ -80,7 +80,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'يوسف أحمد العتيبي',
+        'first_name': 'يوسف', 'middle_name': 'أحمد', 'grandfather_name': '', 'family_name': 'العتيبي',
         'national_id': '1078901234',
         'date_of_birth': '2013-11-05',
         'gender': 'male',
@@ -115,7 +115,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'ريم فهد الشهري',
+        'first_name': 'ريم', 'middle_name': 'فهد', 'grandfather_name': '', 'family_name': 'الشهري',
         'national_id': '2089012345',
         'date_of_birth': '2016-05-18',
         'gender': 'female',
@@ -148,7 +148,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'عمر سالم الدوسري',
+        'first_name': 'عمر', 'middle_name': 'سالم', 'grandfather_name': '', 'family_name': 'الدوسري',
         'national_id': '1090123456',
         'date_of_birth': '2012-08-30',
         'gender': 'male',
@@ -182,7 +182,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'لمى عبدالرحمن الحربي',
+        'first_name': 'لمى', 'middle_name': 'عبدالرحمن', 'grandfather_name': '', 'family_name': 'الحربي',
         'national_id': '2001234567',
         'date_of_birth': '2018-02-14',
         'gender': 'female',
@@ -212,7 +212,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'تركي ناصر الزهراني',
+        'first_name': 'تركي', 'middle_name': 'ناصر', 'grandfather_name': '', 'family_name': 'الزهراني',
         'national_id': '1102345678',
         'date_of_birth': '2010-12-01',
         'gender': 'male',
@@ -246,7 +246,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'دانة خالد المالكي',
+        'first_name': 'دانة', 'middle_name': 'خالد', 'grandfather_name': '', 'family_name': 'المالكي',
         'national_id': '2013456789',
         'date_of_birth': '2019-09-08',
         'gender': 'female',
@@ -278,7 +278,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'فيصل محمد السبيعي',
+        'first_name': 'فيصل', 'middle_name': 'محمد', 'grandfather_name': '', 'family_name': 'السبيعي',
         'national_id': '1123456780',
         'date_of_birth': '2011-04-25',
         'gender': 'male',
@@ -309,7 +309,7 @@ STUDENTS = [
         },
     },
     {
-        'full_name': 'سارة علي الغامدي',
+        'first_name': 'سارة', 'middle_name': 'علي', 'grandfather_name': '', 'family_name': 'الغامدي',
         'national_id': '2024567891',
         'date_of_birth': '2014-06-19',
         'gender': 'female',

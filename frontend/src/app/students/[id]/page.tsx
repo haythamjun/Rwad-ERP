@@ -213,7 +213,10 @@ export default function StudentDetailPage() {
           <div className="card">
             <h3 className="section-title">البيانات الشخصية</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InfoRow label="الاسم الكامل"            value={student.full_name} />
+              <InfoRow label="الاسم الأول"               value={student.first_name} />
+              <InfoRow label="اسم الأب"                value={student.middle_name || '—'} />
+              <InfoRow label="اسم الجد"                value={student.grandfather_name || '—'} />
+              <InfoRow label="اسم العائلة"             value={student.family_name} />
               <InfoRow label="رقم الملف"               value={student.file_number} />
               <InfoRow label="رقم الهوية / الإقامة"   value={student.national_id} />
               <InfoRow label="تاريخ الميلاد"           value={`${formatDate(student.date_of_birth)} (${student.age} سنة)`} />
