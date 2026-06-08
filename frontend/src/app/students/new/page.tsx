@@ -221,11 +221,12 @@ export default function NewStudentPage() {
       });
       if (photo) fd.append('photo', photo);
       const res = await studentsApi.create(fd);
-      studentId = res.data.id;
+      const sid: number = res.data.id;
+      studentId = sid;
 
       // 2. Guardians
       for (const g of guardians) {
-        await guardiansApi.create(studentId, {
+        await guardiansApi.create(sid, {
           full_name:          g.full_name,
           relationship:       g.relationship as never,
           national_id:        g.national_id || undefined,
@@ -240,7 +241,7 @@ export default function NewStudentPage() {
 
       // 3. Family
       if (showFamily && family.parents_status) {
-        await familyApi.create(studentId, {
+        await familyApi.create(sid, {
           family_size:         Number(family.family_size),
           sibling_order:       Number(family.sibling_order),
           parents_status:      family.parents_status,
@@ -258,11 +259,11 @@ export default function NewStudentPage() {
         afd.append('file', a.file);
         afd.append('attachment_type', a.type);
         afd.append('name', a.name);
-        await attachmentsApi.upload(studentId, afd);
+        await attachmentsApi.upload(sid, afd);
       }
 
       toast.success('تم حفظ ملف الطالب بنجاح');
-      router.push(`/students/${studentId}`);
+      router.push(`/students/${sid}`);
     } catch (err: unknown) {
       const apiErr = err as { response?: { data?: Record<string, string[]> } };
       if (apiErr?.response?.data) {
