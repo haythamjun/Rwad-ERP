@@ -204,6 +204,9 @@ export default function NewStudentPage() {
       if (!family.family_size || !family.sibling_order || !family.parents_status) {
         toast.error('يرجى تعبئة الحقول الإلزامية في بيانات الأسرة'); return;
       }
+      if (Number(family.sibling_order) > Number(family.family_size)) {
+        toast.error('ترتيب المستفيد لا يمكن أن يكون أكبر من عدد أفراد الأسرة'); return;
+      }
     }
     // Validate attachments
     for (const a of attachments) {
@@ -262,8 +265,8 @@ export default function NewStudentPage() {
         await attachmentsApi.upload(sid, afd);
       }
 
-      toast.success('تم حفظ ملف الطالب بنجاح');
-      router.push(`/students/${sid}`);
+      toast.success(`تمت الإضافة بنجاح — رقم الملف: ${res.data.file_number}`, { duration: 5000 });
+      router.push('/students');
     } catch (err: unknown) {
       const apiErr = err as { response?: { data?: Record<string, string[]> } };
       if (apiErr?.response?.data) {
@@ -274,8 +277,8 @@ export default function NewStudentPage() {
       } else {
         toast.error('حدث خطأ أثناء الحفظ');
       }
-      // If student was created but later steps failed, redirect anyway
-      if (studentId) router.push(`/students/${studentId}`);
+      // If student was created but later steps failed, go to list
+      if (studentId) router.push('/students');
     } finally {
       setSaving(false);
     }
@@ -513,8 +516,15 @@ export default function NewStudentPage() {
                     </div>
                     <div>
                       <label className="form-label">رقم الهوية</label>
-                      <input className="form-input" dir="ltr" value={g.national_id}
-                        onChange={e => updateGuardian(g._key, 'national_id', e.target.value)} />
+                      <input
+                        className="form-input font-mono" dir="ltr"
+                        inputMode="numeric" maxLength={10} placeholder="1XXXXXXXXX"
+                        value={g.national_id}
+                        onChange={e => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          updateGuardian(g._key, 'national_id', v);
+                        }}
+                      />
                     </div>
                     <div>
                       <label className="form-label">رقم الجوال <span className="text-red-500">*</span></label>
