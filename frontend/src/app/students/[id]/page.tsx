@@ -7,7 +7,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Edit, Trash2, Plus, Phone, Mail, MapPin,
-  User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X,
+  User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -43,6 +43,16 @@ export default function StudentDetailPage() {
       router.replace('/students');
     },
     onError: () => toast.error('فشل الحذف'),
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: () => studentsApi.update(Number(id), { status: 'active' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      toast.success('تم قبول الطالب وتفعيل ملفه');
+    },
+    onError: () => toast.error('فشل قبول الطالب'),
   });
 
   const guardianDeleteMutation = useMutation({
@@ -146,6 +156,15 @@ export default function StudentDetailPage() {
             <Link href="/students" className="btn-secondary">
               <ArrowRight size={16} /> العودة
             </Link>
+            {user?.can_write && student?.status === 'pending' && (
+              <button
+                onClick={() => acceptMutation.mutate()}
+                disabled={acceptMutation.isPending}
+                className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-xl transition-colors disabled:opacity-50"
+              >
+                <CheckCircle size={16} /> قبول الطالب
+              </button>
+            )}
             {user?.can_write && (
               <Link href={`/students/${id}/edit`} className="btn-secondary">
                 <Edit size={16} /> تعديل
