@@ -116,17 +116,17 @@ export const familyApi = {
 // Branches
 // ─────────────────────────────────────────────
 export const branchesApi = {
-  list:   ()                              => api.get('/core/branches/'),
-  create: (data: Record<string, unknown>) => api.post('/core/branches/', data),
-  update: (id: number, data: Record<string, unknown>) => api.patch(`/core/branches/${id}/`, data),
-  delete: (id: number)                    => api.delete(`/core/branches/${id}/`),
+  list:   ()                              => api.get('/branches/'),
+  create: (data: Record<string, unknown>) => api.post('/branches/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/branches/${id}/`, data),
+  delete: (id: number)                    => api.delete(`/branches/${id}/`),
 };
 
 // ─────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────
 export const dashboardApi = {
-  stats: () => api.get('/core/dashboard/stats/'),
+  stats: () => api.get('/dashboard/stats/'),
 };
 
 // ─────────────────────────────────────────────
@@ -150,7 +150,7 @@ export const attendanceApi = {
 // Audit Logs
 // ─────────────────────────────────────────────
 export const auditLogsApi = {
-  list: (params?: Record<string, unknown>) => api.get('/core/audit-logs/', { params }),
+  list: (params?: Record<string, unknown>) => api.get('/audit-logs/', { params }),
 };
 
 // ─────────────────────────────────────────────

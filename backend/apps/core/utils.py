@@ -1,4 +1,40 @@
+import sys
+import traceback
+
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import exception_handler as drf_exception_handler
+
 from django.contrib.contenttypes.models import ContentType
+
+
+def custom_exception_handler(exc, context):
+    """
+    Catch ALL exceptions (not just APIException) and return JSON.
+    Prevents Django from returning HTML 500 pages for the API.
+    Logs the full traceback to stderr so Railway logs show the real error.
+    """
+    response = drf_exception_handler(exc, context)
+
+    if response is None:
+        # DRF didn't handle it — log and return JSON 500
+        view = context.get('view', '')
+        print(
+            f'UNHANDLED EXCEPTION in {view.__class__.__name__ if view else "unknown"}: '
+            f'{type(exc).__name__}: {exc}',
+            file=sys.stderr,
+        )
+        traceback.print_exc(file=sys.stderr)
+
+        return Response(
+            {
+                'error': f'{type(exc).__name__}: {exc}',
+                'detail': 'حدث خطأ داخلي في الخادم. تم تسجيل التفاصيل.',
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    return response
 
 
 def get_client_ip(request):
