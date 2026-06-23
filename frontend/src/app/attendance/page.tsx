@@ -50,9 +50,19 @@ export default function AttendancePage() {
     staleTime: 30_000,
   });
 
+  const nowTime = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   const quickMarkMutation = useMutation({
-    mutationFn: ({ studentId, status }: { studentId: number; status: string }) =>
-      attendanceApi.create(studentId, { attendance_date: selectedDate, status }),
+    mutationFn: ({ studentId, status }: { studentId: number; status: string }) => {
+      const payload: Record<string, string> = { attendance_date: selectedDate, status };
+      if (status === 'present' || status === 'late') {
+        payload.check_in_time = nowTime();
+      }
+      return attendanceApi.create(studentId, payload);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance-sheet'] });
       toast.success('تم التسجيل');
@@ -60,7 +70,7 @@ export default function AttendancePage() {
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { non_field_errors?: string[] } } })
         ?.response?.data?.non_field_errors?.[0];
-      toast.error(msg === 'The fields student, attendance_date must make a unique set.'
+      toast.error(msg === 'تم تسجيل حضور هذا الطالب مسبقاً في هذا اليوم'
         ? 'تم تسجيل حضور هذا الطالب مسبقاً'
         : 'حدث خطأ في التسجيل');
     },
