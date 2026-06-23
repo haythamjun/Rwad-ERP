@@ -1,4 +1,5 @@
 from rest_framework import generics, status, filters
+from rest_framework import serializers as drf_serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -627,12 +628,24 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
+        from django.db import IntegrityError
         student_pk = self.kwargs.get('student_pk')
-        if student_pk:
-            student = get_object_or_404(Student, pk=student_pk)
-            serializer.save(student=student)
-        else:
-            serializer.save()
+        try:
+            if student_pk:
+                student = get_object_or_404(Student, pk=student_pk)
+                # Manual duplicate-date check (UniqueTogetherValidator removed from serializer)
+                date = serializer.validated_data.get('attendance_date')
+                if StudentAttendance.objects.filter(student=student, attendance_date=date).exists():
+                    raise drf_serializers.ValidationError(
+                        {'non_field_errors': ['تم تسجيل حضور هذا الطالب مسبقاً في هذا اليوم']}
+                    )
+                serializer.save(student=student)
+            else:
+                serializer.save()
+        except IntegrityError:
+            raise drf_serializers.ValidationError(
+                {'non_field_errors': ['تم تسجيل حضور هذا الطالب مسبقاً في هذا اليوم']}
+            )
 
 
 class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):

@@ -235,11 +235,11 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'recorded_by', 'updated_by', 'created_at', 'updated_at']
-        extra_kwargs = {
-            # student is always supplied by the view via perform_create (from URL),
-            # so it must not be required in the request body.
-            'student': {'required': False},
-        }
+        extra_kwargs = {'student': {'required': False}}
+        # UniqueTogetherValidator for (student, attendance_date) forces student to be
+        # required in the request body, but student is always set by the view from the
+        # URL parameter. Remove it here and enforce the constraint in perform_create.
+        validators = []
 
     def get_recorded_by_name(self, obj):
         if obj.recorded_by:
