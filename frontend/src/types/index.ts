@@ -224,6 +224,50 @@ export interface StudentAttachment {
 }
 
 // ─────────────────────────────────────────────
+// Attendance
+// ─────────────────────────────────────────────
+export type AttendanceStatus =
+  | 'present' | 'absent' | 'late' | 'excused_absence' | 'early_leave';
+
+export interface Attendance {
+  id: number;
+  student: number;
+  student_name: string;
+  branch?: number | null;
+  branch_name?: string | null;
+  attendance_date: string;
+  check_in_time?: string | null;
+  check_out_time?: string | null;
+  status: AttendanceStatus;
+  status_display: string;
+  absence_reason?: string;
+  late_reason?: string;
+  early_leave_reason?: string;
+  guardian_notified: boolean;
+  notification_notes?: string;
+  notes?: string;
+  recorded_by?: number | null;
+  recorded_by_name?: string | null;
+  updated_by?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceFormData {
+  attendance_date: string;
+  status: AttendanceStatus;
+  check_in_time?: string;
+  check_out_time?: string;
+  absence_reason?: string;
+  late_reason?: string;
+  early_leave_reason?: string;
+  guardian_notified?: boolean;
+  notification_notes?: string;
+  notes?: string;
+  branch?: number | null;
+}
+
+// ─────────────────────────────────────────────
 // API Pagination
 // ─────────────────────────────────────────────
 export interface PaginatedResponse<T> {

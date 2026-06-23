@@ -8,14 +8,16 @@ import toast from 'react-hot-toast';
 import {
   ArrowRight, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
+  CalendarDays, Clock,
 } from 'lucide-react';
-import { studentsApi, guardiansApi, familyApi, attachmentsApi } from '@/lib/api';
+import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS } from '@/lib/utils';
-import type { Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData } from '@/types';
+import type { Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData } from '@/types';
 import Header from '@/components/layout/Header';
 import GuardianModal from '@/components/students/GuardianModal';
 import FamilyModal from '@/components/students/FamilyModal';
+import AttendanceModal from '@/components/students/AttendanceModal';
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +27,8 @@ export default function StudentDetailPage() {
 
   const [guardianModal, setGuardianModal] = useState<{ open: boolean; guardian?: Guardian }>({ open: false });
   const [familyModal, setFamilyModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'guardians' | 'family' | 'attachments'>('info');
+  const [attendanceModal, setAttendanceModal] = useState<{ open: boolean; record?: Attendance }>({ open: false });
+  const [activeTab, setActiveTab] = useState<'info' | 'guardians' | 'family' | 'attachments' | 'attendance'>('info');
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState('');
   const [attachName, setAttachName] = useState('');
@@ -108,6 +111,46 @@ export default function StudentDetailPage() {
       toast.success('تم حذف المرفق');
     },
     onError: () => toast.error('فشل حذف المرفق'),
+  });
+
+  const { data: attendances = [] } = useQuery<Attendance[]>({
+    queryKey: ['attendance', id],
+    queryFn: () => attendanceApi.list(Number(id)).then((r) => r.data),
+    enabled: activeTab === 'attendance',
+  });
+
+  const attendanceCreateMutation = useMutation({
+    mutationFn: (data: AttendanceFormData) => attendanceApi.create(Number(id), data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', id] });
+      setAttendanceModal({ open: false });
+      toast.success('تم تسجيل الحضور');
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { non_field_errors?: string[] } } })
+        ?.response?.data?.non_field_errors?.[0];
+      toast.error(msg || 'حدث خطأ في الحفظ');
+    },
+  });
+
+  const attendanceUpdateMutation = useMutation({
+    mutationFn: ({ recId, data }: { recId: number; data: AttendanceFormData }) =>
+      attendanceApi.update(Number(id), recId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', id] });
+      setAttendanceModal({ open: false });
+      toast.success('تم تحديث السجل');
+    },
+    onError: () => toast.error('حدث خطأ في التحديث'),
+  });
+
+  const attendanceDeleteMutation = useMutation({
+    mutationFn: (recId: number) => attendanceApi.delete(Number(id), recId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['attendance', id] });
+      toast.success('تم حذف السجل');
+    },
+    onError: () => toast.error('فشل الحذف'),
   });
 
   const handleAttachUpload = () => {
@@ -202,12 +245,13 @@ export default function StudentDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         {[
           { key: 'info', label: 'البيانات الأساسية', icon: User },
           { key: 'guardians', label: `أولياء الأمور (${student.guardians?.length || 0})`, icon: Users },
           { key: 'family', label: 'الأسرة', icon: Home },
           { key: 'attachments', label: `المرفقات (${student.attachments?.length || 0})`, icon: Paperclip },
+          { key: 'attendance', label: 'الحضور والغياب', icon: CalendarDays },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -525,6 +569,101 @@ export default function StudentDetailPage() {
         </div>
       )}
 
+      {activeTab === 'attendance' && (
+        <div className="space-y-4">
+          {user?.can_write && (
+            <button
+              onClick={() => setAttendanceModal({ open: true })}
+              className="btn-primary"
+            >
+              <Plus size={16} /> تسجيل حضور / غياب
+            </button>
+          )}
+
+          {attendances.length === 0 ? (
+            <div className="card text-center py-10 text-gray-400">
+              لا توجد سجلات حضور بعد
+            </div>
+          ) : (
+            <div className="card overflow-hidden p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-right py-3 px-4 font-medium text-gray-600">التاريخ</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-600">الحالة</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-600">الحضور / الانصراف</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-600">ولي الأمر</th>
+                    <th className="text-right py-3 px-4 font-medium text-gray-600">ملاحظات</th>
+                    {user?.can_write && (
+                      <th className="py-3 px-4" />
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {attendances.map((rec) => (
+                    <tr key={rec.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-3 px-4 font-medium text-gray-800">
+                        {formatDate(rec.attendance_date)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`badge text-xs px-2 py-0.5 ${ATTENDANCE_COLORS[rec.status]}`}>
+                          {rec.status_display}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-gray-500">
+                        {rec.check_in_time || rec.check_out_time ? (
+                          <span className="flex items-center gap-1">
+                            <Clock size={13} className="text-gray-400" />
+                            {rec.check_in_time && <span>{rec.check_in_time.slice(0,5)}</span>}
+                            {rec.check_in_time && rec.check_out_time && <span className="text-gray-300">—</span>}
+                            {rec.check_out_time && <span>{rec.check_out_time.slice(0,5)}</span>}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {rec.guardian_notified ? (
+                          <span className="badge bg-green-100 text-green-700 text-xs">تم الإخطار</span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-gray-500 max-w-[180px] truncate">
+                        {rec.absence_reason || rec.late_reason || rec.early_leave_reason || rec.notes || '—'}
+                      </td>
+                      {user?.can_write && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <button
+                              onClick={() => setAttendanceModal({ open: true, record: rec })}
+                              className="btn-secondary py-1 px-2"
+                            >
+                              <Edit size={13} />
+                            </button>
+                            {user?.can_delete && (
+                              <button
+                                onClick={() => {
+                                  if (confirm('حذف هذا السجل؟')) attendanceDeleteMutation.mutate(rec.id);
+                                }}
+                                className="btn-danger py-1 px-2"
+                                disabled={attendanceDeleteMutation.isPending}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       {guardianModal.open && (
         <GuardianModal
@@ -545,6 +684,21 @@ export default function StudentDetailPage() {
           loading={familySaveMutation.isPending}
         />
       )}
+
+      {attendanceModal.open && (
+        <AttendanceModal
+          record={attendanceModal.record}
+          onClose={() => setAttendanceModal({ open: false })}
+          onSave={(data) => {
+            if (attendanceModal.record) {
+              attendanceUpdateMutation.mutate({ recId: attendanceModal.record.id, data });
+            } else {
+              attendanceCreateMutation.mutate(data);
+            }
+          }}
+          loading={attendanceCreateMutation.isPending || attendanceUpdateMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -557,3 +711,11 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+const ATTENDANCE_COLORS: Record<string, string> = {
+  present:         'bg-green-100 text-green-700',
+  absent:          'bg-red-100 text-red-700',
+  late:            'bg-yellow-100 text-yellow-700',
+  excused_absence: 'bg-blue-100 text-blue-700',
+  early_leave:     'bg-orange-100 text-orange-700',
+};

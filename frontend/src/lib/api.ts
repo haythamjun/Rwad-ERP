@@ -130,6 +130,20 @@ export const dashboardApi = {
 };
 
 // ─────────────────────────────────────────────
+// Attendance
+// ─────────────────────────────────────────────
+export const attendanceApi = {
+  list: (studentId: number, params?: Record<string, unknown>) =>
+    api.get(`/students/${studentId}/attendance/`, { params }),
+  create: (studentId: number, data: unknown) =>
+    api.post(`/students/${studentId}/attendance/`, data),
+  update: (studentId: number, id: number, data: unknown) =>
+    api.patch(`/students/${studentId}/attendance/${id}/`, data),
+  delete: (studentId: number, id: number) =>
+    api.delete(`/students/${studentId}/attendance/${id}/`),
+};
+
+// ─────────────────────────────────────────────
 // Audit Logs
 // ─────────────────────────────────────────────
 export const auditLogsApi = {
