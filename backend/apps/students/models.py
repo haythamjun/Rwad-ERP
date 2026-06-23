@@ -168,10 +168,23 @@ class Student(models.Model):
     def save(self, *args, **kwargs):
         if not self.file_number:
             year = timezone.now().year
-            count = Student.objects.filter(
-                file_number__startswith=f'RW-{year}-'
-            ).count() + 1
-            self.file_number = f"RW-{year}-{count:04d}"
+            prefix = f'RW-{year}-'
+            # Use MAX (not COUNT) so gaps from deleted students don't cause collisions
+            max_fn = (
+                Student.objects
+                .filter(file_number__startswith=prefix)
+                .values_list('file_number', flat=True)
+                .order_by('-file_number')
+                .first()
+            )
+            if max_fn:
+                try:
+                    num = int(max_fn[len(prefix):]) + 1
+                except (ValueError, IndexError):
+                    num = 1
+            else:
+                num = 1
+            self.file_number = f"{prefix}{num:04d}"
         super().save(*args, **kwargs)
 
 

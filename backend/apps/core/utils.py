@@ -47,29 +47,32 @@ def get_client_ip(request):
 
 
 def log_action(request, action, obj=None, object_repr='', changes=None):
-    from apps.core.models import AuditLog
+    try:
+        from apps.core.models import AuditLog
 
-    user = None
-    if request and hasattr(request, 'user') and request.user.is_authenticated:
-        user = request.user
+        user = None
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            user = request.user
 
-    ip = get_client_ip(request)
+        ip = get_client_ip(request)
 
-    content_type = None
-    object_id = None
-    if obj and hasattr(obj, 'pk') and obj.pk:
-        try:
-            content_type = ContentType.objects.get_for_model(obj)
-            object_id = obj.pk
-        except Exception:
-            pass
+        content_type = None
+        object_id = None
+        if obj and hasattr(obj, 'pk') and obj.pk:
+            try:
+                content_type = ContentType.objects.get_for_model(obj)
+                object_id = obj.pk
+            except Exception:
+                pass
 
-    AuditLog.objects.create(
-        user=user,
-        action=action,
-        content_type=content_type,
-        object_id=object_id,
-        object_repr=str(object_repr)[:200],
-        changes=changes or {},
-        ip_address=ip,
-    )
+        AuditLog.objects.create(
+            user=user,
+            action=action,
+            content_type=content_type,
+            object_id=object_id,
+            object_repr=str(object_repr)[:200],
+            changes=changes or {},
+            ip_address=ip,
+        )
+    except Exception as exc:
+        print(f'[log_action] failed silently: {exc}', file=sys.stderr)
