@@ -53,7 +53,7 @@ interface Props {
 const today = new Date().toISOString().split('T')[0];
 
 export default function AttendanceModal({ record, onClose, onSave, loading }: Props) {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       attendance_date:    record?.attendance_date    || today,
@@ -71,6 +71,11 @@ export default function AttendanceModal({ record, onClose, onSave, loading }: Pr
 
   const status           = watch('status');
   const guardianNotified = watch('guardian_notified');
+
+  const nowTime = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
 
   const showCheckIn   = status === 'present' || status === 'late';
   const showCheckOut  = status === 'present' || status === 'late' || status === 'early_leave';
@@ -123,7 +128,16 @@ export default function AttendanceModal({ record, onClose, onSave, loading }: Pr
               {showCheckIn && (
                 <div>
                   <label className="form-label">وقت الحضور</label>
-                  <input {...register('check_in_time')} type="time" className="form-input" />
+                  <div className="flex gap-2">
+                    <input {...register('check_in_time')} type="time" className="form-input flex-1" />
+                    <button
+                      type="button"
+                      onClick={() => setValue('check_in_time', nowTime())}
+                      className="flex-shrink-0 px-3 py-2 text-xs font-medium bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-xl transition-colors"
+                    >
+                      الآن
+                    </button>
+                  </div>
                   {errors.check_in_time && (
                     <p className="text-red-500 text-xs mt-1">{errors.check_in_time.message}</p>
                   )}
@@ -135,7 +149,16 @@ export default function AttendanceModal({ record, onClose, onSave, loading }: Pr
                     وقت الانصراف{' '}
                     {status === 'early_leave' && <span className="text-red-500">*</span>}
                   </label>
-                  <input {...register('check_out_time')} type="time" className="form-input" />
+                  <div className="flex gap-2">
+                    <input {...register('check_out_time')} type="time" className="form-input flex-1" />
+                    <button
+                      type="button"
+                      onClick={() => setValue('check_out_time', nowTime())}
+                      className="flex-shrink-0 px-3 py-2 text-xs font-medium bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-xl transition-colors"
+                    >
+                      الآن
+                    </button>
+                  </div>
                   {errors.check_out_time && (
                     <p className="text-red-500 text-xs mt-1">{errors.check_out_time.message}</p>
                   )}
