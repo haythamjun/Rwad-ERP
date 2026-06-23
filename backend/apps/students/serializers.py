@@ -235,6 +235,11 @@ class StudentAttendanceSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'recorded_by', 'updated_by', 'created_at', 'updated_at']
+        extra_kwargs = {
+            # student is always supplied by the view via perform_create (from URL),
+            # so it must not be required in the request body.
+            'student': {'required': False},
+        }
 
     def get_recorded_by_name(self, obj):
         if obj.recorded_by:
