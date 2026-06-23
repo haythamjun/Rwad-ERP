@@ -1,17 +1,23 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Users, UserCheck, Clock, UserX, TrendingUp, FileText } from 'lucide-react';
-import { studentsApi } from '@/lib/api';
+import { Users, UserCheck, Clock, UserX, TrendingUp, FileText, Building2, MapPin } from 'lucide-react';
+import { dashboardApi, studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import type { PaginatedResponse, Student } from '@/types';
+
+interface DashboardStats {
+  total:     number;
+  by_status: Record<string, number>;
+  branches:  { id: number; name: string; location: string; student_count: number }[];
+}
 
 interface StatCardProps {
   title: string;
   value: number | string;
-  icon: React.ReactNode;
+  icon:  React.ReactNode;
   color: string;
-  bg: string;
+  bg:    string;
 }
 
 function StatCard({ title, value, icon, color, bg }: StatCardProps) {
@@ -31,57 +37,75 @@ function StatCard({ title, value, icon, color, bg }: StatCardProps) {
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
 
-  const { data: studentsData } = useQuery<PaginatedResponse<Student>>({
-    queryKey: ['students', 'all'],
-    queryFn: () => studentsApi.list({ page_size: 1000 }).then((r) => r.data),
+  const { data: stats } = useQuery<DashboardStats>({
+    queryKey: ['dashboard-stats'],
+    queryFn:  () => dashboardApi.stats().then(r => r.data),
   });
 
-  const students = studentsData?.results || [];
-  const total = studentsData?.count || 0;
+  const { data: studentsData } = useQuery<PaginatedResponse<Student>>({
+    queryKey: ['students', 'recent'],
+    queryFn:  () => studentsApi.list({ page_size: 5, ordering: '-created_at' }).then(r => r.data),
+  });
 
-  const active = students.filter((s) => s.status === 'active').length;
-  const pending = students.filter((s) => s.status === 'pending').length;
-  const graduated = students.filter((s) => s.status === 'graduated').length;
-  const inactive = students.filter((s) => s.status === 'inactive').length;
-
-  const recent = students
-    .slice()
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 5);
+  const total     = stats?.total                  || 0;
+  const active    = stats?.by_status?.active      || 0;
+  const pending   = stats?.by_status?.pending     || 0;
+  const graduated = stats?.by_status?.graduated   || 0;
+  const inactive  = stats?.by_status?.inactive    || 0;
+  const branches  = stats?.branches               || [];
+  const recent    = studentsData?.results         || [];
 
   return (
     <div className="space-y-6">
+
       {/* Welcome */}
       <div className="card bg-gradient-to-r from-brand to-brand-light text-white border-0">
-        <h2 className="text-lg font-semibold">
-          مرحباً، {user?.full_name} 👋
-        </h2>
+        <h2 className="text-lg font-semibold">مرحباً، {user?.full_name} 👋</h2>
         <p className="text-white/80 text-sm mt-1">
           نظام Roya - رؤية | مركز التأهيل — {new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="xl:col-span-1">
-          <StatCard title="إجمالي الطلاب" value={total} icon={<Users size={22} />} color="text-primary-600" bg="bg-primary-50" />
-        </div>
-        <div className="xl:col-span-1">
-          <StatCard title="نشط" value={active} icon={<UserCheck size={22} />} color="text-green-600" bg="bg-green-50" />
-        </div>
-        <div className="xl:col-span-1">
-          <StatCard title="في الانتظار" value={pending} icon={<Clock size={22} />} color="text-yellow-600" bg="bg-yellow-50" />
-        </div>
-        <div className="xl:col-span-1">
-          <StatCard title="خرّيج" value={graduated} icon={<TrendingUp size={22} />} color="text-blue-600" bg="bg-blue-50" />
-        </div>
-        <div className="xl:col-span-1">
-          <StatCard title="غير نشط" value={inactive} icon={<UserX size={22} />} color="text-gray-600" bg="bg-gray-100" />
-        </div>
-        <div className="xl:col-span-1">
-          <StatCard title="إجمالي الملفات" value={total} icon={<FileText size={22} />} color="text-purple-600" bg="bg-purple-50" />
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard title="إجمالي الطلاب" value={total}     icon={<Users size={22}/>}     color="text-primary-600" bg="bg-primary-50" />
+        <StatCard title="نشط"            value={active}    icon={<UserCheck size={22}/>} color="text-green-600"   bg="bg-green-50" />
+        <StatCard title="في الانتظار"    value={pending}   icon={<Clock size={22}/>}     color="text-yellow-600"  bg="bg-yellow-50" />
+        <StatCard title="خرّيج"          value={graduated} icon={<TrendingUp size={22}/>}color="text-blue-600"    bg="bg-blue-50" />
+        <StatCard title="غير نشط"        value={inactive}  icon={<UserX size={22}/>}     color="text-gray-600"    bg="bg-gray-100" />
+        <StatCard title="إجمالي الملفات" value={total}     icon={<FileText size={22}/>}  color="text-purple-600"  bg="bg-purple-50" />
       </div>
+
+      {/* Branches */}
+      {branches.length > 0 && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <Building2 size={18} className="text-primary-600" />
+            <h3 className="section-title mb-0">الطلاب حسب الفرع</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {branches.map(b => (
+              <div key={b.id} className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+                  <Building2 size={16} className="text-primary-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-800 truncate">{b.name}</p>
+                  {b.location && (
+                    <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                      <MapPin size={10}/> {b.location}
+                    </p>
+                  )}
+                </div>
+                <div className="text-center flex-shrink-0">
+                  <p className="text-2xl font-bold text-primary-600">{b.student_count}</p>
+                  <p className="text-xs text-gray-400">طالب</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent students */}
       <div className="card">
@@ -95,6 +119,7 @@ export default function DashboardPage() {
                 <tr className="border-b border-gray-100">
                   <th className="text-right py-2 font-medium text-gray-500">رقم الملف</th>
                   <th className="text-right py-2 font-medium text-gray-500">الاسم</th>
+                  <th className="text-right py-2 font-medium text-gray-500">الفرع</th>
                   <th className="text-right py-2 font-medium text-gray-500">الجنسية</th>
                   <th className="text-right py-2 font-medium text-gray-500">الحالة</th>
                   <th className="text-right py-2 font-medium text-gray-500">تاريخ التسجيل</th>
@@ -105,10 +130,9 @@ export default function DashboardPage() {
                   <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="py-2.5 font-mono text-xs text-gray-600">{s.file_number}</td>
                     <td className="py-2.5 font-medium text-gray-800">{s.full_name}</td>
+                    <td className="py-2.5 text-gray-500 text-xs">{s.branch_name || '—'}</td>
                     <td className="py-2.5 text-gray-600">{s.nationality}</td>
-                    <td className="py-2.5">
-                      <StatusBadge status={s.status} label={s.status_display} />
-                    </td>
+                    <td className="py-2.5"><StatusBadge status={s.status} label={s.status_display} /></td>
                     <td className="py-2.5 text-gray-500 text-xs">{s.registration_date}</td>
                   </tr>
                 ))}

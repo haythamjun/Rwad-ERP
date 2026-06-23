@@ -23,7 +23,7 @@ const navItems = [
   { href: '/users', label: 'المستخدمون', icon: UserCog, adminOnly: true },
   { href: '/reports', label: 'التقارير', icon: BarChart3, disabled: true },
   { href: '/audit-logs', label: 'سجل العمليات', icon: ClipboardList, managerOnly: true },
-  { href: '/settings', label: 'الإعدادات', icon: Settings, disabled: true },
+  { href: '/settings', label: 'الإعدادات', icon: Settings, adminOnly: true },
 ];
 
 export default function Sidebar() {

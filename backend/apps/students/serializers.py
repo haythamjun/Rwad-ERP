@@ -90,6 +90,7 @@ class StudentListSerializer(serializers.ModelSerializer):
     disability_degree_display= serializers.CharField(source='get_disability_degree_display',read_only=True)
     age                      = serializers.IntegerField(read_only=True)
     primary_guardian         = serializers.SerializerMethodField()
+    branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -102,6 +103,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'disability_type', 'disability_type_display',
             'disability_degree', 'disability_degree_display',
             'registration_date', 'photo',
+            'branch', 'branch_name',
             'primary_guardian', 'created_at',
         ]
 
@@ -128,6 +130,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     referral_source_display  = serializers.CharField(source='get_referral_source_display',   read_only=True)
     age                      = serializers.IntegerField(read_only=True)
     created_by_name          = serializers.SerializerMethodField()
+    branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -137,6 +140,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'national_id',
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'photo',
+            'branch', 'branch_name',
             # إعاقة
             'disability_type', 'disability_type_display',
             'disability_degree', 'disability_degree_display',
@@ -178,6 +182,7 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'referral_source', 'referral_source_detail',
             # حالة
             'status', 'registration_date', 'notes',
+            'branch',
         ]
 
     def validate_national_id(self, value):

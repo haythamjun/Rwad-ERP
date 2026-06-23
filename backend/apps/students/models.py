@@ -56,6 +56,13 @@ class Student(models.Model):
     file_number = models.CharField(
         max_length=30, unique=True, blank=True, verbose_name='رقم الملف'
     )
+    branch = models.ForeignKey(
+        'core.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='students',
+        verbose_name='الفرع',
+    )
     registration_date = models.DateField(
         default=timezone.now, verbose_name='تاريخ التسجيل'
     )

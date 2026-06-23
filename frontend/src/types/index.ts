@@ -1,4 +1,17 @@
 // ─────────────────────────────────────────────
+// Branch
+// ─────────────────────────────────────────────
+export interface Branch {
+  id: number;
+  name: string;
+  location: string;
+  phone: string;
+  is_active: boolean;
+  created_at: string;
+  student_count: number;
+}
+
+// ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
 export type ModuleKey = 'students' | 'reports' | 'audit_logs' | 'users' | 'settings';
@@ -57,6 +70,8 @@ export type ReferralSource =
 export interface Student {
   id: number;
   file_number: string;
+  branch?: number | null;
+  branch_name?: string | null;
   first_name: string;
   middle_name: string;
   grandfather_name: string;

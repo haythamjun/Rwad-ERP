@@ -113,6 +113,23 @@ export const familyApi = {
 };
 
 // ─────────────────────────────────────────────
+// Branches
+// ─────────────────────────────────────────────
+export const branchesApi = {
+  list:   ()                              => api.get('/core/branches/'),
+  create: (data: Record<string, unknown>) => api.post('/core/branches/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/core/branches/${id}/`, data),
+  delete: (id: number)                    => api.delete(`/core/branches/${id}/`),
+};
+
+// ─────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────
+export const dashboardApi = {
+  stats: () => api.get('/core/dashboard/stats/'),
+};
+
+// ─────────────────────────────────────────────
 // Audit Logs
 // ─────────────────────────────────────────────
 export const auditLogsApi = {

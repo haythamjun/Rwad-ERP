@@ -3,6 +3,22 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 
 
+class Branch(models.Model):
+    name        = models.CharField(max_length=100, unique=True, verbose_name='اسم الفرع')
+    location    = models.CharField(max_length=200, blank=True, verbose_name='الموقع')
+    phone       = models.CharField(max_length=20,  blank=True, verbose_name='هاتف الفرع')
+    is_active   = models.BooleanField(default=True, verbose_name='نشط')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'فرع'
+        verbose_name_plural = 'الفروع'
+        ordering            = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = 'create', 'إضافة'

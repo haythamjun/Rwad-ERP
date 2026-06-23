@@ -5,7 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Save, Upload, X } from 'lucide-react';
 import { useState, useRef } from 'react';
-import type { StudentFormData } from '@/types';
+import { useQuery } from '@tanstack/react-query';
+import { branchesApi } from '@/lib/api';
+import type { StudentFormData, Branch } from '@/types';
 
 const schema = z.object({
   // أساسية
@@ -57,6 +59,7 @@ const schema = z.object({
       return d <= today;
     }, 'تاريخ التسجيل لا يمكن أن يكون في المستقبل'),
   notes:             z.string().optional(),
+  branch:            z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -163,6 +166,11 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
   });
 
   const referralSource = watch('referral_source');
+
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ['branches'],
+    queryFn:  () => branchesApi.list().then(r => r.data),
+  });
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -297,6 +305,18 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
               <option value="transferred">محوّل</option>
             </select>
           </div>
+
+          {branches.length > 0 && (
+            <div>
+              <label className="form-label">الفرع</label>
+              <select {...register('branch')} className="form-input">
+                <option value="">-- بدون فرع --</option>
+                {branches.filter(b => b.is_active).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

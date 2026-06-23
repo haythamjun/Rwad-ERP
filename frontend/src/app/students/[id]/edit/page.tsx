@@ -65,17 +65,18 @@ export default function EditStudentPage() {
           onSubmit={handleSubmit}
           loading={isPending}
           defaultValues={{
-            first_name: student.first_name,
-            middle_name: student.middle_name,
+            first_name:       student.first_name,
+            middle_name:      student.middle_name,
             grandfather_name: student.grandfather_name,
-            family_name: student.family_name,
-            national_id: student.national_id,
-            date_of_birth: student.date_of_birth,
-            gender: student.gender,
-            nationality: student.nationality,
-            status: student.status,
+            family_name:      student.family_name,
+            national_id:      student.national_id,
+            date_of_birth:    student.date_of_birth,
+            gender:           student.gender,
+            nationality:      student.nationality,
+            status:           student.status,
             registration_date: student.registration_date,
-            notes: student.notes || '',
+            notes:            student.notes || '',
+            branch:           student.branch ? String(student.branch) : '',
           }}
         />
       )}

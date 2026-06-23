@@ -5,12 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Save, Upload, X, Plus, Trash2, UserPlus, FileText,
 } from 'lucide-react';
-import { studentsApi, guardiansApi, familyApi, attachmentsApi } from '@/lib/api';
+import { studentsApi, guardiansApi, familyApi, attachmentsApi, branchesApi } from '@/lib/api';
+import type { Branch } from '@/types';
 import Header from '@/components/layout/Header';
 
 // ─── Zod schema for basic student data ───────────────────────────────────────
@@ -35,7 +37,8 @@ const schema = z.object({
   status: z.enum(['pending','active','inactive','graduated','suspended','transferred']),
   registration_date: z.string().min(1, 'تاريخ التسجيل مطلوب')
     .refine(v => new Date(v) <= new Date(), 'لا يمكن أن يكون في المستقبل'),
-  notes: z.string().optional(),
+  notes:  z.string().optional(),
+  branch: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -142,6 +145,12 @@ export default function NewStudentPage() {
     },
   });
   const referralSource = watch('referral_source');
+
+  // ── Branches ─────────────────────────────────────────────────────────────
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ['branches'],
+    queryFn:  () => branchesApi.list().then(r => r.data),
+  });
 
   // ── Photo ────────────────────────────────────────────────────────────────
   const [photo, setPhoto]         = useState<File | null>(null);
@@ -399,6 +408,18 @@ export default function NewStudentPage() {
                 <option value="transferred">محوّل</option>
               </select>
             </div>
+
+            {branches.length > 0 && (
+              <div>
+                <label className="form-label">الفرع</label>
+                <select {...register('branch')} className="form-input">
+                  <option value="">-- بدون فرع --</option>
+                  {branches.filter(b => b.is_active).map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
