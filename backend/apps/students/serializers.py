@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Student, Guardian, FamilyInfo, StudentAttachment
+from .models import Student, Guardian, FamilyInfo, StudentAttachment, StudentAttendance
 from datetime import date
 
 
@@ -210,3 +210,72 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
         return super().create(validated_data)
+
+
+# ── Attendance ─────────────────────────────────────────────────────────────────
+
+class StudentAttendanceSerializer(serializers.ModelSerializer):
+    status_display   = serializers.CharField(source='get_status_display', read_only=True)
+    student_name     = serializers.CharField(source='student.full_name',  read_only=True)
+    branch_name      = serializers.CharField(source='branch.name',        read_only=True, default=None)
+    recorded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = StudentAttendance
+        fields = [
+            'id', 'student', 'student_name',
+            'branch', 'branch_name',
+            'attendance_date',
+            'check_in_time', 'check_out_time',
+            'status', 'status_display',
+            'absence_reason', 'late_reason', 'early_leave_reason',
+            'guardian_notified', 'notification_notes',
+            'notes',
+            'recorded_by', 'recorded_by_name', 'updated_by',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'recorded_by', 'updated_by', 'created_at', 'updated_at']
+
+    def get_recorded_by_name(self, obj):
+        if obj.recorded_by:
+            return obj.recorded_by.get_full_name() or obj.recorded_by.username
+        return None
+
+    def validate(self, attrs):
+        status         = attrs.get('status', getattr(self.instance, 'status', None))
+        check_in_time  = attrs.get('check_in_time',  getattr(self.instance, 'check_in_time',  None))
+        check_out_time = attrs.get('check_out_time', getattr(self.instance, 'check_out_time', None))
+        absence_reason = attrs.get('absence_reason', getattr(self.instance, 'absence_reason', ''))
+        early_leave_r  = attrs.get('early_leave_reason', getattr(self.instance, 'early_leave_reason', ''))
+
+        # check_out must be after check_in
+        if check_in_time and check_out_time and check_out_time <= check_in_time:
+            raise serializers.ValidationError(
+                {'check_out_time': 'وقت الانصراف يجب أن يكون بعد وقت الحضور.'}
+            )
+
+        # early_leave requires check_out_time
+        if status == 'early_leave' and not check_out_time:
+            raise serializers.ValidationError(
+                {'check_out_time': 'وقت الانصراف مطلوب عند تسجيل انصراف مبكر.'}
+            )
+
+        # excused_absence requires absence_reason
+        if status == 'excused_absence' and not (absence_reason or '').strip():
+            raise serializers.ValidationError(
+                {'absence_reason': 'سبب الغياب مطلوب عند تسجيل غياب بعذر.'}
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['recorded_by'] = request.user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['updated_by'] = request.user
+        return super().update(instance, validated_data)

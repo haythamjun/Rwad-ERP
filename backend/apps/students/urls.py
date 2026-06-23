@@ -10,6 +10,8 @@ from .views import (
     StudentExportView,
     StudentImportView,
     StudentImportTemplateView,
+    AttendanceListCreateView,
+    AttendanceDetailView,
 )
 
 urlpatterns = [
@@ -26,4 +28,9 @@ urlpatterns = [
     # Attachments
     path('students/<int:student_pk>/attachments/', StudentAttachmentListView.as_view(), name='attachment-list'),
     path('students/<int:student_pk>/attachments/<int:pk>/', StudentAttachmentDeleteView.as_view(), name='attachment-delete'),
+    # Attendance — per student
+    path('students/<int:student_pk>/attendance/', AttendanceListCreateView.as_view(), name='attendance-list'),
+    path('students/<int:student_pk>/attendance/<int:pk>/', AttendanceDetailView.as_view(), name='attendance-detail'),
+    # Attendance — global list (for attendance sheet views)
+    path('attendance/', AttendanceListCreateView.as_view(), name='attendance-global'),
 ]

@@ -311,3 +311,56 @@ class StudentAttachment(models.Model):
 
     def __str__(self):
         return f"{self.name} — {self.student.full_name}"
+
+
+class StudentAttendance(models.Model):
+    class Status(models.TextChoices):
+        PRESENT         = 'present',         'حاضر'
+        ABSENT          = 'absent',          'غائب'
+        LATE            = 'late',            'متأخر'
+        EXCUSED_ABSENCE = 'excused_absence', 'غياب بعذر'
+        EARLY_LEAVE     = 'early_leave',     'انصراف مبكر'
+
+    student        = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='attendances', verbose_name='المستفيد',
+    )
+    branch         = models.ForeignKey(
+        'core.Branch', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='attendances', verbose_name='الفرع',
+    )
+    attendance_date   = models.DateField(verbose_name='تاريخ الحضور')
+    check_in_time     = models.TimeField(null=True, blank=True, verbose_name='وقت الحضور')
+    check_out_time    = models.TimeField(null=True, blank=True, verbose_name='وقت الانصراف')
+    status            = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PRESENT,
+        verbose_name='الحالة',
+    )
+    absence_reason    = models.TextField(blank=True, verbose_name='سبب الغياب')
+    late_reason       = models.TextField(blank=True, verbose_name='سبب التأخر')
+    early_leave_reason= models.TextField(blank=True, verbose_name='سبب الانصراف المبكر')
+    guardian_notified = models.BooleanField(default=False, verbose_name='تم إخطار ولي الأمر')
+    notification_notes= models.TextField(blank=True, verbose_name='ملاحظات الإخطار')
+    notes             = models.TextField(blank=True, verbose_name='ملاحظات')
+    recorded_by       = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='recorded_attendances', verbose_name='سُجّل بواسطة',
+    )
+    updated_by        = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='updated_attendances', verbose_name='عُدِّل بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'سجل حضور'
+        verbose_name_plural = 'سجلات الحضور'
+        ordering            = ['-attendance_date', '-created_at']
+        unique_together     = ('student', 'attendance_date')
+
+    def __str__(self):
+        return f"{self.student.full_name} | {self.attendance_date} | {self.get_status_display()}"

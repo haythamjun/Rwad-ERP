@@ -596,3 +596,50 @@ class StudentImportTemplateView(APIView):
         response['Content-Disposition'] = 'attachment; filename="import_template_roya.xlsx"'
         wb.save(response)
         return response
+
+
+# ── Attendance ─────────────────────────────────────────────────────────────────
+from .models import StudentAttendance
+from .serializers import StudentAttendanceSerializer
+
+
+class AttendanceListCreateView(generics.ListCreateAPIView):
+    serializer_class = StudentAttendanceSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['status', 'attendance_date', 'branch', 'guardian_notified']
+    ordering_fields  = ['attendance_date', 'created_at']
+    ordering         = ['-attendance_date']
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        if student_pk:
+            return (
+                StudentAttendance.objects
+                .filter(student_id=student_pk)
+                .select_related('branch', 'recorded_by', 'updated_by')
+            )
+        return (
+            StudentAttendance.objects
+            .select_related('student', 'branch', 'recorded_by', 'updated_by')
+        )
+
+    def perform_create(self, serializer):
+        student_pk = self.kwargs.get('student_pk')
+        if student_pk:
+            student = get_object_or_404(Student, pk=student_pk)
+            serializer.save(student=student)
+        else:
+            serializer.save()
+
+
+class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = StudentAttendanceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = StudentAttendance.objects.select_related('branch', 'recorded_by', 'updated_by')
+        if student_pk:
+            return qs.filter(student_id=student_pk)
+        return qs
