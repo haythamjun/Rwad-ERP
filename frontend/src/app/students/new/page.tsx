@@ -182,6 +182,14 @@ export default function NewStudentPage() {
   });
   const setFam = (k: string, v: unknown) => setFamily(f => ({ ...f, [k]: v }));
 
+  const incomeRangeFrom = (n: number): string => {
+    if (n < 3000)  return 'very_low';
+    if (n < 6000)  return 'low';
+    if (n < 10000) return 'medium';
+    if (n < 20000) return 'high';
+    return 'very_high';
+  };
+
   // ── Attachments ──────────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const attachRef = useRef<HTMLInputElement>(null);
@@ -306,7 +314,11 @@ export default function NewStudentPage() {
         }
       />
 
-      <form onSubmit={handleSubmit(saveAll)} className="space-y-5">
+      <form onSubmit={handleSubmit(saveAll, (errs) => {
+        const first = Object.values(errs)[0] as { message?: string } | undefined;
+        toast.error(`يوجد حقول مطلوبة — ${first?.message || 'يرجى مراجعة البيانات الأساسية'}`, { duration: 5000 });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      })} className="space-y-5">
 
         {/* ══ ١. البيانات الشخصية ══════════════════════════════════════════ */}
         <div className="card">
@@ -618,8 +630,15 @@ export default function NewStudentPage() {
               </div>
               <div>
                 <label className="form-label">ترتيب المستفيد بين الإخوة <span className="text-red-500">*</span></label>
-                <input type="number" min="1" className="form-input" value={family.sibling_order}
-                  onChange={e => setFam('sibling_order', e.target.value)} />
+                <input
+                  type="number" min="1"
+                  className={`form-input ${family.sibling_order && family.family_size && Number(family.sibling_order) > Number(family.family_size) ? 'border-red-400 bg-red-50' : ''}`}
+                  value={family.sibling_order}
+                  onChange={e => setFam('sibling_order', e.target.value)}
+                />
+                {family.sibling_order && family.family_size && Number(family.sibling_order) > Number(family.family_size) && (
+                  <p className="text-red-500 text-xs mt-1">يجب ألا يتجاوز عدد أفراد الأسرة ({family.family_size})</p>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="form-label">حالة الوالدين <span className="text-red-500">*</span></label>
@@ -640,7 +659,12 @@ export default function NewStudentPage() {
               <div>
                 <label className="form-label">الدخل الشهري (ريال)</label>
                 <input type="number" min="0" step="100" className="form-input" placeholder="مثال: 5000"
-                  value={family.monthly_income} onChange={e => setFam('monthly_income', e.target.value)} />
+                  value={family.monthly_income}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setFam('monthly_income', v);
+                    if (v && Number(v) > 0) setFam('income_range', incomeRangeFrom(Number(v)));
+                  }} />
               </div>
               <div>
                 <label className="form-label">نوع السكن</label>
