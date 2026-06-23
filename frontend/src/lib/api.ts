@@ -141,6 +141,9 @@ export const attendanceApi = {
     api.patch(`/students/${studentId}/attendance/${id}/`, data),
   delete: (studentId: number, id: number) =>
     api.delete(`/students/${studentId}/attendance/${id}/`),
+  // Daily attendance sheet — all active students + their record for a date
+  sheet: (params: { date: string; branch?: string; search?: string }) =>
+    api.get('/attendance/sheet/', { params }),
 };
 
 // ─────────────────────────────────────────────

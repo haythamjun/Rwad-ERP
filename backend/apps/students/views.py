@@ -601,15 +601,17 @@ class StudentImportTemplateView(APIView):
 # ── Attendance ─────────────────────────────────────────────────────────────────
 from .models import StudentAttendance
 from .serializers import StudentAttendanceSerializer
+from django.db.models import Q
 
 
 class AttendanceListCreateView(generics.ListCreateAPIView):
-    serializer_class = StudentAttendanceSerializer
+    serializer_class   = StudentAttendanceSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['status', 'attendance_date', 'branch', 'guardian_notified']
-    ordering_fields  = ['attendance_date', 'created_at']
-    ordering         = ['-attendance_date']
+    pagination_class   = None          # always return full list (no pagination)
+    filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields   = ['status', 'attendance_date', 'branch', 'guardian_notified']
+    ordering_fields    = ['attendance_date', 'created_at']
+    ordering           = ['-attendance_date']
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
@@ -643,3 +645,54 @@ class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
         if student_pk:
             return qs.filter(student_id=student_pk)
         return qs
+
+
+class AttendanceSheetView(APIView):
+    """
+    GET /api/attendance/sheet/?date=YYYY-MM-DD[&branch=ID][&search=text]
+    Returns all active students merged with their attendance record for the given date.
+    No pagination — designed for the daily attendance register.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        date   = request.query_params.get('date')
+        branch = request.query_params.get('branch')
+        search = request.query_params.get('search', '').strip()
+
+        if not date:
+            return Response({'error': 'date parameter is required'}, status=400)
+
+        students_qs = Student.objects.filter(status='active').select_related('branch')
+        if branch:
+            students_qs = students_qs.filter(branch_id=branch)
+        if search:
+            students_qs = students_qs.filter(
+                Q(first_name__icontains=search)  |
+                Q(family_name__icontains=search) |
+                Q(file_number__icontains=search)
+            )
+        students_qs = students_qs.order_by('first_name', 'family_name')
+
+        # Build attendance map for the date in a single query
+        attendance_map = {
+            a.student_id: a
+            for a in StudentAttendance.objects.filter(
+                attendance_date=date,
+                student__in=students_qs,
+            ).select_related('branch', 'recorded_by')
+        }
+
+        result = []
+        for s in students_qs:
+            att = attendance_map.get(s.id)
+            result.append({
+                'student_id':   s.id,
+                'student_name': s.full_name,
+                'file_number':  s.file_number,
+                'branch_id':    s.branch_id,
+                'branch_name':  s.branch.name if s.branch else None,
+                'attendance':   StudentAttendanceSerializer(att).data if att else None,
+            })
+
+        return Response(result)

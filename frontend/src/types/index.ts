@@ -253,6 +253,16 @@ export interface Attendance {
   updated_at: string;
 }
 
+// Row returned by GET /api/attendance/sheet/
+export interface AttendanceSheetRow {
+  student_id: number;
+  student_name: string;
+  file_number: string;
+  branch_id: number | null;
+  branch_name: string | null;
+  attendance: Attendance | null;
+}
+
 export interface AttendanceFormData {
   attendance_date: string;
   status: AttendanceStatus;

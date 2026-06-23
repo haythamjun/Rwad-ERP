@@ -12,6 +12,7 @@ from .views import (
     StudentImportTemplateView,
     AttendanceListCreateView,
     AttendanceDetailView,
+    AttendanceSheetView,
 )
 
 urlpatterns = [
@@ -33,4 +34,6 @@ urlpatterns = [
     path('students/<int:student_pk>/attendance/<int:pk>/', AttendanceDetailView.as_view(), name='attendance-detail'),
     # Attendance — global list (for attendance sheet views)
     path('attendance/', AttendanceListCreateView.as_view(), name='attendance-global'),
+    # Attendance — daily sheet (students merged with attendance)
+    path('attendance/sheet/', AttendanceSheetView.as_view(), name='attendance-sheet'),
 ]

@@ -10,6 +10,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -18,12 +19,13 @@ import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
 
 const navItems = [
-  { href: '/dashboard', label: 'الرئيسية', icon: LayoutDashboard },
-  { href: '/students', label: 'ملفات الطلاب', icon: Users },
-  { href: '/users', label: 'المستخدمون', icon: UserCog, adminOnly: true },
-  { href: '/reports', label: 'التقارير', icon: BarChart3, disabled: true },
-  { href: '/audit-logs', label: 'سجل العمليات', icon: ClipboardList, managerOnly: true },
-  { href: '/settings', label: 'الإعدادات', icon: Settings, adminOnly: true },
+  { href: '/dashboard',  label: 'الرئيسية',       icon: LayoutDashboard },
+  { href: '/students',   label: 'ملفات الطلاب',   icon: Users },
+  { href: '/attendance', label: 'الحضور والغياب',  icon: CalendarDays },
+  { href: '/users',      label: 'المستخدمون',      icon: UserCog,       adminOnly: true },
+  { href: '/reports',    label: 'التقارير',         icon: BarChart3,     disabled: true },
+  { href: '/audit-logs', label: 'سجل العمليات',    icon: ClipboardList, managerOnly: true },
+  { href: '/settings',   label: 'الإعدادات',        icon: Settings,      adminOnly: true },
 ];
 
 export default function Sidebar() {
