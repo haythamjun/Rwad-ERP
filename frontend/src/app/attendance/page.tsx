@@ -118,7 +118,20 @@ export default function AttendancePage() {
 
       {/* Filters */}
       <div className="card">
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Branch filter — always visible */}
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value)}
+            className="form-input py-1.5 text-sm w-48 flex-shrink-0"
+          >
+            <option value="">جميع الفروع</option>
+            {branches.map((b) => (
+              <option key={b.id} value={String(b.id)}>{b.name}</option>
+            ))}
+          </select>
+
+          {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -129,17 +142,15 @@ export default function AttendancePage() {
               className="form-input pr-9 py-1.5 text-sm"
             />
           </div>
-          {branches.length > 0 && (
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="form-input py-1.5 text-sm w-44"
+
+          {/* Active filter indicator */}
+          {(selectedBranch || search) && (
+            <button
+              onClick={() => { setSelectedBranch(''); setSearch(''); }}
+              className="text-xs text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
             >
-              <option value="">جميع الفروع</option>
-              {branches.map((b) => (
-                <option key={b.id} value={String(b.id)}>{b.name}</option>
-              ))}
-            </select>
+              مسح الفلتر ✕
+            </button>
           )}
         </div>
       </div>
