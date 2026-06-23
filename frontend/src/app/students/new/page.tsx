@@ -190,6 +190,9 @@ export default function NewStudentPage() {
     return 'very_high';
   };
 
+  // ── API error ────────────────────────────────────────────────────────────
+  const [apiError, setApiError] = useState<string | null>(null);
+
   // ── Attachments ──────────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const attachRef = useRef<HTMLInputElement>(null);
@@ -230,6 +233,7 @@ export default function NewStudentPage() {
       if (!a.type) { toast.error(`يرجى اختيار نوع المرفق: ${a.name}`); return; }
     }
 
+    setApiError(null);
     setSaving(true);
     let studentId: number | null = null;
 
@@ -285,14 +289,20 @@ export default function NewStudentPage() {
       toast.success(`تمت الإضافة بنجاح — رقم الملف: ${res.data.file_number}`, { duration: 5000 });
       router.push('/students');
     } catch (err: unknown) {
-      const apiErr = err as { response?: { data?: Record<string, string[]> } };
+      const apiErr = err as { response?: { data?: Record<string, unknown> } };
       if (apiErr?.response?.data) {
-        const msg = Object.entries(apiErr.response.data)
-          .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
-          .join(' | ');
-        toast.error(msg);
+        const data = apiErr.response.data;
+        const lines = Object.entries(data).map(([k, v]) => {
+          const msgs = Array.isArray(v) ? v.join(', ') : String(v);
+          return `${k}: ${msgs}`;
+        });
+        const msg = lines.join(' | ');
+        setApiError(msg);
+        toast.error(msg, { duration: 8000 });
       } else {
-        toast.error('حدث خطأ أثناء الحفظ');
+        const msg = 'حدث خطأ أثناء الحفظ — تحقق من الاتصال وأعد المحاولة';
+        setApiError(msg);
+        toast.error(msg, { duration: 8000 });
       }
       // If student was created but later steps failed, go to list
       if (studentId) router.push('/students');
@@ -764,6 +774,23 @@ export default function NewStudentPage() {
           <textarea {...register('notes')} rows={3} className="form-input resize-none"
             placeholder="أي ملاحظات إضافية تخص المستفيد..." />
         </div>
+
+        {/* ── Errors summary (always visible near save button) ────────────── */}
+        {Object.keys(errors).length > 0 && (
+          <div className="bg-red-50 border border-red-300 rounded-xl p-4 text-right">
+            <p className="text-sm font-semibold text-red-700 mb-2">⚠ يرجى تصحيح الأخطاء التالية قبل الحفظ:</p>
+            <ul className="space-y-0.5 text-xs text-red-600">
+              {Object.entries(errors).map(([, e]) =>
+                e?.message ? <li key={e.message as string}>• {e.message as string}</li> : null
+              )}
+            </ul>
+          </div>
+        )}
+        {apiError && (
+          <div className="bg-red-50 border border-red-300 rounded-xl p-4 text-right text-sm text-red-700">
+            ⚠ {apiError}
+          </div>
+        )}
 
         {/* ── Submit ─────────────────────────────────────────────────────── */}
         <div className="flex justify-end gap-3 pb-6">
