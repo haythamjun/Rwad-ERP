@@ -29,6 +29,7 @@ class StudentListCreateView(generics.ListCreateAPIView):
     queryset = Student.objects.select_related('created_by').prefetch_related(
         'guardians', 'family_info'
     )
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = StudentFilter
     search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number']

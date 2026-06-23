@@ -289,21 +289,28 @@ export default function NewStudentPage() {
       toast.success(`تمت الإضافة بنجاح — رقم الملف: ${res.data.file_number}`, { duration: 5000 });
       router.push('/students');
     } catch (err: unknown) {
-      const apiErr = err as { response?: { data?: Record<string, unknown> } };
-      if (apiErr?.response?.data) {
-        const data = apiErr.response.data;
-        const lines = Object.entries(data).map(([k, v]) => {
-          const msgs = Array.isArray(v) ? v.join(', ') : String(v);
-          return `${k}: ${msgs}`;
+      console.error('[saveAll error]', err);
+      const apiErr = err as { response?: { data?: unknown; status?: number } };
+      const rawData = apiErr?.response?.data;
+      const status  = apiErr?.response?.status;
+
+      let msg: string;
+      if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+        // DRF JSON validation error — show field messages
+        const lines = Object.entries(rawData as Record<string, unknown>).map(([k, v]) => {
+          const text = Array.isArray(v) ? v.join(', ') : String(v);
+          return `${k}: ${text}`;
         });
-        const msg = lines.join(' | ');
-        setApiError(msg);
-        toast.error(msg, { duration: 8000 });
+        msg = lines.join(' | ');
+      } else if (typeof rawData === 'string' && rawData.includes('DOCTYPE')) {
+        // Server returned HTML (Django 500 error page)
+        msg = `خطأ في الخادم (${status || 500}) — يرجى التواصل مع الدعم التقني`;
       } else {
-        const msg = 'حدث خطأ أثناء الحفظ — تحقق من الاتصال وأعد المحاولة';
-        setApiError(msg);
-        toast.error(msg, { duration: 8000 });
+        msg = `حدث خطأ أثناء الحفظ${status ? ` (${status})` : ''} — تحقق من الاتصال وأعد المحاولة`;
       }
+
+      setApiError(msg);
+      toast.error(msg, { duration: 8000 });
       // If student was created but later steps failed, go to list
       if (studentId) router.push('/students');
     } finally {
