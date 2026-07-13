@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -167,25 +167,28 @@ class Student(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.file_number:
-            year = timezone.now().year
-            prefix = f'RW-{year}-'
-            # Use MAX (not COUNT) so gaps from deleted students don't cause collisions
-            max_fn = (
-                Student.objects
-                .filter(file_number__startswith=prefix)
-                .values_list('file_number', flat=True)
-                .order_by('-file_number')
-                .first()
-            )
-            if max_fn:
-                try:
-                    num = int(max_fn[len(prefix):]) + 1
-                except (ValueError, IndexError):
+            with transaction.atomic():
+                year = timezone.now().year
+                prefix = f'RW-{year}-'
+                max_fn = (
+                    Student.objects
+                    .select_for_update()
+                    .filter(file_number__startswith=prefix)
+                    .order_by('-file_number')
+                    .values_list('file_number', flat=True)
+                    .first()
+                )
+                if max_fn:
+                    try:
+                        num = int(max_fn[len(prefix):]) + 1
+                    except (ValueError, IndexError):
+                        num = 1
+                else:
                     num = 1
-            else:
-                num = 1
-            self.file_number = f"{prefix}{num:04d}"
-        super().save(*args, **kwargs)
+                self.file_number = f"{prefix}{num:04d}"
+                super().save(*args, **kwargs)
+        else:
+            super().save(*args, **kwargs)
 
 
 class Guardian(models.Model):

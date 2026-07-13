@@ -4,7 +4,7 @@
     "builder": "RAILPACK"
   },
   "deploy": {
-    "startCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py create_default_users && gunicorn rwad_erp.wsgi --bind 0.0.0.0:$PORT",
+    "startCommand": "DJANGO_SETTINGS_MODULE=rwad_erp.settings.production python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py create_default_users && gunicorn rwad_erp.wsgi --bind 0.0.0.0:$PORT",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
