@@ -8,6 +8,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 
+import csv
+import io
+
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -597,6 +600,253 @@ class StudentImportTemplateView(APIView):
         )
         response['Content-Disposition'] = 'attachment; filename="import_template_roya.xlsx"'
         wb.save(response)
+        return response
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CSV Export / Import
+# ──────────────────────────────────────────────────────────────────────────────
+
+class StudentExportCsvView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        students = (
+            Student.objects
+            .all()
+            .prefetch_related('guardians')
+            .select_related('family_info')
+            .order_by('file_number')
+        )
+
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="students_roya.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'رقم الملف', 'تاريخ التسجيل', 'الاسم الأول', 'اسم الأب', 'اسم الجد', 'اسم العائلة',
+            'رقم الهوية', 'تاريخ الميلاد', 'الجنس', 'الجنسية', 'الحالة',
+            'نوع الإعاقة', 'درجة الإعاقة', 'التشخيص', 'جهة الإحالة',
+            'اسم ولي الأمر', 'صلة القرابة', 'رقم هوية ولي الأمر',
+            'رقم الجوال', 'جوال إضافي', 'البريد الإلكتروني',
+            'العنوان', 'جهة التواصل الرئيسية', 'ملاحظات ولي الأمر',
+            'عدد أفراد الأسرة', 'ترتيب المستفيد', 'حالة الوالدين',
+            'الدخل الشهري (ريال)', 'الدخل التقريبي', 'نوع السكن',
+            'ملاحظات اجتماعية',
+        ])
+
+        for student in students:
+            guardian = (
+                student.guardians.filter(is_primary_contact=True).first()
+                or student.guardians.first()
+            )
+            fam = getattr(student, 'family_info', None)
+            writer.writerow([
+                student.file_number,
+                str(student.registration_date),
+                student.first_name,
+                student.middle_name,
+                student.grandfather_name,
+                student.family_name,
+                student.national_id,
+                str(student.date_of_birth),
+                student.get_gender_display(),
+                student.nationality,
+                student.get_status_display(),
+                student.get_disability_type_display() if student.disability_type else '',
+                student.get_disability_degree_display() if student.disability_degree else '',
+                student.diagnosis or '',
+                student.get_referral_source_display() if student.referral_source else '',
+                guardian.full_name if guardian else '',
+                guardian.get_relationship_display() if guardian else '',
+                guardian.national_id if guardian else '',
+                guardian.phone if guardian else '',
+                guardian.phone_alt if guardian else '',
+                guardian.email if guardian else '',
+                guardian.address if guardian else '',
+                'نعم' if (guardian and guardian.is_primary_contact) else 'لا',
+                guardian.notes if guardian else '',
+                fam.family_size if fam else '',
+                fam.sibling_order if fam else '',
+                fam.get_parents_status_display() if fam else '',
+                fam.monthly_income if fam else '',
+                fam.get_income_range_display() if fam else '',
+                fam.get_housing_type_display() if fam else '',
+                fam.social_notes if fam else '',
+            ])
+
+        log_action(request, 'export', None, 'تصدير قائمة الطلاب إلى CSV')
+        return response
+
+
+class StudentImportCsvView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from datetime import date as date_type, datetime
+
+        if not request.user.can_write:
+            return Response({'detail': 'ليس لديك صلاحية الاستيراد.'}, status=status.HTTP_403_FORBIDDEN)
+
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'لم يتم إرفاق ملف.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content = file.read().decode('utf-8-sig')
+            rows = list(csv.reader(io.StringIO(content)))
+        except Exception:
+            return Response(
+                {'detail': 'تعذّر قراءة الملف. تأكد أنه ملف CSV بترميز UTF-8.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(rows) < 2:
+            return Response({'detail': 'الملف فارغ.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        data_rows = rows[1:]
+        created, skipped, errors = 0, 0, []
+
+        for i, row in enumerate(data_rows, start=2):
+            def _c(idx, r=row):
+                return r[idx].strip() if idx < len(r) else ''
+
+            first_name       = _c(0)
+            middle_name      = _c(1)
+            grandfather_name = _c(2)
+            family_name      = _c(3)
+            national_id      = _c(4)
+            dob_raw          = _c(5)
+            gender_raw       = _c(6)
+            nationality      = _c(7)
+
+            if not any([first_name, family_name, national_id, dob_raw]):
+                continue
+
+            row_errors = []
+
+            if not first_name:
+                row_errors.append('الاسم الأول مطلوب')
+            if not family_name:
+                row_errors.append('اسم العائلة مطلوب')
+            if not national_id:
+                row_errors.append('رقم الهوية مطلوب')
+            elif not national_id.isdigit() or len(national_id) != 10:
+                row_errors.append('رقم الهوية يجب أن يكون 10 أرقام')
+            if not nationality:
+                row_errors.append('الجنسية مطلوبة')
+
+            gender = GENDER_MAP.get(gender_raw)
+            if not gender:
+                row_errors.append(f'الجنس غير صحيح: "{gender_raw}" — استخدم: ذكر أو أنثى')
+
+            dob = None
+            try:
+                dob = datetime.strptime(dob_raw, '%Y-%m-%d').date()
+                today = date_type.today()
+                if dob > today:
+                    row_errors.append('تاريخ الميلاد في المستقبل')
+                elif dob < today.replace(year=today.year - 100):
+                    row_errors.append('تاريخ الميلاد أكبر من 100 سنة')
+            except (ValueError, TypeError):
+                row_errors.append(f'تاريخ الميلاد غير صحيح: "{dob_raw}" — الصيغة: YYYY-MM-DD')
+
+            full_name_display = f"{first_name} {family_name}".strip()
+
+            if row_errors:
+                errors.append({'row': i, 'name': full_name_display or '—', 'errors': row_errors})
+                skipped += 1
+                continue
+
+            if Student.objects.filter(national_id=national_id).exists():
+                errors.append({
+                    'row': i,
+                    'name': full_name_display,
+                    'errors': [f'رقم الهوية {national_id} مسجّل مسبقاً'],
+                })
+                skipped += 1
+                continue
+
+            status_val     = STATUS_MAP.get(_c(8), 'pending') or 'pending'
+            reg_date_raw   = _c(9)
+            disability_raw = _c(10)
+            degree_raw     = _c(11)
+            diagnosis      = _c(12)
+            edu_raw        = _c(13)
+            school_name    = _c(14)
+            grade          = _c(15)
+            referral_raw   = _c(16)
+            notes          = _c(17)
+
+            try:
+                reg_date = (
+                    datetime.strptime(reg_date_raw, '%Y-%m-%d').date()
+                    if reg_date_raw else date_type.today()
+                )
+            except (ValueError, TypeError):
+                reg_date = date_type.today()
+
+            Student.objects.create(
+                first_name        = first_name,
+                middle_name       = middle_name,
+                grandfather_name  = grandfather_name,
+                family_name       = family_name,
+                national_id       = national_id,
+                date_of_birth     = dob,
+                gender            = gender,
+                nationality       = nationality,
+                status            = status_val,
+                registration_date = reg_date,
+                disability_type   = DISABILITY_MAP.get(disability_raw, ''),
+                disability_degree = DEGREE_MAP.get(degree_raw, ''),
+                diagnosis         = diagnosis,
+                educational_level = EDU_MAP.get(edu_raw, ''),
+                school_name       = school_name,
+                grade             = grade,
+                referral_source   = REFERRAL_MAP.get(referral_raw, ''),
+                notes             = notes,
+                created_by        = request.user,
+            )
+            created += 1
+
+        log_action(request, 'create', None, f'استيراد {created} طالب من CSV')
+        return Response({'created': created, 'skipped': skipped, 'errors': errors}, status=status.HTTP_200_OK)
+
+
+class StudentImportCsvTemplateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="import_template_roya.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'الاسم الأول',
+            'اسم الأب',
+            'اسم الجد',
+            'اسم العائلة',
+            'رقم الهوية',
+            'تاريخ الميلاد (YYYY-MM-DD)',
+            'الجنس (ذكر/أنثى)',
+            'الجنسية',
+            'الحالة (نشط / في انتظار القبول / غير نشط / خرّيج / موقوف / محوّل)',
+            'تاريخ التسجيل (YYYY-MM-DD)',
+            'نوع الإعاقة',
+            'درجة الإعاقة (بسيطة / متوسطة / شديدة / شديدة جداً)',
+            'التشخيص التفصيلي',
+            'المستوى التعليمي',
+            'اسم المدرسة',
+            'الصف / المرحلة',
+            'جهة الإحالة',
+            'ملاحظات',
+        ])
+        writer.writerow([
+            'محمد', 'أحمد', 'سعد', 'العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
+            'نشط', '2024-01-10', 'طيف التوحد', 'متوسطة', 'تشخيص طيف التوحد درجة 2',
+            'برنامج تربية خاصة', 'مدرسة الأمل', 'الثالث الابتدائي', 'مستشفى / عيادة', '',
+        ])
         return response
 
 

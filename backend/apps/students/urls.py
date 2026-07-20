@@ -10,6 +10,9 @@ from .views import (
     StudentExportView,
     StudentImportView,
     StudentImportTemplateView,
+    StudentExportCsvView,
+    StudentImportCsvView,
+    StudentImportCsvTemplateView,
     AttendanceListCreateView,
     AttendanceDetailView,
     AttendanceSheetView,
@@ -18,8 +21,11 @@ from .views import (
 urlpatterns = [
     path('students/', StudentListCreateView.as_view(), name='student-list'),
     path('students/export/', StudentExportView.as_view(), name='student-export'),
+    path('students/export/csv/', StudentExportCsvView.as_view(), name='student-export-csv'),
     path('students/import/', StudentImportView.as_view(), name='student-import'),
     path('students/import/template/', StudentImportTemplateView.as_view(), name='student-import-template'),
+    path('students/import/csv/', StudentImportCsvView.as_view(), name='student-import-csv'),
+    path('students/import/csv/template/', StudentImportCsvTemplateView.as_view(), name='student-import-csv-template'),
     path('students/<int:pk>/', StudentDetailView.as_view(), name='student-detail'),
     # Guardians
     path('students/<int:student_pk>/guardians/', GuardianListCreateView.as_view(), name='guardian-list'),

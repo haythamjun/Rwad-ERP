@@ -48,7 +48,9 @@ export default function StudentsPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<StudentFilters>({ page: 1 });
   const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importFormat, setImportFormat] = useState<'excel' | 'csv'>('excel');
 
   const { data, isLoading } = useQuery<PaginatedResponse<Student>>({
     queryKey: ['students', filters],
@@ -80,6 +82,19 @@ export default function StudentsPage() {
     }
   };
 
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const res = await studentsApi.exportCsv();
+      downloadBlob(res.data, `students_${Date.now()}.csv`);
+      toast.success('تم تصدير ملف CSV بنجاح');
+    } catch {
+      toast.error('حدث خطأ في التصدير');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <Header
@@ -95,14 +110,29 @@ export default function StudentsPage() {
               <Download size={16} />
               {exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}
             </button>
+            <button
+              onClick={handleExportCsv}
+              disabled={exportingCsv}
+              className="btn-secondary"
+            >
+              <Download size={16} />
+              {exportingCsv ? 'جارٍ التصدير...' : 'تصدير CSV'}
+            </button>
             {user?.can_write && (
               <>
                 <button
-                  onClick={() => setImportOpen(true)}
+                  onClick={() => { setImportFormat('excel'); setImportOpen(true); }}
                   className="btn-secondary"
                 >
                   <Upload size={16} />
                   استيراد Excel
+                </button>
+                <button
+                  onClick={() => { setImportFormat('csv'); setImportOpen(true); }}
+                  className="btn-secondary"
+                >
+                  <Upload size={16} />
+                  استيراد CSV
                 </button>
                 <Link href="/students/new" className="btn-primary">
                   <Plus size={16} />
@@ -256,6 +286,7 @@ export default function StudentsPage() {
         {/* Import Modal */}
         {importOpen && (
           <ImportModal
+            format={importFormat}
             onClose={() => setImportOpen(false)}
             onDone={() => {
               queryClient.invalidateQueries({ queryKey: ['students'] });
