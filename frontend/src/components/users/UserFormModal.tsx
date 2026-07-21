@@ -76,7 +76,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
     staleTime: 60_000,
   });
 
-  const cities = [...new Set(branches.map((b) => b.city).filter(Boolean))];
+  const cities = Array.from(new Set(branches.map((b) => b.city).filter(Boolean)));
 
   // Reset when user prop changes (e.g. modal re-opened for different user)
   useEffect(() => {
