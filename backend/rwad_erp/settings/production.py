@@ -9,6 +9,8 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
 _cors = os.environ.get('CORS_ALLOWED_ORIGINS', '')
 CORS_ALLOWED_ORIGINS = [o for o in _cors.split(',') if o]
 CORS_ALLOW_CREDENTIALS = True
+# Allow any localhost port (Flutter web dev, local front-end dev servers)
+CORS_ALLOWED_ORIGIN_REGEXES = [r'^http://localhost:\d+$']
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = False
