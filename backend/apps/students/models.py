@@ -382,3 +382,28 @@ class StudentAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student.full_name} | {self.attendance_date} | {self.get_status_display()}"
+
+
+# ── Guardian Portal Auth Token ─────────────────────────────────────────────────
+
+class GuardianAuthToken(models.Model):
+    """One-row-per-session token issued to a guardian for the Flutter portal."""
+    guardian   = models.ForeignKey(
+        Guardian, on_delete=models.CASCADE,
+        related_name='auth_tokens', verbose_name='ولي الأمر',
+    )
+    key        = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'رمز تحقق ولي الأمر'
+        verbose_name_plural = 'رموز تحقق أولياء الأمور'
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            import secrets
+            self.key = secrets.token_hex(32)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Token for {self.guardian.full_name}"

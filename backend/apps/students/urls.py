@@ -1,4 +1,11 @@
 from django.urls import path
+from .portal_views import (
+    GuardianLoginView,
+    GuardianLogoutView,
+    PortalStudentView,
+    PortalAttendanceView,
+    PortalDashboardView,
+)
 from .views import (
     StudentListCreateView,
     StudentDetailView,
@@ -46,4 +53,11 @@ urlpatterns = [
     path('attendance/', AttendanceListCreateView.as_view(), name='attendance-global'),
     # Attendance — daily sheet (students merged with attendance)
     path('attendance/sheet/', AttendanceSheetView.as_view(), name='attendance-sheet'),
+
+    # ── Guardian Portal (Flutter app) ──────────────────────────────────────────
+    path('portal/login/',      GuardianLoginView.as_view(),    name='portal-login'),
+    path('portal/logout/',     GuardianLogoutView.as_view(),   name='portal-logout'),
+    path('portal/dashboard/',  PortalDashboardView.as_view(),  name='portal-dashboard'),
+    path('portal/student/',    PortalStudentView.as_view(),    name='portal-student'),
+    path('portal/attendance/', PortalAttendanceView.as_view(), name='portal-attendance'),
 ]
