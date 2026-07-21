@@ -34,7 +34,7 @@ const schema = z.object({
   grade:                  z.string().optional(),
   referral_source:        z.string().optional(),
   referral_source_detail: z.string().optional(),
-  status: z.enum(['pending','active','inactive','graduated','suspended','transferred']),
+  status: z.literal('pending'),
   registration_date: z.string().min(1, 'تاريخ التسجيل مطلوب')
     .refine(v => new Date(v) <= new Date(), 'لا يمكن أن يكون في المستقبل'),
   notes:  z.string().optional(),
@@ -428,14 +428,12 @@ export default function NewStudentPage() {
             </div>
             <div>
               <label className="form-label">الحالة</label>
-              <select {...register('status')} className="form-input">
-                <option value="pending">في انتظار القبول</option>
-                <option value="active">نشط</option>
-                <option value="inactive">غير نشط</option>
-                <option value="graduated">خرّيج</option>
-                <option value="suspended">موقوف</option>
-                <option value="transferred">محوّل</option>
-              </select>
+              <div className="form-input bg-gray-50 flex items-center gap-2 cursor-default select-none">
+                <span className="inline-block w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" />
+                <span className="text-gray-600 text-sm">في انتظار القبول</span>
+                <span className="text-gray-400 text-xs mr-auto">تُضبط تلقائياً عند التسجيل</span>
+              </div>
+              <input type="hidden" {...register('status')} value="pending" />
             </div>
 
             {branches.length > 0 && (
