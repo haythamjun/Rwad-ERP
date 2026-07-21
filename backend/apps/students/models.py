@@ -298,6 +298,7 @@ class StudentAttachment(models.Model):
     class AttachmentType(models.TextChoices):
         NATIONAL_ID          = 'national_id',          'صورة الهوية'
         BIRTH_CERTIFICATE    = 'birth_certificate',    'شهادة الميلاد'
+        FAMILY_CARD          = 'family_card',          'كرت الأسرة'
         MEDICAL_REPORT       = 'medical_report',       'تقرير طبي'
         PSYCHOLOGICAL_REPORT = 'psychological_report', 'تقرير نفسي'
         DISABILITY_CARD      = 'disability_card',      'بطاقة إعاقة'

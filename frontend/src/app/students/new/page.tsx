@@ -116,6 +116,12 @@ const HOUSING_TYPE = [
   { value:'other',label:'أخرى' },
 ];
 
+// ─── Required attachments ────────────────────────────────────────────────────
+const REQUIRED_ATTACHMENTS = [
+  { type: 'national_id', label: 'صورة الهوية الوطنية' },
+  { type: 'family_card', label: 'كرت الأسرة' },
+] as const;
+
 // ─── Helper: section title ────────────────────────────────────────────────────
 function SectionTitle({ num, title }: { num: string; title: string }) {
   return (
@@ -193,7 +199,12 @@ export default function NewStudentPage() {
   // ── API error ────────────────────────────────────────────────────────────
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // ── Attachments ──────────────────────────────────────────────────────────
+  // ── Required attachments ─────────────────────────────────────────────────
+  const [requiredFiles, setRequiredFiles] = useState<Record<string, File | null>>({ national_id: null, family_card: null });
+  const [activeReqType, setActiveReqType] = useState<string | null>(null);
+  const reqFileRef = useRef<HTMLInputElement>(null);
+
+  // ── Optional attachments ──────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
   const attachRef = useRef<HTMLInputElement>(null);
 
@@ -228,7 +239,13 @@ export default function NewStudentPage() {
         toast.error('ترتيب المستفيد لا يمكن أن يكون أكبر من عدد أفراد الأسرة'); return;
       }
     }
-    // Validate attachments
+    // Validate required attachments
+    const missingRequired = REQUIRED_ATTACHMENTS.filter(r => !requiredFiles[r.type]);
+    if (missingRequired.length > 0) {
+      toast.error(`يرجى إرفاق: ${missingRequired.map(r => r.label).join('، ')}`);
+      return;
+    }
+    // Validate optional attachments
     for (const a of attachments) {
       if (!a.type) { toast.error(`يرجى اختيار نوع المرفق: ${a.name}`); return; }
     }
@@ -277,7 +294,19 @@ export default function NewStudentPage() {
         });
       }
 
-      // 4. Attachments
+      // 4. Required attachments (upload first)
+      for (const req of REQUIRED_ATTACHMENTS) {
+        const file = requiredFiles[req.type];
+        if (file) {
+          const afd = new FormData();
+          afd.append('file', file);
+          afd.append('attachment_type', req.type);
+          afd.append('name', file.name.replace(/\.[^/.]+$/, ''));
+          await attachmentsApi.upload(sid, afd);
+        }
+      }
+
+      // 5. Optional attachments
       for (const a of attachments) {
         const afd = new FormData();
         afd.append('file', a.file);
@@ -708,30 +737,84 @@ export default function NewStudentPage() {
 
         {/* ══ ٧. المرفقات ═════════════════════════════════════════════════ */}
         <div className="card">
-          <div className="flex items-center justify-between mb-5 pb-2 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-xs">٧</span>
-              </div>
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">المرفقات</h3>
+          <div className="flex items-center gap-3 mb-5 pb-2 border-b border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-xs">٧</span>
             </div>
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">المرفقات</h3>
+          </div>
+
+          {/* المستندات الإلزامية */}
+          <p className="text-xs font-semibold text-gray-700 mb-3">
+            المستندات الإلزامية <span className="text-red-500">*</span>
+          </p>
+          <div className="space-y-2 mb-5">
+            {REQUIRED_ATTACHMENTS.map(req => {
+              const file = requiredFiles[req.type];
+              return (
+                <div key={req.type}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-colors ${
+                    file ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                  }`}>
+                  <FileText size={18} className={`flex-shrink-0 ${file ? 'text-green-500' : 'text-red-400'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">
+                      {req.label} <span className="text-red-500">*</span>
+                    </p>
+                    {file && (
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {file.name} — {(file.size / 1024).toFixed(0)} KB
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveReqType(req.type); reqFileRef.current?.click(); }}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                      file
+                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                        : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    }`}
+                  >
+                    {file ? 'تغيير' : 'رفع ملف'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <input ref={reqFileRef} type="file" accept=".pdf,image/*" className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f && activeReqType) {
+                setRequiredFiles(prev => ({ ...prev, [activeReqType]: f }));
+                e.target.value = '';
+                setActiveReqType(null);
+              }
+            }} />
+
+          {/* فاصل */}
+          <div className="border-t border-gray-100 mb-4" />
+
+          {/* المرفقات الإضافية */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-gray-600">مرفقات إضافية (اختيارية)</p>
             <button type="button" onClick={() => attachRef.current?.click()}
               className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 font-medium">
               <Plus size={15} /> إضافة ملف
             </button>
-            <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden"
-              onChange={e => {
-                const f = e.target.files?.[0];
-                if (f) { addAttachment(f); e.target.value = ''; }
-              }} />
           </div>
+          <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) { addAttachment(f); e.target.value = ''; }
+            }} />
 
           {attachments.length === 0 ? (
             <div
-              className="text-center py-8 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-primary-300 transition-colors"
+              className="text-center py-6 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-primary-300 transition-colors"
               onClick={() => attachRef.current?.click()}>
-              <Upload size={24} className="mx-auto mb-2 text-gray-300" />
-              اضغط هنا لإرفاق ملف PDF أو صورة
+              <Upload size={20} className="mx-auto mb-1.5 text-gray-300" />
+              اضغط لإضافة مرفق اختياري (PDF أو صورة)
             </div>
           ) : (
             <div className="space-y-3">
@@ -744,7 +827,6 @@ export default function NewStudentPage() {
                       <select className="form-input py-1.5 text-sm" value={a.type}
                         onChange={e => updateAttachment(a._key, 'type', e.target.value)}>
                         <option value="">-- اختر --</option>
-                        <option value="national_id">صورة الهوية</option>
                         <option value="birth_certificate">شهادة الميلاد</option>
                         <option value="medical_report">تقرير طبي</option>
                         <option value="psychological_report">تقرير نفسي</option>
