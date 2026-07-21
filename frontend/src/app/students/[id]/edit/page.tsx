@@ -78,7 +78,7 @@ export default function EditStudentPage() {
             date_of_birth:    student.date_of_birth,
             gender:           student.gender,
             nationality:      student.nationality,
-            status:           student.status,
+            status:           student.status === 'rejected' ? 'pending' : student.status,
             registration_date: student.registration_date,
             disability_degree: student.disability_degree || '',
             diagnosis:        student.diagnosis || '',
