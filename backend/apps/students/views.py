@@ -28,16 +28,35 @@ from .permissions import CanWrite, CanDelete, CanExport, CanImport
 from apps.core.utils import log_action
 
 
+def _disability_display(student):
+    """Comma-joined Arabic labels for a student's disability_type list."""
+    type_map = dict(Student.DisabilityType.choices)
+    types = student.disability_type if isinstance(student.disability_type, list) else []
+    return '، '.join(type_map.get(t, t) for t in types if t)
+
+
+def _apply_scope(user, qs):
+    """Restrict queryset to the user's assigned branch or city. Admin sees all."""
+    if user.is_admin:
+        return qs
+    if user.assigned_branch_id:
+        return qs.filter(branch_id=user.assigned_branch_id)
+    if user.assigned_city:
+        return qs.filter(branch__city=user.assigned_city)
+    return qs
+
+
 class StudentListCreateView(generics.ListCreateAPIView):
-    queryset = Student.objects.select_related('created_by').prefetch_related(
-        'guardians', 'family_info'
-    )
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = StudentFilter
     search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number']
     ordering_fields = ['first_name', 'family_name', 'registration_date', 'created_at', 'file_number']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        qs = Student.objects.select_related('created_by').prefetch_related('guardians', 'family_info')
+        return _apply_scope(self.request.user, qs)
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -55,10 +74,11 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Student.objects.select_related('created_by').prefetch_related(
-        'guardians', 'family_info', 'attachments'
-    )
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        qs = Student.objects.select_related('created_by').prefetch_related('guardians', 'family_info', 'attachments')
+        return _apply_scope(self.request.user, qs)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -79,6 +99,40 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         log_action(self.request, 'delete', instance, str(instance))
         instance.delete()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reject student
+# ──────────────────────────────────────────────────────────────────────────────
+
+class RejectStudentView(APIView):
+    permission_classes = [CanDelete]
+
+    def post(self, request, pk):
+        student = get_object_or_404(Student, pk=pk)
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response(
+                {'reason': ['سبب الرفض مطلوب']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        student.status = Student.Status.REJECTED
+        student.rejection_reason = reason
+        student.save(update_fields=['status', 'rejection_reason', 'updated_at'])
+        log_action(request, 'update', student, f'رفض الطالب: {student}')
+        return Response({'status': 'rejected', 'rejection_reason': reason})
+
+
+class RestoreStudentView(APIView):
+    permission_classes = [CanDelete]
+
+    def post(self, request, pk):
+        student = get_object_or_404(Student, pk=pk)
+        student.status = Student.Status.PENDING
+        student.rejection_reason = ''
+        student.save(update_fields=['status', 'rejection_reason', 'updated_at'])
+        log_action(request, 'update', student, f'استعادة الطالب: {student}')
+        return Response({'status': 'pending'})
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -220,12 +274,12 @@ class StudentExportView(APIView):
     permission_classes = [CanExport]
 
     def get(self, request):
-        students = (
-            Student.objects
-            .all()
+        students = _apply_scope(
+            request.user,
+            Student.objects.all()
             .prefetch_related('guardians')
             .select_related('family_info')
-            .order_by('file_number')
+            .order_by('file_number'),
         )
 
         wb = openpyxl.Workbook()
@@ -301,7 +355,7 @@ class StudentExportView(APIView):
                 student.get_gender_display(),
                 student.nationality,
                 student.get_status_display(),
-                student.get_disability_type_display()  if student.disability_type  else '',
+                _disability_display(student),
                 student.get_disability_degree_display() if student.disability_degree else '',
                 student.diagnosis or '',
                 student.get_referral_source_display()  if student.referral_source  else '',
@@ -347,12 +401,13 @@ class StudentExportView(APIView):
 GENDER_MAP = {'ذكر': 'male', 'أنثى': 'female', 'male': 'male', 'female': 'female'}
 
 STATUS_MAP = {
-    'في انتظار القبول': 'pending', 'pending': 'pending',
-    'نشط': 'active', 'active': 'active',
-    'غير نشط': 'inactive', 'inactive': 'inactive',
-    'خرّيج': 'graduated', 'graduated': 'graduated',
-    'موقوف': 'suspended', 'suspended': 'suspended',
-    'محوّل': 'transferred', 'transferred': 'transferred',
+    'في انتظار القبول': 'pending',    'pending':     'pending',
+    'نشط':              'active',     'active':      'active',
+    'غير نشط':          'inactive',   'inactive':    'inactive',
+    'خرّيج':            'graduated',  'graduated':   'graduated',
+    'موقوف':            'suspended',  'suspended':   'suspended',
+    'محوّل':            'transferred','transferred': 'transferred',
+    'مرفوض':            'rejected',   'rejected':    'rejected',
 }
 
 DISABILITY_MAP = {
@@ -519,7 +574,7 @@ class StudentImportView(APIView):
                 nationality       = nationality,
                 status            = status_val,
                 registration_date = reg_date,
-                disability_type   = DISABILITY_MAP.get(disability_raw, ''),
+                disability_type   = [DISABILITY_MAP[t.strip()] for t in disability_raw.split(',') if t.strip() in DISABILITY_MAP],
                 disability_degree = DEGREE_MAP.get(degree_raw, ''),
                 diagnosis         = diagnosis,
                 educational_level = EDU_MAP.get(edu_raw, ''),
@@ -608,12 +663,12 @@ class StudentExportCsvView(APIView):
     permission_classes = [CanExport]
 
     def get(self, request):
-        students = (
-            Student.objects
-            .all()
+        students = _apply_scope(
+            request.user,
+            Student.objects.all()
             .prefetch_related('guardians')
             .select_related('family_info')
-            .order_by('file_number')
+            .order_by('file_number'),
         )
 
         response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
@@ -650,7 +705,7 @@ class StudentExportCsvView(APIView):
                 student.get_gender_display(),
                 student.nationality,
                 student.get_status_display(),
-                student.get_disability_type_display() if student.disability_type else '',
+                _disability_display(student),
                 student.get_disability_degree_display() if student.disability_degree else '',
                 student.diagnosis or '',
                 student.get_referral_source_display() if student.referral_source else '',
@@ -792,7 +847,7 @@ class StudentImportCsvView(APIView):
                 nationality       = nationality,
                 status            = status_val,
                 registration_date = reg_date,
-                disability_type   = DISABILITY_MAP.get(disability_raw, ''),
+                disability_type   = [DISABILITY_MAP[t.strip()] for t in disability_raw.split(',') if t.strip() in DISABILITY_MAP],
                 disability_degree = DEGREE_MAP.get(degree_raw, ''),
                 diagnosis         = diagnosis,
                 educational_level = EDU_MAP.get(edu_raw, ''),

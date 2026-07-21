@@ -20,6 +20,14 @@ class User(AbstractUser):
     avatar = models.ImageField(
         upload_to='avatars/', null=True, blank=True, verbose_name='الصورة الشخصية'
     )
+    assigned_branch = models.ForeignKey(
+        'core.Branch',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='assigned_users',
+        verbose_name='الفرع المعيّن',
+    )
+    assigned_city = models.CharField(max_length=100, blank=True, verbose_name='المدينة المعيّنة')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

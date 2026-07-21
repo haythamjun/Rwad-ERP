@@ -35,7 +35,11 @@ export default function EditStudentPage() {
     const fd = new FormData();
     Object.entries(data).forEach(([key, value]) => {
       if (value !== null && value !== undefined && value !== '') {
-        fd.append(key, value instanceof File ? value : String(value));
+        if (Array.isArray(value)) {
+          fd.append(key, JSON.stringify(value));
+        } else {
+          fd.append(key, value instanceof File ? value : String(value));
+        }
       }
     });
     mutate(fd);
@@ -64,6 +68,7 @@ export default function EditStudentPage() {
         <StudentForm
           onSubmit={handleSubmit}
           loading={isPending}
+          initialDisabilityTypes={Array.isArray(student.disability_type) ? student.disability_type : []}
           defaultValues={{
             first_name:       student.first_name,
             middle_name:      student.middle_name,
@@ -75,6 +80,8 @@ export default function EditStudentPage() {
             nationality:      student.nationality,
             status:           student.status,
             registration_date: student.registration_date,
+            disability_degree: student.disability_degree || '',
+            diagnosis:        student.diagnosis || '',
             notes:            student.notes || '',
             branch:           student.branch ? String(student.branch) : '',
           }}

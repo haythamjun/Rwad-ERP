@@ -38,7 +38,7 @@ export default function AttendancePage() {
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
-    queryFn: () => branchesApi.list().then((r) => r.data),
+    queryFn: () => branchesApi.list().then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const { data: rows = [], isLoading, refetch } = useQuery<AttendanceSheetRow[]>({
@@ -46,7 +46,7 @@ export default function AttendancePage() {
     queryFn: () =>
       attendanceApi
         .sheet({ date: selectedDate, branch: selectedBranch || undefined, search: search || undefined })
-        .then((r) => r.data),
+        .then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
     staleTime: 30_000,
   });
 

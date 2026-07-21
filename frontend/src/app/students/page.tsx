@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Plus, Search, Download, Filter, ChevronRight, ChevronLeft, Upload } from 'lucide-react';
+import { Plus, Search, Download, Filter, ChevronRight, ChevronLeft, Upload, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -20,6 +20,7 @@ const STATUS_OPTIONS = [
   { value: 'graduated', label: 'خرّيج' },
   { value: 'suspended', label: 'موقوف' },
   { value: 'transferred', label: 'محوّل' },
+  { value: 'rejected', label: 'مرفوض' },
 ];
 
 const DISABILITY_OPTIONS = [
@@ -143,6 +144,12 @@ export default function StudentsPage() {
                   استيراد CSV
                 </button>
               </>
+            )}
+            {user?.can_delete && (
+              <Link href="/students/rejected" className="btn-secondary text-rose-600 border-rose-200 hover:bg-rose-50">
+                <XCircle size={16} />
+                المرفوضون
+              </Link>
             )}
             {user?.can_write && (
               <Link href="/students/new" className="btn-primary">

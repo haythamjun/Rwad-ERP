@@ -23,6 +23,7 @@ interface ModalProps {
 function BranchModal({ branch, onClose, onSave, loading }: ModalProps) {
   const [form, setForm] = useState({
     name:      branch?.name      || '',
+    city:      branch?.city      || '',
     location:  branch?.location  || '',
     phone:     branch?.phone     || '',
     is_active: branch?.is_active ?? true,
@@ -59,12 +60,22 @@ function BranchModal({ branch, onClose, onSave, loading }: ModalProps) {
           </div>
 
           <div>
+            <label className="form-label">المدينة</label>
+            <input
+              className="form-input"
+              value={form.city}
+              onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+              placeholder="مثال: الرياض"
+            />
+          </div>
+
+          <div>
             <label className="form-label">الموقع / العنوان</label>
             <input
               className="form-input"
               value={form.location}
               onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-              placeholder="مثال: الرياض، حي العليا"
+              placeholder="مثال: حي العليا، شارع الملك فهد"
             />
           </div>
 
@@ -121,7 +132,7 @@ export default function SettingsPage() {
 
   const { data: branches = [], isLoading } = useQuery<Branch[]>({
     queryKey: ['branches'],
-    queryFn:  () => branchesApi.list().then(r => r.data),
+    queryFn:  () => branchesApi.list().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const createMutation = useMutation({

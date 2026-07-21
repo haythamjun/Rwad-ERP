@@ -42,6 +42,7 @@ export const STATUS_COLORS: Record<string, string> = {
   graduated:   'bg-blue-100 text-blue-800',
   suspended:   'bg-red-100 text-red-800',
   transferred: 'bg-purple-100 text-purple-800',
+  rejected:    'bg-rose-100 text-rose-800',
 };
 
 export const GENDER_LABEL: Record<string, string> = {

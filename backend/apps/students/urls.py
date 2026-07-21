@@ -2,6 +2,8 @@ from django.urls import path
 from .views import (
     StudentListCreateView,
     StudentDetailView,
+    RejectStudentView,
+    RestoreStudentView,
     GuardianListCreateView,
     GuardianDetailView,
     FamilyInfoView,
@@ -27,6 +29,8 @@ urlpatterns = [
     path('students/import/csv/', StudentImportCsvView.as_view(), name='student-import-csv'),
     path('students/import/csv/template/', StudentImportCsvTemplateView.as_view(), name='student-import-csv-template'),
     path('students/<int:pk>/', StudentDetailView.as_view(), name='student-detail'),
+    path('students/<int:pk>/reject/', RejectStudentView.as_view(), name='student-reject'),
+    path('students/<int:pk>/restore/', RestoreStudentView.as_view(), name='student-restore'),
     # Guardians
     path('students/<int:student_pk>/guardians/', GuardianListCreateView.as_view(), name='guardian-list'),
     path('students/<int:student_pk>/guardians/<int:pk>/', GuardianDetailView.as_view(), name='guardian-detail'),

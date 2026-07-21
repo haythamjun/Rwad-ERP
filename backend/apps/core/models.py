@@ -5,6 +5,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 
 class Branch(models.Model):
     name        = models.CharField(max_length=100, unique=True, verbose_name='اسم الفرع')
+    city        = models.CharField(max_length=100, blank=True, verbose_name='المدينة')
     location    = models.CharField(max_length=200, blank=True, verbose_name='الموقع')
     phone       = models.CharField(max_length=20,  blank=True, verbose_name='هاتف الفرع')
     is_active   = models.BooleanField(default=True, verbose_name='نشط')

@@ -4,6 +4,7 @@
 export interface Branch {
   id: number;
   name: string;
+  city: string;
   location: string;
   phone: string;
   is_active: boolean;
@@ -41,6 +42,9 @@ export interface User {
   is_active: boolean;
   created_at: string;
   permissions?: ModulePermission[];
+  assigned_branch?: number | null;
+  assigned_branch_name?: string | null;
+  assigned_city?: string;
 }
 
 export interface AuthTokens { access: string; refresh: string; }
@@ -51,7 +55,7 @@ export interface LoginResponse extends AuthTokens { user: User; }
 // ─────────────────────────────────────────────
 export type StudentStatus =
   | 'pending' | 'active' | 'inactive'
-  | 'graduated' | 'suspended' | 'transferred';
+  | 'graduated' | 'suspended' | 'transferred' | 'rejected';
 
 export type Gender = 'male' | 'female';
 
@@ -87,7 +91,7 @@ export interface Student {
   nationality: string;
   photo?: string | null;
   // إعاقة
-  disability_type?: DisabilityType;
+  disability_type?: string[];
   disability_type_display?: string;
   disability_degree?: DisabilityDegree;
   disability_degree_display?: string;
@@ -106,6 +110,7 @@ export interface Student {
   status_display: string;
   registration_date: string;
   notes?: string;
+  rejection_reason?: string;
   created_at: string;
   updated_at: string;
   created_by?: number | null;
@@ -128,7 +133,7 @@ export interface StudentFormData {
   nationality: string;
   photo?: File | null;
   // إعاقة
-  disability_type?: DisabilityType;
+  disability_type?: string[];
   disability_degree?: DisabilityDegree;
   diagnosis?: string;
   // تعليم

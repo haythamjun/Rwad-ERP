@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { X, Save, Eye, EyeOff } from 'lucide-react';
-import type { User, ModulePermission, ModuleKey } from '@/types';
+import { branchesApi } from '@/lib/api';
+import type { Branch, User, ModulePermission, ModuleKey } from '@/types';
 
 // ── Module definitions ────────────────────────────────────────────────────────
 const MODULES: { key: ModuleKey; label: string }[] = [
@@ -36,19 +38,28 @@ interface Props {
   loading: boolean;
 }
 
+type ScopeType = 'all' | 'city' | 'branch';
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function UserFormModal({ user, onClose, onSave, loading }: Props) {
   const isEdit = !!user;
 
   const [form, setForm] = useState({
-    username:   user?.username   || '',
-    password:   '',
-    first_name: user?.first_name || '',
-    last_name:  user?.last_name  || '',
-    email:      user?.email      || '',
-    phone:      user?.phone      || '',
-    role:       user?.role       || 'viewer',
-    is_active:  user?.is_active  ?? true,
+    username:        user?.username        || '',
+    password:        '',
+    first_name:      user?.first_name      || '',
+    last_name:       user?.last_name       || '',
+    email:           user?.email           || '',
+    phone:           user?.phone           || '',
+    role:            user?.role            || 'viewer',
+    is_active:       user?.is_active       ?? true,
+    assigned_branch: user?.assigned_branch ? String(user.assigned_branch) : '',
+    assigned_city:   user?.assigned_city   || '',
+  });
+  const [scopeType, setScopeType] = useState<ScopeType>(() => {
+    if (user?.assigned_branch) return 'branch';
+    if (user?.assigned_city)   return 'city';
+    return 'all';
   });
   const [showPw, setShowPw]   = useState(false);
   const [perms, setPerms]     = useState<PermMap>(() =>
@@ -56,18 +67,32 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
   );
   const [errors, setErrors]   = useState<Record<string, string>>({});
 
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ['branches'],
+    queryFn: () => branchesApi.list().then((r) => {
+      const d = r.data as Branch[] | { results: Branch[] };
+      return Array.isArray(d) ? d : (d.results ?? []);
+    }),
+    staleTime: 60_000,
+  });
+
+  const cities = [...new Set(branches.map((b) => b.city).filter(Boolean))];
+
   // Reset when user prop changes (e.g. modal re-opened for different user)
   useEffect(() => {
     setForm({
-      username:   user?.username   || '',
-      password:   '',
-      first_name: user?.first_name || '',
-      last_name:  user?.last_name  || '',
-      email:      user?.email      || '',
-      phone:      user?.phone      || '',
-      role:       user?.role       || 'viewer',
-      is_active:  user?.is_active  ?? true,
+      username:        user?.username        || '',
+      password:        '',
+      first_name:      user?.first_name      || '',
+      last_name:       user?.last_name       || '',
+      email:           user?.email           || '',
+      phone:           user?.phone           || '',
+      role:            user?.role            || 'viewer',
+      is_active:       user?.is_active       ?? true,
+      assigned_branch: user?.assigned_branch ? String(user.assigned_branch) : '',
+      assigned_city:   user?.assigned_city   || '',
     });
+    setScopeType(user?.assigned_branch ? 'branch' : user?.assigned_city ? 'city' : 'all');
     setPerms(permsFromList(user?.permissions || []));
     setErrors({});
   }, [user]);
@@ -121,7 +146,12 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
       can_export: perms[key].can_export,
       can_import: perms[key].can_import,
     }));
-    const data: Record<string, unknown> = { ...form, permissions };
+    const data: Record<string, unknown> = {
+      ...form,
+      permissions,
+      assigned_branch: scopeType === 'branch' && form.assigned_branch ? Number(form.assigned_branch) : null,
+      assigned_city:   scopeType === 'city'   ? form.assigned_city    : '',
+    };
     if (!data.password) delete data.password;
     onSave(data);
   };
@@ -259,7 +289,74 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
             </div>
           </div>
 
-          {/* ── Section 2: Module permissions matrix ───────────────────── */}
+          {/* ── Section 2: Work scope ──────────────────────────────────── */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-4 pb-2 border-b border-gray-100">
+              نطاق العمل
+            </h3>
+            <div className="flex flex-wrap gap-4 mb-4">
+              {(['all', 'city', 'branch'] as ScopeType[]).map((type) => (
+                <label key={type} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    className="accent-primary-600"
+                    checked={scopeType === type}
+                    onChange={() => setScopeType(type)}
+                  />
+                  <span className="text-sm text-gray-700">
+                    {type === 'all' ? 'بدون تقييد (يرى الكل)' : type === 'city' ? 'مدينة محددة' : 'فرع محدد'}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {scopeType === 'city' && (
+              <div>
+                <label className="form-label">المدينة</label>
+                {cities.length > 0 ? (
+                  <select
+                    className="form-input"
+                    value={form.assigned_city}
+                    onChange={(e) => set('assigned_city', e.target.value)}
+                  >
+                    <option value="">— اختر مدينة —</option>
+                    {cities.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="form-input"
+                    placeholder="أدخل اسم المدينة"
+                    value={form.assigned_city}
+                    onChange={(e) => set('assigned_city', e.target.value)}
+                  />
+                )}
+                <p className="text-xs text-gray-400 mt-1">سيرى المستخدم طلاب جميع فروع هذه المدينة</p>
+              </div>
+            )}
+
+            {scopeType === 'branch' && (
+              <div>
+                <label className="form-label">الفرع</label>
+                <select
+                  className="form-input"
+                  value={form.assigned_branch}
+                  onChange={(e) => set('assigned_branch', e.target.value)}
+                >
+                  <option value="">— اختر فرع —</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={String(b.id)}>
+                      {b.name}{b.city ? ` — ${b.city}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">سيرى المستخدم طلاب هذا الفرع فقط</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Section 3: Module permissions matrix ─────────────────── */}
           <div>
             <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-4 pb-2 border-b border-gray-100">
               صلاحيات الوحدات

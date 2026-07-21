@@ -26,9 +26,9 @@ const schema = z.object({
     .refine(v => new Date(v) <= new Date(), 'لا يمكن أن يكون في المستقبل'),
   gender:      z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
   nationality: z.string().min(1, 'الجنسية مطلوبة'),
-  disability_type:        z.string().optional(),
+  // disability_type managed as separate state — not in schema
   disability_degree:      z.string().optional(),
-  diagnosis:              z.string().optional(),
+  diagnosis:              z.string().min(1, 'التشخيص التفصيلي مطلوب'),
   educational_level:      z.string().optional(),
   school_name:            z.string().optional(),
   grade:                  z.string().optional(),
@@ -118,8 +118,9 @@ const HOUSING_TYPE = [
 
 // ─── Required attachments ────────────────────────────────────────────────────
 const REQUIRED_ATTACHMENTS = [
-  { type: 'national_id', label: 'صورة الهوية الوطنية' },
-  { type: 'family_card', label: 'كرت الأسرة' },
+  { type: 'national_id',    label: 'صورة الهوية الوطنية' },
+  { type: 'family_card',    label: 'كرت الأسرة' },
+  { type: 'medical_report', label: 'التقرير الطبي' },
 ] as const;
 
 // ─── Helper: section title ────────────────────────────────────────────────────
@@ -155,8 +156,11 @@ export default function NewStudentPage() {
   // ── Branches ─────────────────────────────────────────────────────────────
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
-    queryFn:  () => branchesApi.list().then(r => r.data),
+    queryFn:  () => branchesApi.list().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
+
+  // ── Disability types (multi-select state) ────────────────────────────────
+  const [disabilityTypes, setDisTypes] = useState<string[]>([]);
 
   // ── Photo ────────────────────────────────────────────────────────────────
   const [photo, setPhoto]         = useState<File | null>(null);
@@ -200,7 +204,7 @@ export default function NewStudentPage() {
   const [apiError, setApiError] = useState<string | null>(null);
 
   // ── Required attachments ─────────────────────────────────────────────────
-  const [requiredFiles, setRequiredFiles] = useState<Record<string, File | null>>({ national_id: null, family_card: null });
+  const [requiredFiles, setRequiredFiles] = useState<Record<string, File | null>>({ national_id: null, family_card: null, medical_report: null });
   const [activeReqType, setActiveReqType] = useState<string | null>(null);
   const reqFileRef = useRef<HTMLInputElement>(null);
 
@@ -225,6 +229,16 @@ export default function NewStudentPage() {
   const [saving, setSaving] = useState(false);
 
   const saveAll = async (data: FormValues) => {
+    // Validate disability types
+    if (disabilityTypes.length === 0) {
+      toast.error('يرجى اختيار نوع الإعاقة على الأقل');
+      return;
+    }
+    // Require at least one guardian
+    if (guardians.length === 0) {
+      toast.error('يرجى إضافة ولي أمر واحد على الأقل');
+      return;
+    }
     // Validate guardians minimally
     for (const g of guardians) {
       if (!g.full_name.trim()) { toast.error('يرجى إدخال اسم ولي الأمر'); return; }
@@ -260,6 +274,7 @@ export default function NewStudentPage() {
       Object.entries(data).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') fd.append(k, String(v));
       });
+      fd.append('disability_type', JSON.stringify(disabilityTypes));
       if (photo) fd.append('photo', photo);
       const res = await studentsApi.create(fd);
       const sid: number = res.data.id;
@@ -482,25 +497,64 @@ export default function NewStudentPage() {
         {/* ══ ٢. الإعاقة والتشخيص ═════════════════════════════════════════ */}
         <div className="card">
           <SectionTitle num="٢" title="الإعاقة والتشخيص" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
+
+            {/* نوع الإعاقة — متعدد الاختيار */}
             <div>
-              <label className="form-label">نوع الإعاقة</label>
-              <select {...register('disability_type')} className="form-input">
-                <option value="">-- اختر --</option>
-                {DISABILITY_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              <label className="form-label">
+                نوع الإعاقة <span className="text-red-500">*</span>
+                {disabilityTypes.length > 0 && (
+                  <span className="mr-2 text-xs font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
+                    {disabilityTypes.length} مختار
+                  </span>
+                )}
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+                {DISABILITY_TYPES.map(o => {
+                  const checked = disabilityTypes.includes(o.value);
+                  return (
+                    <label
+                      key={o.value}
+                      className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-colors select-none ${
+                        checked
+                          ? 'border-primary-400 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-primary-600 flex-shrink-0"
+                        checked={checked}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setDisTypes(prev => [...prev, o.value]);
+                          } else {
+                            setDisTypes(prev => prev.filter(t => t !== o.value));
+                          }
+                        }}
+                      />
+                      <span className="text-sm">{o.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="form-label">درجة الإعاقة</label>
+                <select {...register('disability_degree')} className="form-input">
+                  <option value="">-- اختر --</option>
+                  {DISABILITY_DEGREES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
+
             <div>
-              <label className="form-label">درجة الإعاقة</label>
-              <select {...register('disability_degree')} className="form-input">
-                <option value="">-- اختر --</option>
-                {DISABILITY_DEGREES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="form-label">التشخيص التفصيلي</label>
+              <label className="form-label">التشخيص التفصيلي <span className="text-red-500">*</span></label>
               <textarea {...register('diagnosis')} rows={3} className="form-input resize-none"
                 placeholder="التشخيص الطبي أو النفسي التفصيلي..." />
+              {errors.diagnosis && <p className="text-red-500 text-xs mt-1">{errors.diagnosis.message}</p>}
             </div>
           </div>
         </div>
@@ -553,7 +607,10 @@ export default function NewStudentPage() {
               <div className="w-7 h-7 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-xs">٥</span>
               </div>
-              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">أولياء الأمور</h3>
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                أولياء الأمور <span className="text-red-500">*</span>
+              </h3>
+              <span className="text-xs text-gray-400">(مطلوب ولي أمر واحد على الأقل)</span>
             </div>
             <button type="button" onClick={addGuardian}
               className="flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 font-medium">
@@ -562,8 +619,9 @@ export default function NewStudentPage() {
           </div>
 
           {guardians.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-sm border-2 border-dashed border-gray-200 rounded-xl">
-              لم يُضف أي ولي أمر بعد — اضغط «إضافة ولي أمر» أعلاه
+            <div className="text-center py-6 text-sm border-2 border-dashed border-red-200 bg-red-50 rounded-xl">
+              <p className="text-red-500 font-medium">يجب إضافة ولي أمر واحد على الأقل</p>
+              <p className="text-gray-400 text-xs mt-1">اضغط «إضافة ولي أمر» أعلاه</p>
             </div>
           ) : (
             <div className="space-y-4">

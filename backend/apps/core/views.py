@@ -39,12 +39,13 @@ class BranchSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Branch
-        fields = ['id', 'name', 'location', 'phone', 'is_active', 'created_at', 'student_count']
+        fields = ['id', 'name', 'city', 'location', 'phone', 'is_active', 'created_at', 'student_count']
         read_only_fields = ['id', 'created_at']
 
 
 class BranchListCreateView(generics.ListCreateAPIView):
-    serializer_class = BranchSerializer
+    serializer_class   = BranchSerializer
+    pagination_class   = None          # branches are a small list; no pagination needed
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -71,16 +72,25 @@ class DashboardStatsView(APIView):
     def get(self, request):
         from apps.students.models import Student
 
-        total = Student.objects.count()
+        user = request.user
+        qs = Student.objects.all()
+        branches_qs = Branch.objects.filter(is_active=True)
+
+        if not user.is_admin:
+            if user.assigned_branch_id:
+                qs = qs.filter(branch_id=user.assigned_branch_id)
+                branches_qs = branches_qs.filter(id=user.assigned_branch_id)
+            elif user.assigned_city:
+                qs = qs.filter(branch__city=user.assigned_city)
+                branches_qs = branches_qs.filter(city=user.assigned_city)
+
+        total = qs.count()
         by_status = dict(
-            Student.objects.values_list('status')
-            .annotate(n=Count('id'))
-            .values_list('status', 'n')
+            qs.values_list('status').annotate(n=Count('id')).values_list('status', 'n')
         )
 
         branches = (
-            Branch.objects
-            .filter(is_active=True)
+            branches_qs
             .annotate(student_count=Count('students'))
             .values('id', 'name', 'location', 'student_count')
             .order_by('name')

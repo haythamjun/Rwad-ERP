@@ -78,6 +78,10 @@ export const studentsApi = {
     });
   },
   delete: (id: number) => api.delete(`/students/${id}/`),
+  reject: (id: number, reason: string) =>
+    api.post(`/students/${id}/reject/`, { reason }),
+  restore: (id: number) =>
+    api.post(`/students/${id}/restore/`),
   export: () =>
     api.get('/students/export/', { responseType: 'blob' }),
   exportCsv: () =>

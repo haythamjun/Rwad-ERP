@@ -10,6 +10,7 @@ class Student(models.Model):
         GRADUATED   = 'graduated',   'خرّيج'
         SUSPENDED   = 'suspended',   'موقوف'
         TRANSFERRED = 'transferred', 'محوّل'
+        REJECTED    = 'rejected',    'مرفوض'
 
     class Gender(models.TextChoices):
         MALE   = 'male',   'ذكر'
@@ -87,9 +88,8 @@ class Student(models.Model):
     )
 
     # ── الإعاقة والتشخيص ──────────────────────────────────────────────
-    disability_type = models.CharField(
-        max_length=30, choices=DisabilityType.choices,
-        blank=True, verbose_name='نوع الإعاقة',
+    disability_type = models.JSONField(
+        default=list, verbose_name='نوع الإعاقة',
     )
     disability_degree = models.CharField(
         max_length=20, choices=DisabilityDegree.choices,
@@ -123,6 +123,7 @@ class Student(models.Model):
         max_length=20, choices=Status.choices,
         default=Status.PENDING, verbose_name='الحالة',
     )
+    rejection_reason = models.TextField(blank=True, verbose_name='سبب الرفض')
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
 
     # ── بيانات النظام ─────────────────────────────────────────────────
@@ -145,7 +146,7 @@ class Student(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['first_name']),
             models.Index(fields=['family_name']),
-            models.Index(fields=['disability_type']),
+
         ]
 
     @property

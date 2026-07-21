@@ -1,6 +1,33 @@
+import json as _json
 from rest_framework import serializers
 from .models import Student, Guardian, FamilyInfo, StudentAttachment, StudentAttendance
 from datetime import date
+
+
+# ── Custom field: handles JSON list via both multipart (string) and JSON parser ──
+
+class DisabilityTypeListField(serializers.Field):
+    def to_representation(self, value):
+        return value if isinstance(value, list) else []
+
+    def to_internal_value(self, data):
+        if isinstance(data, list):
+            return data
+        if isinstance(data, str):
+            try:
+                parsed = _json.loads(data)
+                if isinstance(parsed, list):
+                    return parsed
+            except (_json.JSONDecodeError, ValueError):
+                if data:
+                    return [data]
+        return []
+
+
+def _disability_type_display(obj):
+    type_map = dict(Student.DisabilityType.choices)
+    types = obj.disability_type if isinstance(obj.disability_type, list) else []
+    return '، '.join(type_map.get(t, t) for t in types if t)
 
 
 class GuardianSerializer(serializers.ModelSerializer):
@@ -84,10 +111,10 @@ class StudentAttachmentSerializer(serializers.ModelSerializer):
 
 class StudentListSerializer(serializers.ModelSerializer):
     full_name                = serializers.CharField(read_only=True)
-    status_display           = serializers.CharField(source='get_status_display',           read_only=True)
-    gender_display           = serializers.CharField(source='get_gender_display',           read_only=True)
-    disability_type_display  = serializers.CharField(source='get_disability_type_display',  read_only=True)
-    disability_degree_display= serializers.CharField(source='get_disability_degree_display',read_only=True)
+    status_display           = serializers.CharField(source='get_status_display',            read_only=True)
+    gender_display           = serializers.CharField(source='get_gender_display',            read_only=True)
+    disability_type_display  = serializers.SerializerMethodField()
+    disability_degree_display= serializers.CharField(source='get_disability_degree_display', read_only=True)
     age                      = serializers.IntegerField(read_only=True)
     primary_guardian         = serializers.SerializerMethodField()
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
@@ -104,8 +131,12 @@ class StudentListSerializer(serializers.ModelSerializer):
             'disability_degree', 'disability_degree_display',
             'registration_date', 'photo',
             'branch', 'branch_name',
-            'primary_guardian', 'created_at',
+            'primary_guardian', 'created_at', 'updated_at',
+            'rejection_reason',
         ]
+
+    def get_disability_type_display(self, obj):
+        return _disability_type_display(obj)
 
     def get_primary_guardian(self, obj):
         guardian = (
@@ -124,7 +155,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     attachments              = StudentAttachmentSerializer(many=True, read_only=True)
     status_display           = serializers.CharField(source='get_status_display',            read_only=True)
     gender_display           = serializers.CharField(source='get_gender_display',            read_only=True)
-    disability_type_display  = serializers.CharField(source='get_disability_type_display',   read_only=True)
+    disability_type_display  = serializers.SerializerMethodField()
     disability_degree_display= serializers.CharField(source='get_disability_degree_display', read_only=True)
     educational_level_display= serializers.CharField(source='get_educational_level_display', read_only=True)
     referral_source_display  = serializers.CharField(source='get_referral_source_display',   read_only=True)
@@ -154,12 +185,16 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             # حالة
             'status', 'status_display',
             'registration_date', 'notes',
+            'rejection_reason',
             # علاقات
             'guardians', 'family_info', 'attachments',
             # نظام
             'created_by', 'created_by_name', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'file_number', 'created_by', 'created_at', 'updated_at']
+
+    def get_disability_type_display(self, obj):
+        return _disability_type_display(obj)
 
     def get_created_by_name(self, obj):
         if obj.created_by:
@@ -168,6 +203,8 @@ class StudentDetailSerializer(serializers.ModelSerializer):
 
 
 class StudentCreateUpdateSerializer(serializers.ModelSerializer):
+    disability_type = DisabilityTypeListField()
+
     class Meta:
         model  = Student
         fields = [
@@ -184,6 +221,20 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'status', 'registration_date', 'notes',
             'branch',
         ]
+
+    def validate_disability_type(self, value):
+        if not value:
+            raise serializers.ValidationError('يرجى اختيار نوع الإعاقة على الأقل.')
+        valid = {choice[0] for choice in Student.DisabilityType.choices}
+        invalid = [v for v in value if v not in valid]
+        if invalid:
+            raise serializers.ValidationError(f'نوع الإعاقة غير صحيح: {", ".join(invalid)}')
+        return value
+
+    def validate_diagnosis(self, value):
+        if not value or not (value or '').strip():
+            raise serializers.ValidationError('التشخيص التفصيلي مطلوب.')
+        return value
 
     def validate_national_id(self, value):
         if not value.isdigit() or len(value) != 10:

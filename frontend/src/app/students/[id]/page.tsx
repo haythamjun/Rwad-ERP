@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
-  CalendarDays, Clock,
+  CalendarDays, Clock, XCircle, RotateCcw,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -18,16 +18,19 @@ import Header from '@/components/layout/Header';
 import GuardianModal from '@/components/students/GuardianModal';
 import FamilyModal from '@/components/students/FamilyModal';
 import AttendanceModal from '@/components/students/AttendanceModal';
+import AcceptanceLetterModal from '@/components/students/AcceptanceLetterModal';
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
   const [guardianModal, setGuardianModal] = useState<{ open: boolean; guardian?: Guardian }>({ open: false });
   const [familyModal, setFamilyModal] = useState(false);
   const [attendanceModal, setAttendanceModal] = useState<{ open: boolean; record?: Attendance }>({ open: false });
+  const [rejectModal, setRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [acceptanceLetterOpen, setAcceptanceLetterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'guardians' | 'family' | 'attachments' | 'attendance'>('info');
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState('');
@@ -38,14 +41,26 @@ export default function StudentDetailPage() {
     queryFn: () => studentsApi.detail(Number(id)).then((r) => r.data),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => studentsApi.delete(Number(id)),
+  const rejectMutation = useMutation({
+    mutationFn: (reason: string) => studentsApi.reject(Number(id), reason),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
-      toast.success('تم حذف الطالب');
-      router.replace('/students');
+      toast.success('تم رفض الطالب');
+      setRejectModal(false);
+      setRejectReason('');
     },
-    onError: () => toast.error('فشل الحذف'),
+    onError: () => toast.error('فشل رفض الطالب'),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: () => studentsApi.restore(Number(id)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      toast.success('تمت استعادة الطالب إلى قائمة الانتظار');
+    },
+    onError: () => toast.error('فشل استعادة الطالب'),
   });
 
   const acceptMutation = useMutation({
@@ -54,6 +69,7 @@ export default function StudentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['student', id] });
       queryClient.invalidateQueries({ queryKey: ['students'] });
       toast.success('تم قبول الطالب وتفعيل ملفه');
+      setAcceptanceLetterOpen(true);
     },
     onError: () => toast.error('فشل قبول الطالب'),
   });
@@ -115,7 +131,7 @@ export default function StudentDetailPage() {
 
   const { data: attendances = [] } = useQuery<Attendance[]>({
     queryKey: ['attendance', id],
-    queryFn: () => attendanceApi.list(Number(id)).then((r) => r.data),
+    queryFn: () => attendanceApi.list(Number(id)).then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
     enabled: activeTab === 'attendance',
   });
 
@@ -183,10 +199,12 @@ export default function StudentDetailPage() {
     );
   }
 
-  const handleDelete = () => {
-    if (confirm(`هل أنت متأكد من حذف طالب ${student.full_name}؟ هذا الإجراء لا يمكن التراجع عنه.`)) {
-      deleteMutation.mutate();
+  const handleRejectSubmit = () => {
+    if (!rejectReason.trim()) {
+      toast.error('يرجى كتابة سبب الرفض');
+      return;
     }
+    rejectMutation.mutate(rejectReason.trim());
   };
 
   return (
@@ -208,14 +226,34 @@ export default function StudentDetailPage() {
                 <CheckCircle size={16} /> قبول الطالب
               </button>
             )}
+            {student?.status === 'active' && (
+              <button
+                onClick={() => setAcceptanceLetterOpen(true)}
+                className="flex items-center gap-1.5 bg-[#0F2A47] hover:bg-[#1a3d66] text-white font-medium py-2 px-4 rounded-xl transition-colors"
+              >
+                <FileText size={16} /> إشعار القبول
+              </button>
+            )}
             {user?.can_write && (
               <Link href={`/students/${id}/edit`} className="btn-secondary">
                 <Edit size={16} /> تعديل
               </Link>
             )}
-            {user?.can_delete && (
-              <button onClick={handleDelete} className="btn-danger" disabled={deleteMutation.isPending}>
-                <Trash2 size={16} /> حذف
+            {user?.can_delete && student?.status !== 'rejected' && (
+              <button
+                onClick={() => { setRejectReason(''); setRejectModal(true); }}
+                className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white font-medium py-2 px-4 rounded-xl transition-colors"
+              >
+                <XCircle size={16} /> رفض
+              </button>
+            )}
+            {user?.can_delete && student?.status === 'rejected' && (
+              <button
+                onClick={() => restoreMutation.mutate()}
+                disabled={restoreMutation.isPending}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-xl transition-colors disabled:opacity-50"
+              >
+                <RotateCcw size={16} /> استعادة
               </button>
             )}
           </div>
@@ -323,6 +361,22 @@ export default function StudentDetailPage() {
               <InfoRow label="تفاصيل الإحالة" value={student.referral_source_detail || '—'} />
             </div>
           </div>
+
+          {/* سبب الرفض */}
+          {student.status === 'rejected' && student.rejection_reason && (
+            <div className="card border border-rose-200 bg-rose-50">
+              <div className="flex items-center gap-2 mb-2">
+                <XCircle size={18} className="text-rose-600 flex-shrink-0" />
+                <h3 className="font-semibold text-rose-700">سبب الرفض</h3>
+              </div>
+              <p className="text-sm text-rose-800 leading-relaxed whitespace-pre-wrap">
+                {student.rejection_reason}
+              </p>
+              <p className="text-xs text-rose-400 mt-2">
+                تاريخ الرفض: {formatDate(student.updated_at)}
+              </p>
+            </div>
+          )}
 
           {/* ملاحظات ونظام */}
           <div className="card">
@@ -698,6 +752,68 @@ export default function StudentDetailPage() {
           }}
           loading={attendanceCreateMutation.isPending || attendanceUpdateMutation.isPending}
         />
+      )}
+
+      {/* Acceptance Letter Modal */}
+      {acceptanceLetterOpen && (
+        <AcceptanceLetterModal
+          student={student}
+          onClose={() => setAcceptanceLetterOpen(false)}
+        />
+      )}
+
+      {/* Reject Modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" dir="rtl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <XCircle size={20} className="text-rose-600" />
+                <h2 className="text-lg font-bold text-gray-800">رفض الطالب</h2>
+              </div>
+              <button onClick={() => setRejectModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-4">
+                سيتم تغيير حالة الطالب <strong>{student.full_name}</strong> إلى «مرفوض».
+              </p>
+              <label className="form-label">
+                سبب الرفض <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                className="form-input min-h-[100px] resize-none"
+                placeholder="اكتب سبب رفض الطالب بوضوح..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setRejectModal(false)} className="btn-secondary">
+                إلغاء
+              </button>
+              <button
+                onClick={handleRejectSubmit}
+                disabled={rejectMutation.isPending}
+                className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-medium py-2 px-5 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {rejectMutation.isPending ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    جارٍ الرفض...
+                  </>
+                ) : (
+                  <><XCircle size={15} /> تأكيد الرفض</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

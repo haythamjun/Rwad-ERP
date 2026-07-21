@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Save, Upload, X } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { branchesApi } from '@/lib/api';
 import type { StudentFormData, Branch } from '@/types';
 
@@ -36,10 +37,9 @@ const schema = z.object({
     }, 'تاريخ الميلاد غير صحيح (أكثر من 100 سنة)'),
   gender:            z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
   nationality:       z.string().min(1, 'الجنسية مطلوبة'),
-  // إعاقة
-  disability_type:   z.string().optional(),
+  // إعاقة (disability_type managed as separate state — not in schema)
   disability_degree: z.string().optional(),
-  diagnosis:         z.string().optional(),
+  diagnosis:         z.string().min(1, 'التشخيص التفصيلي مطلوب'),
   // تعليم
   educational_level: z.string().optional(),
   school_name:       z.string().optional(),
@@ -68,6 +68,7 @@ interface Props {
   onSubmit: (data: StudentFormData) => void;
   loading?: boolean;
   defaultValues?: Partial<FormValues>;
+  initialDisabilityTypes?: string[];
 }
 
 // ── Options ──────────────────────────────────────────────────────────────────
@@ -150,10 +151,11 @@ function SectionTitle({ num, title }: { num: string; title: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function StudentForm({ onSubmit, loading, defaultValues }: Props) {
-  const [photo, setPhoto]           = useState<File | null>(null);
-  const [photoPreview, setPreview]  = useState<string | null>(null);
-  const fileRef                     = useRef<HTMLInputElement>(null);
+export default function StudentForm({ onSubmit, loading, defaultValues, initialDisabilityTypes }: Props) {
+  const [photo, setPhoto]                 = useState<File | null>(null);
+  const [photoPreview, setPreview]        = useState<string | null>(null);
+  const fileRef                           = useRef<HTMLInputElement>(null);
+  const [disabilityTypes, setDisTypes]    = useState<string[]>(initialDisabilityTypes || []);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -169,7 +171,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
-    queryFn:  () => branchesApi.list().then(r => r.data),
+    queryFn:  () => branchesApi.list().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,7 +182,11 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
   };
 
   const submit = (values: FormValues) => {
-    onSubmit({ ...values, photo } as StudentFormData);
+    if (disabilityTypes.length === 0) {
+      toast.error('يرجى اختيار نوع الإعاقة على الأقل');
+      return;
+    }
+    onSubmit({ ...values, disability_type: disabilityTypes, photo } as StudentFormData);
   };
 
   return (
@@ -324,35 +330,69 @@ export default function StudentForm({ onSubmit, loading, defaultValues }: Props)
       <div className="card">
         <SectionTitle num="٢" title="الإعاقة والتشخيص" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* نوع الإعاقة — متعدد الاختيار */}
           <div>
-            <label className="form-label">نوع الإعاقة</label>
-            <select {...register('disability_type')} className="form-input">
-              <option value="">-- اختر --</option>
-              {DISABILITY_TYPES.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            <label className="form-label">
+              نوع الإعاقة <span className="text-red-500">*</span>
+              {disabilityTypes.length > 0 && (
+                <span className="mr-2 text-xs font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
+                  {disabilityTypes.length} مختار
+                </span>
+              )}
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+              {DISABILITY_TYPES.map(o => {
+                const checked = disabilityTypes.includes(o.value);
+                return (
+                  <label
+                    key={o.value}
+                    className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-colors select-none ${
+                      checked
+                        ? 'border-primary-400 bg-primary-50 text-primary-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-primary-600 flex-shrink-0"
+                      checked={checked}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setDisTypes(prev => [...prev, o.value]);
+                        } else {
+                          setDisTypes(prev => prev.filter(t => t !== o.value));
+                        }
+                      }}
+                    />
+                    <span className="text-sm">{o.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+            <div>
+              <label className="form-label">درجة الإعاقة</label>
+              <select {...register('disability_degree')} className="form-input">
+                <option value="">-- اختر --</option>
+                {DISABILITY_DEGREES.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
-            <label className="form-label">درجة الإعاقة</label>
-            <select {...register('disability_degree')} className="form-input">
-              <option value="">-- اختر --</option>
-              {DISABILITY_DEGREES.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="form-label">التشخيص التفصيلي</label>
+            <label className="form-label">التشخيص التفصيلي <span className="text-red-500">*</span></label>
             <textarea
               {...register('diagnosis')}
               rows={3}
-              className="form-input resize-none"
+              className={`form-input resize-none`}
               placeholder="التشخيص الطبي أو النفسي التفصيلي..."
             />
+            {errors.diagnosis && <p className="text-red-500 text-xs mt-1">{errors.diagnosis.message}</p>}
           </div>
         </div>
       </div>
