@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission
 from django.db.models import Count, Q
 from .models import Guardian, GuardianAuthToken, StudentAttendance
 
@@ -31,9 +31,9 @@ class GuardianTokenAuthentication(BaseAuthentication):
             raise AuthenticationFailed('رمز التحقق غير صالح أو منتهي الصلاحية')
 
 
-class GuardianIsAuthenticated(IsAuthenticated):
-    """Companion permission class for guardian-only views."""
-    pass
+class GuardianIsAuthenticated(BasePermission):
+    def has_permission(self, request, view):
+        return request.auth is not None
 
 
 # ── Login ──────────────────────────────────────────────────────────────────────
