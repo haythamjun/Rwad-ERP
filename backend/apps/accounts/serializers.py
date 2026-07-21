@@ -9,7 +9,7 @@ User = get_user_model()
 class ModulePermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = UserModulePermission
-        fields = ['module', 'can_view', 'can_edit']
+        fields = ['module', 'can_view', 'can_edit', 'can_export', 'can_import']
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

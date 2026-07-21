@@ -52,6 +52,10 @@ export default function StudentsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importFormat, setImportFormat] = useState<'excel' | 'csv'>('excel');
 
+  const studentsPerm = user?.permissions?.find((p) => p.module === 'students');
+  const canExport = user?.is_admin || studentsPerm?.can_export === true;
+  const canImport = user?.is_admin || studentsPerm?.can_import === true;
+
   const { data, isLoading } = useQuery<PaginatedResponse<Student>>({
     queryKey: ['students', filters],
     queryFn: () =>
@@ -102,23 +106,27 @@ export default function StudentsPage() {
         subtitle={`إجمالي ${data?.count ?? 0} طالب`}
         actions={
           <>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="btn-secondary"
-            >
-              <Download size={16} />
-              {exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}
-            </button>
-            <button
-              onClick={handleExportCsv}
-              disabled={exportingCsv}
-              className="btn-secondary"
-            >
-              <Download size={16} />
-              {exportingCsv ? 'جارٍ التصدير...' : 'تصدير CSV'}
-            </button>
-            {user?.can_write && (
+            {canExport && (
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="btn-secondary"
+                >
+                  <Download size={16} />
+                  {exporting ? 'جارٍ التصدير...' : 'تصدير Excel'}
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  disabled={exportingCsv}
+                  className="btn-secondary"
+                >
+                  <Download size={16} />
+                  {exportingCsv ? 'جارٍ التصدير...' : 'تصدير CSV'}
+                </button>
+              </>
+            )}
+            {canImport && (
               <>
                 <button
                   onClick={() => { setImportFormat('excel'); setImportOpen(true); }}
@@ -134,11 +142,13 @@ export default function StudentsPage() {
                   <Upload size={16} />
                   استيراد CSV
                 </button>
-                <Link href="/students/new" className="btn-primary">
-                  <Plus size={16} />
-                  إضافة طالب
-                </Link>
               </>
+            )}
+            {user?.can_write && (
+              <Link href="/students/new" className="btn-primary">
+                <Plus size={16} />
+                إضافة طالب
+              </Link>
             )}
           </>
         }

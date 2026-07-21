@@ -13,3 +13,29 @@ class CanDelete(BasePermission):
 
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.can_delete
+
+
+class CanExport(BasePermission):
+    message = 'ليس لديك صلاحية لتصدير البيانات'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='students', can_export=True
+        ).exists()
+
+
+class CanImport(BasePermission):
+    message = 'ليس لديك صلاحية لاستيراد البيانات'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='students', can_import=True
+        ).exists()

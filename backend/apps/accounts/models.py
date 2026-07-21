@@ -65,8 +65,10 @@ class UserModulePermission(models.Model):
         related_name='module_permissions', verbose_name='المستخدم',
     )
     module   = models.CharField(max_length=20, choices=Module.choices, verbose_name='الوحدة')
-    can_view = models.BooleanField(default=False, verbose_name='عرض')
-    can_edit = models.BooleanField(default=False, verbose_name='تعديل')
+    can_view   = models.BooleanField(default=False, verbose_name='عرض')
+    can_edit   = models.BooleanField(default=False, verbose_name='تعديل')
+    can_export = models.BooleanField(default=False, verbose_name='تصدير')
+    can_import = models.BooleanField(default=False, verbose_name='استيراد')
 
     class Meta:
         unique_together = ('user', 'module')

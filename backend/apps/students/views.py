@@ -24,7 +24,7 @@ from .serializers import (
     StudentAttachmentSerializer,
 )
 from .filters import StudentFilter
-from .permissions import CanWrite, CanDelete
+from .permissions import CanWrite, CanDelete, CanExport, CanImport
 from apps.core.utils import log_action
 
 
@@ -217,7 +217,7 @@ class StudentAttachmentDeleteView(generics.DestroyAPIView):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class StudentExportView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanExport]
 
     def get(self, request):
         students = (
@@ -404,13 +404,10 @@ def _cell(row, idx):
 
 class StudentImportView(APIView):
     parser_classes = [MultiPartParser, FormParser]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanImport]
 
     def post(self, request):
         from datetime import date as date_type
-
-        if not request.user.can_write:
-            return Response({'detail': 'ليس لديك صلاحية الاستيراد.'}, status=status.HTTP_403_FORBIDDEN)
 
         file = request.FILES.get('file')
         if not file:
@@ -608,7 +605,7 @@ class StudentImportTemplateView(APIView):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class StudentExportCsvView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanExport]
 
     def get(self, request):
         students = (
@@ -681,13 +678,10 @@ class StudentExportCsvView(APIView):
 
 class StudentImportCsvView(APIView):
     parser_classes = [MultiPartParser, FormParser]
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanImport]
 
     def post(self, request):
         from datetime import date as date_type, datetime
-
-        if not request.user.can_write:
-            return Response({'detail': 'ليس لديك صلاحية الاستيراد.'}, status=status.HTTP_403_FORBIDDEN)
 
         file = request.FILES.get('file')
         if not file:

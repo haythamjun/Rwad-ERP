@@ -20,6 +20,8 @@ export interface ModulePermission {
   module: ModuleKey;
   can_view: boolean;
   can_edit: boolean;
+  can_export: boolean;
+  can_import: boolean;
 }
 
 export interface User {

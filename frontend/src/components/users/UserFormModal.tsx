@@ -13,17 +13,17 @@ const MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'settings',   label: 'الإعدادات' },
 ];
 
-type PermMap = Record<ModuleKey, { can_view: boolean; can_edit: boolean }>;
+type PermMap = Record<ModuleKey, { can_view: boolean; can_edit: boolean; can_export: boolean; can_import: boolean }>;
 
 const defaultPerms = (): PermMap =>
   Object.fromEntries(
-    MODULES.map(({ key }) => [key, { can_view: false, can_edit: false }])
+    MODULES.map(({ key }) => [key, { can_view: false, can_edit: false, can_export: false, can_import: false }])
   ) as PermMap;
 
 function permsFromList(list: ModulePermission[]): PermMap {
   const map = defaultPerms();
-  list.forEach(({ module, can_view, can_edit }) => {
-    map[module] = { can_view, can_edit };
+  list.forEach(({ module, can_view, can_edit, can_export, can_import }) => {
+    map[module] = { can_view, can_edit, can_export: can_export ?? false, can_import: can_import ?? false };
   });
   return map;
 }
@@ -77,13 +77,27 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
     setErrors((e) => { const n = { ...e }; delete n[k]; return n; });
   };
 
-  const togglePerm = (module: ModuleKey, field: 'can_view' | 'can_edit') => {
+  const togglePerm = (module: ModuleKey, field: 'can_view' | 'can_edit' | 'can_export' | 'can_import') => {
     setPerms((prev) => {
       const updated = { ...prev[module], [field]: !prev[module][field] };
-      // If can_edit is checked, can_view must be checked too
+      // can_edit requires can_view
       if (field === 'can_edit' && updated.can_edit) updated.can_view = true;
-      // If can_view is unchecked, can_edit must be unchecked too
-      if (field === 'can_view' && !updated.can_view) updated.can_edit = false;
+      // can_export requires can_view
+      if (field === 'can_export' && updated.can_export) updated.can_view = true;
+      // can_import requires can_view + can_edit + can_export
+      if (field === 'can_import' && updated.can_import) {
+        updated.can_view = true;
+        updated.can_edit = true;
+        updated.can_export = true;
+      }
+      // unchecking can_view clears everything
+      if (field === 'can_view' && !updated.can_view) {
+        updated.can_edit = false;
+        updated.can_export = false;
+        updated.can_import = false;
+      }
+      // unchecking can_export clears can_import
+      if (field === 'can_export' && !updated.can_export) updated.can_import = false;
       return { ...prev, [module]: updated };
     });
   };
@@ -101,9 +115,11 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
   const handleSubmit = () => {
     if (!validate()) return;
     const permissions = MODULES.map(({ key }) => ({
-      module:   key,
-      can_view: perms[key].can_view,
-      can_edit: perms[key].can_edit,
+      module:     key,
+      can_view:   perms[key].can_view,
+      can_edit:   perms[key].can_edit,
+      can_export: perms[key].can_export,
+      can_import: perms[key].can_import,
     }));
     const data: Record<string, unknown> = { ...form, permissions };
     if (!data.password) delete data.password;
@@ -252,17 +268,29 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 w-1/2">الوحدة</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600">الوحدة</th>
+                    <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">
                       <span className="flex items-center justify-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
                         عرض
                       </span>
                     </th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">
+                    <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">
                       <span className="flex items-center justify-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                         تعديل
+                      </span>
+                    </th>
+                    <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">
+                      <span className="flex items-center justify-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                        تصدير
+                      </span>
+                    </th>
+                    <th className="text-center px-3 py-3 text-xs font-semibold text-gray-600">
+                      <span className="flex items-center justify-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
+                        استيراد
                       </span>
                     </th>
                   </tr>
@@ -271,7 +299,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                   {MODULES.map(({ key, label }) => (
                     <tr key={key} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-gray-700">{label}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         <input
                           type="checkbox"
                           className="w-4 h-4 accent-blue-500 cursor-pointer"
@@ -279,12 +307,28 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                           onChange={() => togglePerm(key, 'can_view')}
                         />
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-3 text-center">
                         <input
                           type="checkbox"
                           className="w-4 h-4 accent-green-500 cursor-pointer"
                           checked={perms[key].can_edit}
                           onChange={() => togglePerm(key, 'can_edit')}
+                        />
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-orange-500 cursor-pointer"
+                          checked={perms[key].can_export}
+                          onChange={() => togglePerm(key, 'can_export')}
+                        />
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 accent-purple-500 cursor-pointer"
+                          checked={perms[key].can_import}
+                          onChange={() => togglePerm(key, 'can_import')}
                         />
                       </td>
                     </tr>
@@ -293,7 +337,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
               </table>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              ملاحظة: تفعيل «تعديل» يفعّل «عرض» تلقائياً. مدير النظام لديه صلاحية كاملة بصرف النظر عن هذه الإعدادات.
+              ملاحظة: «استيراد» يفعّل عرض + تعديل + تصدير تلقائياً. «تصدير» يفعّل عرض. مدير النظام لديه صلاحية كاملة دائماً.
             </p>
           </div>
 
