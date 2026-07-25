@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowRight } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { studentsApi } from '@/lib/api';
 import StudentForm from '@/components/students/StudentForm';
 import type { Student, StudentFormData } from '@/types';
@@ -60,7 +60,7 @@ export default function EditStudentPage() {
         subtitle={`رقم الملف: ${student?.file_number}`}
         actions={
           <Link href={`/students/${id}`} className="btn-secondary">
-            <ArrowRight size={16} /> العودة
+            <ArrowLeft size={16} /> العودة
           </Link>
         }
       />

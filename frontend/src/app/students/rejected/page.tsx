@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowRight, Search, XCircle, RotateCcw, Eye } from 'lucide-react';
+import { ArrowLeft, Search, XCircle, RotateCcw, Eye } from 'lucide-react';
 import { studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
@@ -45,7 +45,7 @@ export default function RejectedStudentsPage() {
         subtitle={`إجمالي ${data?.count ?? 0} طالب مرفوض`}
         actions={
           <Link href="/students" className="btn-secondary">
-            <ArrowRight size={16} /> العودة
+            <ArrowLeft size={16} /> العودة
           </Link>
         }
       />

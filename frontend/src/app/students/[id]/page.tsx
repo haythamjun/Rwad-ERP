@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
-  ArrowRight, Edit, Trash2, Plus, Phone, Mail, MapPin,
+  ArrowLeft, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
   CalendarDays, Clock, XCircle, RotateCcw,
 } from 'lucide-react';
@@ -215,7 +215,7 @@ export default function StudentDetailPage() {
         actions={
           <div className="flex gap-2">
             <Link href="/students" className="btn-secondary">
-              <ArrowRight size={16} /> العودة
+              <ArrowLeft size={16} /> العودة
             </Link>
             {user?.can_write && student?.status === 'pending' && (
               <button

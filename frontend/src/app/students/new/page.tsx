@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
-  ArrowRight, Save, Upload, X, Plus, Trash2, UserPlus, FileText,
+  ArrowLeft, Save, Upload, X, Plus, Trash2, UserPlus, FileText,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, branchesApi } from '@/lib/api';
 import type { Branch } from '@/types';
@@ -370,7 +370,7 @@ export default function NewStudentPage() {
         subtitle="أدخل جميع بيانات المستفيد في هذه الصفحة"
         actions={
           <Link href="/students" className="btn-secondary">
-            <ArrowRight size={16} /> العودة للقائمة
+            <ArrowLeft size={16} /> العودة للقائمة
           </Link>
         }
       />
