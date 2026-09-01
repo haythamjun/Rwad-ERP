@@ -136,6 +136,20 @@ export const branchesApi = {
   delete: (id: number)                    => api.delete(`/branches/${id}/`),
 };
 
+export const termsApi = {
+  list:   ()                              => api.get('/terms/'),
+  create: (data: Record<string, unknown>) => api.post('/terms/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/terms/${id}/`, data),
+  delete: (id: number)                    => api.delete(`/terms/${id}/`),
+};
+
+export const holidaysApi = {
+  list:   ()                              => api.get('/holidays/'),
+  create: (data: Record<string, unknown>) => api.post('/holidays/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/holidays/${id}/`, data),
+  delete: (id: number)                    => api.delete(`/holidays/${id}/`),
+};
+
 export const siteSettingsApi = {
   get:    () => api.get('/settings/'),
   update: (data: FormData | Record<string, unknown>) => {

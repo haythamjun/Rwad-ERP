@@ -2,13 +2,15 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { branchesApi, siteSettingsApi } from '@/lib/api';
+import { branchesApi, siteSettingsApi, termsApi, holidaysApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { Branch, SiteSettings } from '@/types';
+import type { Branch, SiteSettings, WeekDay, AcademicTerm, Holiday } from '@/types';
+import { WEEK_DAYS } from '@/types';
 import Header from '@/components/layout/Header';
 import {
   Plus, Pencil, Trash2, MapPin, Phone, X, Save, Upload,
   Building2, ShieldAlert, Users, Info, Mail, Globe,
+  CalendarRange, PartyPopper, LucideIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -21,6 +23,7 @@ function SiteSettingsCard() {
   const [form, setForm] = useState({
     center_name_ar: '', center_name_en: '', phone: '', email: '', website: '', address: '',
   });
+  const [weeklyOffDays, setWeeklyOffDays] = useState<WeekDay[]>([]);
 
   const { data: settings } = useQuery<SiteSettings>({
     queryKey: ['site-settings'],
@@ -37,18 +40,24 @@ function SiteSettingsCard() {
         website:        settings.website || '',
         address:        settings.address || '',
       });
+      setWeeklyOffDays(settings.weekly_off_days?.length ? settings.weekly_off_days : ['friday', 'saturday']);
     }
   }, [settings]);
+
+  const toggleOffDay = (day: WeekDay) => {
+    setWeeklyOffDays((cur) => (cur.includes(day) ? cur.filter((d) => d !== day) : [...cur, day]));
+  };
 
   const saveMutation = useMutation({
     mutationFn: () => {
       if (logoFile) {
         const fd = new FormData();
         Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+        fd.append('weekly_off_days', JSON.stringify(weeklyOffDays));
         fd.append('logo', logoFile);
         return siteSettingsApi.update(fd);
       }
-      return siteSettingsApi.update(form);
+      return siteSettingsApi.update({ ...form, weekly_off_days: weeklyOffDays });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['site-settings'] });
@@ -131,6 +140,27 @@ function SiteSettingsCard() {
         </div>
       </div>
 
+      <div className="mt-5 pt-5 border-t border-gray-100">
+        <label className="form-label flex items-center gap-1 mb-2"><CalendarRange size={12}/> أيام الإجازة الأسبوعية</label>
+        <p className="text-xs text-gray-400 mb-3">تُستبعد هذه الأيام من "أيام الدراسة المتوقعة" عند احتساب نسبة الحضور بالتقارير</p>
+        <div className="flex flex-wrap gap-2">
+          {WEEK_DAYS.map((d) => (
+            <button
+              key={d.value}
+              type="button"
+              onClick={() => toggleOffDay(d.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                weeklyOffDays.includes(d.value)
+                  ? 'bg-primary-600 border-primary-600 text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:border-primary-300'
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex justify-end mt-5">
         <button
           onClick={() => saveMutation.mutate()}
@@ -143,6 +173,245 @@ function SiteSettingsCard() {
           }
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── الفصول الدراسية / العطل الرسمية — بطاقة عامة (اسم + مدى تاريخ) ─────────────
+// يُستخدم لكل من AcademicTerm وHoliday لتفادي تكرار نفس واجهة القائمة+النموذج.
+interface DateRangeItem { id: number; name: string; start_date: string; end_date: string; }
+
+interface DateRangeApi {
+  list:   () => Promise<{ data: unknown }>;
+  create: (data: Record<string, unknown>) => Promise<unknown>;
+  update: (id: number, data: Record<string, unknown>) => Promise<unknown>;
+  delete: (id: number) => Promise<unknown>;
+}
+
+interface DateRangeManagerCardProps {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+  nameLabel: string;
+  namePlaceholder: string;
+  addLabel: string;
+  emptyText: string;
+  queryKey: string;
+  api: DateRangeApi;
+}
+
+function DateRangeModal({
+  item, title, nameLabel, namePlaceholder, onClose, onSave, loading,
+}: {
+  item?: DateRangeItem | null;
+  title: string;
+  nameLabel: string;
+  namePlaceholder: string;
+  onClose: () => void;
+  onSave: (data: Record<string, unknown>) => void;
+  loading: boolean;
+}) {
+  const [form, setForm] = useState({
+    name:       item?.name       || '',
+    start_date: item?.start_date || '',
+    end_date:   item?.end_date   || '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.name.trim()) e.name = `${nameLabel} مطلوب`;
+    if (!form.start_date)  e.start_date = 'تاريخ البداية مطلوب';
+    if (!form.end_date)    e.end_date = 'تاريخ النهاية مطلوب';
+    if (form.start_date && form.end_date && form.end_date < form.start_date) {
+      e.end_date = 'يجب أن يكون بعد تاريخ البداية أو مساويًا له';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4" dir="rtl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-800">{item ? `تعديل ${title}` : `إضافة ${title}`}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="form-label">{nameLabel} <span className="text-red-500">*</span></label>
+            <input
+              className={`form-input ${errors.name ? 'border-red-400' : ''}`}
+              value={form.name}
+              onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setErrors({}); }}
+              placeholder={namePlaceholder}
+            />
+            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">من تاريخ <span className="text-red-500">*</span></label>
+              <input
+                type="date" dir="ltr"
+                className={`form-input ${errors.start_date ? 'border-red-400' : ''}`}
+                value={form.start_date}
+                onChange={e => { setForm(f => ({ ...f, start_date: e.target.value })); setErrors({}); }}
+              />
+              {errors.start_date && <p className="text-red-500 text-xs mt-1">{errors.start_date}</p>}
+            </div>
+            <div>
+              <label className="form-label">إلى تاريخ <span className="text-red-500">*</span></label>
+              <input
+                type="date" dir="ltr"
+                className={`form-input ${errors.end_date ? 'border-red-400' : ''}`}
+                value={form.end_date}
+                onChange={e => { setForm(f => ({ ...f, end_date: e.target.value })); setErrors({}); }}
+              />
+              {errors.end_date && <p className="text-red-500 text-xs mt-1">{errors.end_date}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-secondary">إلغاء</button>
+          <button
+            disabled={loading}
+            onClick={() => { if (validate()) onSave(form); }}
+            className="btn-primary px-6"
+          >
+            {loading
+              ? 'جارٍ الحفظ...'
+              : <span className="flex items-center gap-1.5"><Save size={14}/> حفظ</span>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DateRangeManagerCard({
+  title, description, icon: Icon, nameLabel, namePlaceholder, addLabel, emptyText, queryKey, api,
+}: DateRangeManagerCardProps) {
+  const queryClient = useQueryClient();
+  const [modalOpen,  setModalOpen]  = useState(false);
+  const [editTarget, setEditTarget] = useState<DateRangeItem | null>(null);
+  const [deleteId,   setDeleteId]   = useState<number | null>(null);
+
+  const { data: items = [], isLoading } = useQuery<DateRangeItem[]>({
+    queryKey: [queryKey],
+    queryFn:  () => api.list().then((r) => {
+      const d = (r as { data: unknown }).data;
+      return Array.isArray(d) ? d as DateRangeItem[] : ((d as { results?: DateRangeItem[] })?.results ?? []);
+    }),
+  });
+
+  const closeModal = () => { setModalOpen(false); setEditTarget(null); };
+
+  const createMutation = useMutation({
+    mutationFn: (d: Record<string, unknown>) => api.create(d),
+    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: [queryKey] }); closeModal(); toast.success('تمت الإضافة'); },
+    onError:    () => toast.error('حدث خطأ أثناء الحفظ'),
+  });
+  const updateMutation = useMutation({
+    mutationFn: ({ id, d }: { id: number; d: Record<string, unknown> }) => api.update(id, d),
+    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: [queryKey] }); closeModal(); toast.success('تم التحديث'); },
+    onError:    () => toast.error('حدث خطأ أثناء التحديث'),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => api.delete(id),
+    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: [queryKey] }); setDeleteId(null); toast.success('تم الحذف'); },
+    onError:    () => toast.error('حدث خطأ أثناء الحذف'),
+  });
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
+            <Icon size={18} className="text-primary-600" />
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-800">{title}</h2>
+            <p className="text-xs text-gray-400">{description}</p>
+          </div>
+        </div>
+        <button onClick={() => { setEditTarget(null); setModalOpen(true); }} className="btn-primary flex items-center gap-2">
+          <Plus size={15} /> {addLabel}
+        </button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-spin w-6 h-6 border-4 border-primary-600 border-t-transparent rounded-full" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+          <Icon size={30} className="mx-auto mb-2 text-gray-300" />
+          <p className="text-sm">{emptyText}</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {items.map((it) => (
+            <div key={it.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-800">{it.name}</p>
+                <p className="text-xs text-gray-400" dir="ltr">{it.start_date} — {it.end_date}</p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => { setEditTarget(it); setModalOpen(true); }}
+                  className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  title="تعديل"
+                >
+                  <Pencil size={14}/>
+                </button>
+                <button
+                  onClick={() => setDeleteId(it.id)}
+                  className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="حذف"
+                >
+                  <Trash2 size={14}/>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {modalOpen && (
+        <DateRangeModal
+          item={editTarget}
+          title={title}
+          nameLabel={nameLabel}
+          namePlaceholder={namePlaceholder}
+          onClose={closeModal}
+          loading={createMutation.isPending || updateMutation.isPending}
+          onSave={(d) => { if (editTarget) updateMutation.mutate({ id: editTarget.id, d }); else createMutation.mutate(d); }}
+        />
+      )}
+
+      {deleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 text-center" dir="rtl">
+            <Trash2 size={36} className="mx-auto text-red-400 mb-3" />
+            <h3 className="text-base font-bold text-gray-800 mb-1">تأكيد الحذف</h3>
+            <p className="text-sm text-gray-500 mb-5">هل أنت متأكد من الحذف؟</p>
+            <div className="flex gap-3">
+              <button className="flex-1 btn-secondary" onClick={() => setDeleteId(null)}>إلغاء</button>
+              <button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-xl transition-colors disabled:opacity-50"
+                onClick={() => deleteMutation.mutate(deleteId)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? 'جارٍ الحذف...' : 'حذف'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -307,6 +576,30 @@ export default function SettingsPage() {
       />
 
       <SiteSettingsCard />
+
+      <DateRangeManagerCard
+        title="الفصول الدراسية"
+        description="تُحدّد نطاق أيام الدراسة المتوقعة عند احتساب نسبة الحضور بالتقارير"
+        icon={CalendarRange}
+        nameLabel="اسم الفصل الدراسي"
+        namePlaceholder="مثال: الفصل الأول 1447"
+        addLabel="إضافة فصل"
+        emptyText="لم تتم إضافة أي فصل دراسي بعد"
+        queryKey="academic-terms"
+        api={termsApi}
+      />
+
+      <DateRangeManagerCard
+        title="العطل الرسمية"
+        description="تُستبعد هذه التواريخ من أيام الدراسة المتوقعة بتقرير الحضور"
+        icon={PartyPopper}
+        nameLabel="اسم المناسبة/العطلة"
+        namePlaceholder="مثال: اليوم الوطني"
+        addLabel="إضافة عطلة"
+        emptyText="لم تتم إضافة أي عطلة رسمية بعد"
+        queryKey="holidays"
+        api={holidaysApi}
+      />
 
       {/* Branches section */}
       <div className="card">

@@ -6,12 +6,12 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   ArrowRight, Download, CalendarDays, Users, CheckCircle2, XCircle,
-  Clock, ShieldAlert,
+  Clock, ShieldAlert, Info, CalendarRange,
 } from 'lucide-react';
-import { reportsApi, branchesApi } from '@/lib/api';
+import { reportsApi, branchesApi, termsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { downloadBlob } from '@/lib/utils';
-import type { AttendanceReport, Branch } from '@/types';
+import type { AttendanceReport, Branch, AcademicTerm } from '@/types';
 import Header from '@/components/layout/Header';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -48,6 +48,11 @@ export default function AttendanceReportPage() {
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
     queryFn: () => branchesApi.list().then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+
+  const { data: terms = [] } = useQuery<AcademicTerm[]>({
+    queryKey: ['academic-terms'],
+    queryFn: () => termsApi.list().then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const { data: report, isLoading } = useQuery<AttendanceReport>({
@@ -93,6 +98,20 @@ export default function AttendanceReportPage() {
 
       <div className="card">
         <div className="flex items-end gap-3 flex-wrap">
+          <div className="min-w-[200px]">
+            <label className="form-label flex items-center gap-1"><CalendarRange size={12}/> الفصل الدراسي</label>
+            <select
+              className="form-input"
+              defaultValue=""
+              onChange={(e) => {
+                const term = terms.find((t) => String(t.id) === e.target.value);
+                if (term) { setDateFrom(term.start_date); setDateTo(term.end_date); }
+              }}
+            >
+              <option value="">اختيار سريع لمدى فصل...</option>
+              {terms.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
           <div>
             <label className="form-label">من تاريخ</label>
             <input type="date" dir="ltr" className="form-input" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} max={dateTo} />
@@ -122,14 +141,30 @@ export default function AttendanceReportPage() {
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full" />
         </div>
-      ) : !s || s.total === 0 ? (
+      ) : !s || report!.by_student.length === 0 ? (
         <div className="text-center py-16 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
           <CalendarDays size={36} className="mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">لا توجد سجلات حضور في هذه الفترة</p>
+          <p className="text-sm">لا يوجد طلاب نشطون ضمن هذا النطاق</p>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {s.expected_days === 0 ? (
+            <div className="card !py-3 !bg-yellow-50 !border-yellow-100 flex items-center gap-2 text-yellow-800">
+              <Info size={16} className="flex-shrink-0" />
+              <p className="text-sm font-medium">
+                لا توجد أيام دراسة متوقعة ضمن هذا المدى — تحقّق من الفصول الدراسية وأيام
+                الإجازة الأسبوعية بالإعدادات
+              </p>
+            </div>
+          ) : s.present === 0 && s.late === 0 ? (
+            <div className="card !py-3 !bg-blue-50 !border-blue-100 flex items-center gap-2 text-blue-800">
+              <Info size={16} className="flex-shrink-0" />
+              <p className="text-sm font-medium">لم يحضر أحد خلال هذه الفترة</p>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+            <StatCard label="أيام الدراسة المتوقعة" value={s.expected_days} icon={CalendarRange} tone="bg-primary-50 text-primary-600" />
             <StatCard label="عدد الطلاب" value={s.student_count} icon={Users} tone="bg-primary-50 text-primary-600" />
             <StatCard label="نسبة الحضور" value={`${s.attendance_rate}%`} icon={CheckCircle2} tone="bg-green-50 text-green-600" />
             <StatCard label="حاضر" value={s.present} icon={CheckCircle2} tone="bg-green-50 text-green-600" />
@@ -140,6 +175,9 @@ export default function AttendanceReportPage() {
 
           <div className="card overflow-x-auto">
             <h3 className="section-title">التفصيل حسب الطالب</h3>
+            <p className="text-xs text-gray-400 -mt-3 mb-4">
+              عمود "غائب" يشمل الأيام غير المسجَّلة إطلاقًا ضمن أيام الدراسة المتوقعة
+            </p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-right text-xs text-gray-400 border-b border-gray-100">
@@ -150,7 +188,7 @@ export default function AttendanceReportPage() {
                   <th className="py-2 px-2 font-medium text-center">متأخر</th>
                   <th className="py-2 px-2 font-medium text-center">غياب بعذر</th>
                   <th className="py-2 px-2 font-medium text-center">انصراف مبكر</th>
-                  <th className="py-2 px-2 font-medium text-center">الإجمالي</th>
+                  <th className="py-2 px-2 font-medium text-center">أيام متوقعة</th>
                   <th className="py-2 px-2 font-medium text-center">نسبة الحضور</th>
                 </tr>
               </thead>

@@ -15,6 +15,18 @@ export interface Branch {
 // ─────────────────────────────────────────────
 // إعدادات المركز
 // ─────────────────────────────────────────────
+export type WeekDay = 'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
+
+export const WEEK_DAYS: { value: WeekDay; label: string }[] = [
+  { value: 'sunday',    label: 'الأحد' },
+  { value: 'monday',    label: 'الاثنين' },
+  { value: 'tuesday',   label: 'الثلاثاء' },
+  { value: 'wednesday', label: 'الأربعاء' },
+  { value: 'thursday',  label: 'الخميس' },
+  { value: 'friday',    label: 'الجمعة' },
+  { value: 'saturday',  label: 'السبت' },
+];
+
 export interface SiteSettings {
   center_name_ar: string;
   center_name_en: string;
@@ -23,7 +35,25 @@ export interface SiteSettings {
   website: string;
   address: string;
   logo: string | null;
+  weekly_off_days: WeekDay[];
   updated_at: string;
+}
+
+// فصل دراسي وعطلة رسمية — لاحتساب أيام الدراسة المتوقعة بتقرير الحضور بشكل صحيح
+export interface AcademicTerm {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+}
+
+export interface Holiday {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
 }
 
 export interface Bus {
@@ -601,6 +631,7 @@ export interface AttendanceReportSummary {
   early_leave: number;
   attendance_rate: number;
   student_count: number;
+  expected_days: number;
 }
 
 export interface AttendanceReportStudentRow {

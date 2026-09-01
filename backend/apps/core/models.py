@@ -29,6 +29,9 @@ class SiteSettings(models.Model):
     website        = models.CharField(max_length=200, blank=True, verbose_name='الموقع الإلكتروني')
     address        = models.CharField(max_length=300, blank=True, verbose_name='العنوان')
     logo           = models.ImageField(upload_to='site/', null=True, blank=True, verbose_name='الشعار')
+    weekly_off_days = models.JSONField(
+        default=list, blank=True, verbose_name='أيام الإجازة الأسبوعية',
+    )  # قائمة من: sunday/monday/tuesday/wednesday/thursday/friday/saturday
     updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -46,6 +49,38 @@ class SiteSettings(models.Model):
 
     def __str__(self):
         return self.center_name_ar or 'إعدادات المركز'
+
+
+class AcademicTerm(models.Model):
+    """فصل دراسي — يُستخدم لتحديد نطاق أيام الدراسة المتوقعة عند احتساب نسبة الحضور."""
+    name       = models.CharField(max_length=100, verbose_name='اسم الفصل الدراسي')
+    start_date = models.DateField(verbose_name='تاريخ البداية')
+    end_date   = models.DateField(verbose_name='تاريخ النهاية')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'فصل دراسي'
+        verbose_name_plural  = 'الفصول الدراسية'
+        ordering             = ['-start_date']
+
+    def __str__(self):
+        return self.name
+
+
+class Holiday(models.Model):
+    """عطلة رسمية أو مناسبة — تُستبعد من أيام الدراسة المتوقعة عند احتساب نسبة الحضور."""
+    name       = models.CharField(max_length=200, verbose_name='اسم المناسبة/العطلة')
+    start_date = models.DateField(verbose_name='من تاريخ')
+    end_date   = models.DateField(verbose_name='إلى تاريخ')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'عطلة رسمية'
+        verbose_name_plural  = 'العطل الرسمية'
+        ordering             = ['-start_date']
+
+    def __str__(self):
+        return self.name
 
 
 class Bus(models.Model):

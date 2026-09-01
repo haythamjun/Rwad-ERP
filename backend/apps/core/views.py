@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Q
-from .models import AuditLog, Branch, Bus, SiteSettings
+from .models import AuditLog, Branch, Bus, SiteSettings, AcademicTerm, Holiday
 from .permissions import CanViewReports
 from .utils import log_action
 from apps.accounts.permissions import IsManagerOrAbove, IsAdmin
@@ -81,9 +81,60 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         model  = SiteSettings
         fields = [
             'center_name_ar', 'center_name_en', 'phone', 'email',
-            'website', 'address', 'logo', 'updated_at',
+            'website', 'address', 'logo', 'weekly_off_days', 'updated_at',
         ]
         read_only_fields = ['updated_at']
+
+
+# ── الفصول الدراسية والعطل الرسمية ────────────────────────────────────────────
+# (تُستخدَم لاحتساب "أيام الدراسة المتوقعة" بتقرير الحضور بشكل صحيح)
+
+class AcademicTermSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = AcademicTerm
+        fields = ['id', 'name', 'start_date', 'end_date', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class AcademicTermListCreateView(generics.ListCreateAPIView):
+    serializer_class = AcademicTermSerializer
+    queryset         = AcademicTerm.objects.all()
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAdmin()]
+        return [IsAuthenticated()]
+
+
+class AcademicTermDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = AcademicTermSerializer
+    queryset           = AcademicTerm.objects.all()
+    permission_classes = [IsAdmin]
+
+
+class HolidaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Holiday
+        fields = ['id', 'name', 'start_date', 'end_date', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class HolidayListCreateView(generics.ListCreateAPIView):
+    serializer_class = HolidaySerializer
+    queryset         = Holiday.objects.all()
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAdmin()]
+        return [IsAuthenticated()]
+
+
+class HolidayDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = HolidaySerializer
+    queryset           = Holiday.objects.all()
+    permission_classes = [IsAdmin]
 
 
 class SiteSettingsView(APIView):
@@ -213,66 +264,145 @@ class DashboardStatsView(APIView):
 
 # ── التقارير — تقرير الحضور والانصراف ────────────────────────────────────────
 
+_WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
+
+def _expected_school_days(date_from, date_to):
+    """يُرجع set() من تواريخ أيام الدراسة "المتوقّعة" ضمن [date_from, date_to] —
+    مستبعدًا أيام الإجازة الأسبوعية (من الإعدادات) والعطل الرسمية، ومقصورًا على
+    نطاق الفصول الدراسية المعرَّفة. لو لم يُعرَّف أي فصل دراسي بالنظام إطلاقًا
+    بعد، لا يُطبَّق شرط "داخل فصل" (تفاديًا لنسبة 0% مضلِّلة قبل إعداد الفصول)."""
+    off_days = set(SiteSettings.get_solo().weekly_off_days or [])
+
+    holiday_dates = set()
+    for h in Holiday.objects.filter(start_date__lte=date_to, end_date__gte=date_from):
+        d = max(h.start_date, date_from)
+        end = min(h.end_date, date_to)
+        while d <= end:
+            holiday_dates.add(d)
+            d += timedelta(days=1)
+
+    terms = list(AcademicTerm.objects.filter(start_date__lte=date_to, end_date__gte=date_from))
+    any_term_defined = AcademicTerm.objects.exists()
+
+    def in_some_term(d):
+        return True if not any_term_defined else any(t.start_date <= d <= t.end_date for t in terms)
+
+    expected = set()
+    d = date_from
+    while d <= date_to:
+        if _WEEKDAY_NAMES[d.weekday()] not in off_days and d not in holiday_dates and in_some_term(d):
+            expected.add(d)
+        d += timedelta(days=1)
+    return expected
+
+
 def _build_attendance_report(request):
-    """يبني بيانات تقرير الحضور: (date_from, date_to, summary, rows) — يُستخدم من عرض JSON وتصدير Excel معًا."""
+    """يبني بيانات تقرير الحضور: (date_from, date_to, summary, rows) — يُستخدم من عرض JSON وتصدير Excel معًا.
+
+    النسبة تُحتسب من "أيام الدراسة المتوقعة" الفعلية (وليس عدد السجلات الموجودة
+    فقط) — أي يوم متوقّع بلا سجل حضور إطلاقًا يُحتسب غيابًا. التفصيل حسب الطالب
+    يشمل كل طالب نشط ضمن النطاق حتى لو لم يُسجَّل له أي حضور بالفترة."""
     from apps.students.models import Student, StudentAttendance
 
     today = date.today()
     date_from = parse_date(request.query_params.get('date_from', '')) or today.replace(day=1)
     date_to   = parse_date(request.query_params.get('date_to', '')) or today
 
+    expected_dates = _expected_school_days(date_from, date_to)
+    expected_days  = len(expected_dates)
+
+    # أي يوم بالمدى ليس من أيام الدراسة المتوقعة (عطلة أسبوعية/رسمية أو خارج كل
+    # الفصول) — تُستبعد سجلات الحضور الواقعة عليه من الحساب (شذوذ نادر).
+    excluded_dates = []
+    d = date_from
+    while d <= date_to:
+        if d not in expected_dates:
+            excluded_dates.append(d)
+        d += timedelta(days=1)
+
     qs = StudentAttendance.objects.filter(attendance_date__gte=date_from, attendance_date__lte=date_to)
+    if excluded_dates:
+        qs = qs.exclude(attendance_date__in=excluded_dates)
+    students_qs = Student.objects.filter(status='active')
 
     user = request.user
     if not user.is_admin:
         if user.assigned_branch_id:
             qs = qs.filter(branch_id=user.assigned_branch_id)
+            students_qs = students_qs.filter(branch_id=user.assigned_branch_id)
         elif user.assigned_city:
             qs = qs.filter(branch__city=user.assigned_city)
+            students_qs = students_qs.filter(branch__city=user.assigned_city)
 
     branch_param = request.query_params.get('branch')
     if branch_param:
         qs = qs.filter(branch_id=branch_param)
+        students_qs = students_qs.filter(branch_id=branch_param)
 
     student_param = request.query_params.get('student')
     if student_param:
         qs = qs.filter(student_id=student_param)
+        students_qs = students_qs.filter(id=student_param)
 
-    def _rate(row):
-        return round((row['present'] + row['late']) / row['total'] * 100, 1) if row['total'] else 0
+    student_count = students_qs.count()
 
-    summary = qs.aggregate(
-        total=Count('id'),
+    def _rate(present, late, denom):
+        return round((present + late) / denom * 100, 1) if denom else 0
+
+    # ── الملخص العام ──────────────────────────────────────────────────────────
+    marked = qs.aggregate(
         present=Count('id', filter=Q(status='present')),
-        absent=Count('id', filter=Q(status='absent')),
         late=Count('id', filter=Q(status='late')),
         excused_absence=Count('id', filter=Q(status='excused_absence')),
         early_leave=Count('id', filter=Q(status='early_leave')),
     )
-    summary['attendance_rate'] = _rate(summary)
-    summary['student_count'] = qs.values('student_id').distinct().count()
+    total_slots = expected_days * student_count
+    absent = max(total_slots - marked['present'] - marked['late'] - marked['excused_absence'] - marked['early_leave'], 0)
+    summary = {
+        'total':            total_slots,
+        'present':          marked['present'],
+        'absent':           absent,
+        'late':             marked['late'],
+        'excused_absence':  marked['excused_absence'],
+        'early_leave':      marked['early_leave'],
+        'attendance_rate':  _rate(marked['present'], marked['late'], total_slots),
+        'student_count':    student_count,
+        'expected_days':    expected_days,
+    }
 
-    rows = list(
-        qs.values('student_id')
-        .annotate(
-            total=Count('id'),
+    # ── التفصيل حسب الطالب ───────────────────────────────────────────────────
+    ZERO_STATS = {'present': 0, 'late': 0, 'excused_absence': 0, 'early_leave': 0}
+    stats_by_student = {
+        r['student_id']: r
+        for r in qs.values('student_id').annotate(
             present=Count('id', filter=Q(status='present')),
-            absent=Count('id', filter=Q(status='absent')),
             late=Count('id', filter=Q(status='late')),
             excused_absence=Count('id', filter=Q(status='excused_absence')),
             early_leave=Count('id', filter=Q(status='early_leave')),
         )
-        .order_by('-total')
-    )
-    students_map = {
-        s.id: s for s in Student.objects.filter(id__in=[r['student_id'] for r in rows]).select_related('branch')
     }
-    for r in rows:
-        s = students_map.get(r['student_id'])
-        r['student_name'] = s.full_name if s else ''
-        r['file_number']  = s.file_number if s else ''
-        r['branch_name']  = s.branch.name if s and s.branch_id else None
-        r['attendance_rate'] = _rate(r)
+
+    rows = []
+    for s in students_qs.select_related('branch'):
+        stat = stats_by_student.get(s.id, ZERO_STATS)
+        present, late = stat['present'], stat['late']
+        excused, early = stat['excused_absence'], stat['early_leave']
+        student_absent = max(expected_days - present - late - excused - early, 0)
+        rows.append({
+            'student_id':       s.id,
+            'student_name':     s.full_name,
+            'file_number':      s.file_number,
+            'branch_name':      s.branch.name if s.branch_id else None,
+            'total':            expected_days,
+            'present':          present,
+            'absent':           student_absent,
+            'late':             late,
+            'excused_absence':  excused,
+            'early_leave':      early,
+            'attendance_rate':  _rate(present, late, expected_days),
+        })
+    rows.sort(key=lambda r: r['student_name'])
 
     return date_from, date_to, summary, rows
 
@@ -304,14 +434,14 @@ class AttendanceReportExportView(APIView):
 
         title_fill = PatternFill(start_color='0F2A47', end_color='0F2A47', fill_type='solid')
         title_font = Font(color='FFFFFF', bold=True, size=13)
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
         cell = ws.cell(row=1, column=1, value=f'تقرير الحضور والانصراف — من {date_from} إلى {date_to}')
         cell.fill = title_fill
         cell.font = title_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[1].height = 24
 
-        headers = ['رقم الملف', 'اسم الطالب', 'الفرع', 'حاضر', 'غائب', 'متأخر', 'غياب بعذر', 'انصراف مبكر', 'الإجمالي', 'نسبة الحضور %']
+        headers = ['رقم الملف', 'اسم الطالب', 'الفرع', 'حاضر', 'غائب', 'متأخر', 'غياب بعذر', 'انصراف مبكر', 'أيام الدراسة المتوقعة', 'نسبة الحضور %']
         header_fill = PatternFill(start_color='1E3A5F', end_color='1E3A5F', fill_type='solid')
         header_font = Font(color='FFFFFF', bold=True, size=11)
         ws.row_dimensions[2].height = 22
