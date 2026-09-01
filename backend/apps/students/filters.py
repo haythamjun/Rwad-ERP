@@ -17,9 +17,18 @@ class StudentFilter(django_filters.FilterSet):
         )
 
     def filter_disability_type(self, queryset, name, value):
-        if value:
-            return queryset.filter(disability_type__contains=[value])
-        return queryset
+        # disability_type is now a list of {'type', 'degree'} objects (per-type severity),
+        # so a plain __contains=[value] lookup no longer matches — filter in Python instead.
+        if not value:
+            return queryset
+        ids = [
+            s.id for s in queryset
+            if any(
+                (e.get('type') if isinstance(e, dict) else e) == value
+                for e in (s.disability_type or [])
+            )
+        ]
+        return queryset.filter(pk__in=ids)
 
     file_number       = django_filters.CharFilter(lookup_expr='icontains', label='رقم الملف')
     nationality       = django_filters.CharFilter(lookup_expr='icontains', label='الجنسية')
@@ -28,4 +37,4 @@ class StudentFilter(django_filters.FilterSet):
 
     class Meta:
         model  = Student
-        fields = ['status', 'gender', 'nationality', 'disability_degree', 'referral_source']
+        fields = ['status', 'gender', 'nationality', 'referral_source', 'branch']

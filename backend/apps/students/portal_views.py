@@ -103,10 +103,6 @@ class GuardianLoginView(APIView):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _student_summary(student):
-    disability_map = dict(student.__class__.DisabilityType.choices)
-    types = student.disability_type if isinstance(student.disability_type, list) else []
-    disability_display = '، '.join(disability_map.get(t, t) for t in types if t)
-
     return {
         'id':                  student.id,
         'file_number':         student.file_number,
@@ -119,8 +115,11 @@ def _student_summary(student):
         'status':              student.status,
         'status_display':      student.get_status_display(),
         'disability_type':     student.disability_type,
-        'disability_display':  disability_display,
-        'disability_degree':   student.get_disability_degree_display(),
+        'disability_display':  student.disability_display,
+        # 'disability_degree' is kept for the existing Flutter app, which expects a
+        # plain string — now carries the combined "type (degree)" display since a
+        # single overall degree no longer exists (each type has its own degree).
+        'disability_degree':   student.disability_display,
         'branch_name':         student.branch.name if student.branch else None,
         'registration_date':   str(student.registration_date),
         'photo':               student.photo.url if student.photo else None,

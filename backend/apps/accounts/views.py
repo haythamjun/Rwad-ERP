@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from .serializers import (
     CustomTokenObtainPairSerializer,
     UserSerializer,
+    UserPickerSerializer,
     UserCreateSerializer,
     UserUpdateSerializer,
     ChangePasswordSerializer,
@@ -75,7 +76,12 @@ class UserListCreateView(generics.ListCreateAPIView):
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return UserCreateSerializer
-        return UserSerializer
+        # القراءة الكاملة (بريد/جوال/فرع/صلاحيات كل مستخدم) مقصورة على المدير/المشرف؛
+        # أي مستخدم آخر مسجّل دخول (لقوائم اختيار مثل الأخصائي بالجدول الدراسي) يحصل
+        # على نسخة خفيفة بلا بيانات حساسة.
+        if self.request.user.is_manager_or_above:
+            return UserSerializer
+        return UserPickerSerializer
 
     def get_permissions(self):
         if self.request.method == 'POST':

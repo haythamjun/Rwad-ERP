@@ -39,3 +39,29 @@ class CanImport(BasePermission):
         return request.user.module_permissions.filter(
             module='students', can_import=True
         ).exists()
+
+
+class CanViewMedical(BasePermission):
+    message = 'ليس لديك صلاحية لعرض الملف الطبي'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='medical_file', can_view=True
+        ).exists()
+
+
+class CanEditMedical(BasePermission):
+    message = 'ليس لديك صلاحية لتعديل الملف الطبي'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='medical_file', can_edit=True
+        ).exists()

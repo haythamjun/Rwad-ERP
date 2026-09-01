@@ -7,12 +7,13 @@ import { branchesApi } from '@/lib/api';
 import type { Branch, User, ModulePermission, ModuleKey } from '@/types';
 
 // ── Module definitions ────────────────────────────────────────────────────────
+// ملاحظة: سجل العمليات/المستخدمون/الإعدادات ليست هنا — صلاحيات حساسة تبقى مقفولة
+// على المدير/المشرف دائمًا، وليست قابلة للتفويض الفردي.
 const MODULES: { key: ModuleKey; label: string }[] = [
-  { key: 'students',   label: 'ملفات الطلاب' },
+  { key: 'students',     label: 'ملفات الطلاب' },
+  { key: 'medical_file', label: 'الملف الطبي' },
+  { key: 'assessments', label: 'المقاييس والخطط الدراسية' },
   { key: 'reports',    label: 'التقارير' },
-  { key: 'audit_logs', label: 'سجل العمليات' },
-  { key: 'users',      label: 'المستخدمون' },
-  { key: 'settings',   label: 'الإعدادات' },
 ];
 
 type PermMap = Record<ModuleKey, { can_view: boolean; can_edit: boolean; can_export: boolean; can_import: boolean }>;

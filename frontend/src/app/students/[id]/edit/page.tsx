@@ -80,10 +80,11 @@ export default function EditStudentPage() {
             nationality:      student.nationality,
             status:           student.status === 'rejected' ? 'pending' : student.status,
             registration_date: student.registration_date,
-            disability_degree: student.disability_degree || '',
             diagnosis:        student.diagnosis || '',
+            iq_score:         student.iq_score != null ? String(student.iq_score) : '',
             notes:            student.notes || '',
             branch:           student.branch ? String(student.branch) : '',
+            bus:              student.bus ? String(student.bus) : '',
           }}
         />
       )}

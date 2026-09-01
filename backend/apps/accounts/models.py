@@ -62,11 +62,13 @@ class User(AbstractUser):
 
 class UserModulePermission(models.Model):
     class Module(models.TextChoices):
-        STUDENTS   = 'students',   'ملفات الطلاب'
-        REPORTS    = 'reports',    'التقارير'
-        AUDIT_LOGS = 'audit_logs', 'سجل العمليات'
-        USERS      = 'users',      'المستخدمون'
-        SETTINGS   = 'settings',   'الإعدادات'
+        STUDENTS     = 'students',     'ملفات الطلاب'
+        MEDICAL_FILE = 'medical_file', 'الملف الطبي'
+        ASSESSMENTS  = 'assessments',  'المقاييس والخطط الدراسية'
+        REPORTS      = 'reports',      'التقارير'
+        # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
+        # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
+        # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.
 
     user     = models.ForeignKey(
         User, on_delete=models.CASCADE,

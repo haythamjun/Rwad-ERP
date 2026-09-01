@@ -1,16 +1,151 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { branchesApi } from '@/lib/api';
+import { branchesApi, siteSettingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { Branch } from '@/types';
+import type { Branch, SiteSettings } from '@/types';
 import Header from '@/components/layout/Header';
 import {
-  Plus, Pencil, Trash2, MapPin, Phone, X, Save,
-  Building2, ShieldAlert, Users,
+  Plus, Pencil, Trash2, MapPin, Phone, X, Save, Upload,
+  Building2, ShieldAlert, Users, Info, Mail, Globe,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+// ── Site Settings Card ──────────────────────────────────────────────────────────
+function SiteSettingsCard() {
+  const queryClient = useQueryClient();
+  const logoRef = useRef<HTMLInputElement>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    center_name_ar: '', center_name_en: '', phone: '', email: '', website: '', address: '',
+  });
+
+  const { data: settings } = useQuery<SiteSettings>({
+    queryKey: ['site-settings'],
+    queryFn:  () => siteSettingsApi.get().then(r => r.data),
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setForm({
+        center_name_ar: settings.center_name_ar || '',
+        center_name_en: settings.center_name_en || '',
+        phone:          settings.phone || '',
+        email:          settings.email || '',
+        website:        settings.website || '',
+        address:        settings.address || '',
+      });
+    }
+  }, [settings]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (logoFile) {
+        const fd = new FormData();
+        Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+        fd.append('logo', logoFile);
+        return siteSettingsApi.update(fd);
+      }
+      return siteSettingsApi.update(form);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['site-settings'] });
+      setLogoFile(null);
+      toast.success('تم حفظ معلومات المركز');
+    },
+    onError: () => toast.error('حدث خطأ أثناء الحفظ'),
+  });
+
+  const currentLogo = logoPreview || (settings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${settings.logo}` : null);
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-9 h-9 rounded-xl bg-primary-50 flex items-center justify-center">
+          <Info size={18} className="text-primary-600" />
+        </div>
+        <div>
+          <h2 className="font-bold text-gray-800">معلومات المركز</h2>
+          <p className="text-xs text-gray-400">تظهر هذه المعلومات في المستندات الرسمية مثل إشعار القبول</p>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-5 mb-5">
+        <div
+          className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden cursor-pointer hover:border-primary-400 transition-colors flex-shrink-0"
+          onClick={() => logoRef.current?.click()}
+        >
+          {currentLogo
+            ? <img src={currentLogo} alt="الشعار" className="w-full h-full object-cover" />
+            : <Upload size={20} className="text-gray-400" />}
+        </div>
+        <input
+          ref={logoRef} type="file" accept="image/*" className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            setLogoFile(f);
+            setLogoPreview(URL.createObjectURL(f));
+          }}
+        />
+        <div className="pt-1">
+          <button type="button" onClick={() => logoRef.current?.click()} className="btn-secondary text-xs py-1">
+            رفع شعار المركز
+          </button>
+          <p className="text-xs text-gray-400 mt-1">JPG، PNG — حد أقصى 5 ميجا</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="form-label">اسم المركز (عربي)</label>
+          <input className="form-input" value={form.center_name_ar}
+            onChange={e => setForm(f => ({ ...f, center_name_ar: e.target.value }))} />
+        </div>
+        <div>
+          <label className="form-label">اسم المركز (إنجليزي)</label>
+          <input className="form-input" dir="ltr" value={form.center_name_en}
+            onChange={e => setForm(f => ({ ...f, center_name_en: e.target.value }))} />
+        </div>
+        <div>
+          <label className="form-label flex items-center gap-1"><Phone size={12}/> رقم التواصل</label>
+          <input className="form-input" dir="ltr" value={form.phone}
+            onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="011XXXXXXX" />
+        </div>
+        <div>
+          <label className="form-label flex items-center gap-1"><Mail size={12}/> البريد الإلكتروني</label>
+          <input className="form-input" dir="ltr" type="email" value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+        </div>
+        <div>
+          <label className="form-label flex items-center gap-1"><Globe size={12}/> الموقع الإلكتروني</label>
+          <input className="form-input" dir="ltr" value={form.website}
+            onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="www.example.com" />
+        </div>
+        <div>
+          <label className="form-label flex items-center gap-1"><MapPin size={12}/> العنوان</label>
+          <input className="form-input" value={form.address}
+            onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+        </div>
+      </div>
+
+      <div className="flex justify-end mt-5">
+        <button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          className="btn-primary px-6"
+        >
+          {saveMutation.isPending
+            ? 'جارٍ الحفظ...'
+            : <span className="flex items-center gap-1.5"><Save size={14}/> حفظ</span>
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── Branch Form Modal ─────────────────────────────────────────────────────────
 interface ModalProps {
@@ -170,6 +305,8 @@ export default function SettingsPage() {
         title="الإعدادات"
         subtitle="إدارة إعدادات النظام"
       />
+
+      <SiteSettingsCard />
 
       {/* Branches section */}
       <div className="card">

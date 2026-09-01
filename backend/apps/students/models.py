@@ -64,6 +64,13 @@ class Student(models.Model):
         related_name='students',
         verbose_name='الفرع',
     )
+    bus = models.ForeignKey(
+        'core.Bus',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='students',
+        verbose_name='الباص',
+    )
     registration_date = models.DateField(
         default=timezone.now, verbose_name='تاريخ التسجيل'
     )
@@ -88,14 +95,15 @@ class Student(models.Model):
     )
 
     # ── الإعاقة والتشخيص ──────────────────────────────────────────────
+    # قائمة كائنات: [{'type': 'autism', 'degree': 'moderate'}, ...] — كل نوع إعاقة
+    # له درجته الخاصة (بدل درجة واحدة عامة تنطبق على كل الأنواع المختارة).
     disability_type = models.JSONField(
-        default=list, verbose_name='نوع الإعاقة',
-    )
-    disability_degree = models.CharField(
-        max_length=20, choices=DisabilityDegree.choices,
-        blank=True, verbose_name='درجة الإعاقة',
+        default=list, verbose_name='نوع الإعاقة ودرجتها',
     )
     diagnosis = models.TextField(blank=True, verbose_name='التشخيص التفصيلي')
+    iq_score = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='درجة الذكاء',
+    )
 
     # ── المعلومات التعليمية ────────────────────────────────────────────
     educational_level = models.CharField(
@@ -153,6 +161,26 @@ class Student(models.Model):
     def full_name(self):
         parts = [self.first_name, self.middle_name, self.grandfather_name, self.family_name]
         return ' '.join(p for p in parts if p)
+
+    @property
+    def disability_display(self):
+        """Comma-joined 'نوع (درجة)' pairs, e.g. 'طيف التوحد (متوسطة)، إعاقة حركية (شديدة)'."""
+        type_map   = dict(self.DisabilityType.choices)
+        degree_map = dict(self.DisabilityDegree.choices)
+        entries = self.disability_type if isinstance(self.disability_type, list) else []
+        parts = []
+        for e in entries:
+            if isinstance(e, dict):
+                t, d = e.get('type', ''), e.get('degree', '')
+            else:
+                t, d = e, ''  # شكل قديم (نص فقط) — شبكة أمان
+            if not t:
+                continue
+            label = type_map.get(t, t)
+            if d:
+                label += f' ({degree_map.get(d, d)})'
+            parts.append(label)
+        return '، '.join(parts)
 
     def __str__(self):
         return f"{self.full_name} ({self.file_number})"
@@ -299,7 +327,7 @@ class StudentAttachment(models.Model):
     class AttachmentType(models.TextChoices):
         NATIONAL_ID          = 'national_id',          'صورة الهوية'
         BIRTH_CERTIFICATE    = 'birth_certificate',    'شهادة الميلاد'
-        FAMILY_CARD          = 'family_card',          'كرت الأسرة'
+        FAMILY_CARD          = 'family_card',          'كرت العائلة'
         MEDICAL_REPORT       = 'medical_report',       'تقرير طبي'
         PSYCHOLOGICAL_REPORT = 'psychological_report', 'تقرير نفسي'
         DISABILITY_CARD      = 'disability_card',      'بطاقة إعاقة'
@@ -382,6 +410,187 @@ class StudentAttendance(models.Model):
 
     def __str__(self):
         return f"{self.student.full_name} | {self.attendance_date} | {self.get_status_display()}"
+
+
+# ── الجدول الدراسي الأسبوعي ──────────────────────────────────────────────────────
+
+# فترات الجدول الثابتة: 8 حصص نصف ساعة، من 7:30 حتى 11:30
+from datetime import time as _time  # noqa: E402
+SCHEDULE_TIME_SLOTS = [
+    _time(7, 30), _time(8, 0), _time(8, 30), _time(9, 0),
+    _time(9, 30), _time(10, 0), _time(10, 30), _time(11, 0),
+]
+
+
+class StudentSchedule(models.Model):
+    """حصة واحدة (خلية) في الجدول الدراسي الأسبوعي المتكرر لطالب معيّن."""
+
+    class Day(models.TextChoices):
+        SUNDAY    = 'sunday',    'الأحد'
+        MONDAY    = 'monday',    'الاثنين'
+        TUESDAY   = 'tuesday',   'الثلاثاء'
+        WEDNESDAY = 'wednesday', 'الأربعاء'
+        THURSDAY  = 'thursday',  'الخميس'
+
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='schedule_slots', verbose_name='المستفيد',
+    )
+    day        = models.CharField(max_length=10, choices=Day.choices, verbose_name='اليوم')
+    start_time = models.TimeField(verbose_name='وقت البداية')
+    subject    = models.CharField(max_length=100, verbose_name='المادة / الحصة')
+    specialist = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='schedule_slots', verbose_name='الأخصائي المسؤول',
+    )
+    notes      = models.CharField(max_length=200, blank=True, verbose_name='ملاحظات')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'حصة'
+        verbose_name_plural  = 'الجدول الدراسي'
+        ordering             = ['day', 'start_time']
+        unique_together      = ('student', 'day', 'start_time')
+
+    def __str__(self):
+        return f"{self.student.full_name} | {self.get_day_display()} {self.start_time} | {self.subject}"
+
+
+# ── الملف الطبي ───────────────────────────────────────────────────────────────
+
+class StudentMedicalProfile(models.Model):
+    """بيانات طبية شبه ثابتة — تُعدَّل نادرًا، بخلاف التشيك إن اليومي."""
+    student         = models.OneToOneField(
+        Student, on_delete=models.CASCADE,
+        related_name='medical_profile', verbose_name='المستفيد',
+    )
+    height_cm       = models.PositiveIntegerField(null=True, blank=True, verbose_name='الطول (سم)')
+    weight_kg       = models.PositiveIntegerField(null=True, blank=True, verbose_name='الوزن (كجم)')
+    chronic_disease = models.TextField(blank=True, verbose_name='الأمراض المزمنة')
+    medical_allergy = models.TextField(blank=True, verbose_name='الحساسية الطبية')
+    food_allergy    = models.TextField(blank=True, verbose_name='الحساسية الغذائية')
+    has_seizures    = models.BooleanField(default=False, verbose_name='يعاني من تشنجات')
+    uses_nebulizer  = models.BooleanField(default=False, verbose_name='يستخدم جهاز الاستنشاق')
+    notes           = models.TextField(blank=True, verbose_name='ملاحظات إضافية')
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'ملف طبي'
+        verbose_name_plural  = 'الملفات الطبية'
+
+    def __str__(self):
+        return f'الملف الطبي — {self.student.full_name}'
+
+
+class MedicalVisit(models.Model):
+    """سجل زيارات التقييم الدورية (مستقر / غير مستقر)."""
+    class Status(models.TextChoices):
+        STABLE   = 'stable',   'مستقر'
+        UNSTABLE = 'unstable', 'غير مستقر'
+
+    student      = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='medical_visits', verbose_name='المستفيد',
+    )
+    visit_date   = models.DateField(verbose_name='تاريخ الزيارة')
+    status       = models.CharField(max_length=10, choices=Status.choices, verbose_name='الحالة')
+    notes        = models.TextField(blank=True, verbose_name='ملاحظات')
+    evaluated_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='medical_visits', verbose_name='قُيِّم بواسطة',
+    )
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'زيارة تقييم طبي'
+        verbose_name_plural  = 'زيارات التقييم الطبي'
+        ordering             = ['-visit_date']
+
+    def __str__(self):
+        return f'{self.student.full_name} — {self.visit_date} — {self.get_status_display()}'
+
+
+class Medication(models.Model):
+    """قائمة الأدوية الثابتة لكل طالب — يُبنى عليها التشيك إن اليومي."""
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='medications', verbose_name='المستفيد',
+    )
+    name       = models.CharField(max_length=150, verbose_name='اسم الدواء')
+    dose       = models.CharField(max_length=100, blank=True, verbose_name='الجرعة')
+    frequency  = models.CharField(max_length=100, blank=True, verbose_name='عدد المرات باليوم')
+    notes      = models.TextField(blank=True, verbose_name='ملاحظات')
+    is_active  = models.BooleanField(default=True, verbose_name='نشط')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'دواء'
+        verbose_name_plural  = 'الأدوية'
+        ordering             = ['-is_active', 'name']
+
+    def __str__(self):
+        return f'{self.name} — {self.student.full_name}'
+
+
+class DailyMedicalCheckIn(models.Model):
+    """تشيك إن طبي واحد لكل طالب في اليوم — منفصل تمامًا عن حضور/غياب الطالب العام."""
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='medical_checkins', verbose_name='المستفيد',
+    )
+    check_date = models.DateField(verbose_name='التاريخ')
+    check_time = models.TimeField(null=True, blank=True, verbose_name='وقت الوصول')
+    # القياسات الأساسية — تُقاس مرة واحدة يوميًا مع الوصول
+    blood_pressure_systolic  = models.PositiveIntegerField(null=True, blank=True, verbose_name='الضغط الانقباضي')
+    blood_pressure_diastolic = models.PositiveIntegerField(null=True, blank=True, verbose_name='الضغط الانبساطي')
+    blood_sugar  = models.PositiveIntegerField(null=True, blank=True, verbose_name='سكر الدم')
+    weight_kg    = models.PositiveIntegerField(null=True, blank=True, verbose_name='الوزن (كجم)')
+    temperature  = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True, verbose_name='درجة الحرارة')
+    pulse        = models.PositiveIntegerField(null=True, blank=True, verbose_name='النبض')
+    notes      = models.TextField(blank=True, verbose_name='ملاحظات')
+    checked_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='medical_checkins', verbose_name='سُجِّل بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'تشيك إن طبي'
+        verbose_name_plural  = 'التشيك إن الطبي'
+        ordering             = ['-check_date']
+        unique_together      = ('student', 'check_date')
+
+    def __str__(self):
+        return f'{self.student.full_name} — {self.check_date}'
+
+
+class MedicationAdministration(models.Model):
+    """هل أُعطي دواء معيّن ضمن تشيك إن يوم معيّن."""
+    checkin    = models.ForeignKey(
+        DailyMedicalCheckIn, on_delete=models.CASCADE,
+        related_name='medication_records', verbose_name='التشيك إن',
+    )
+    medication = models.ForeignKey(
+        Medication, on_delete=models.CASCADE,
+        related_name='administrations', verbose_name='الدواء',
+    )
+    given      = models.BooleanField(default=False, verbose_name='أُعطي')
+    given_at   = models.TimeField(null=True, blank=True, verbose_name='وقت الإعطاء')
+    notes      = models.CharField(max_length=200, blank=True, verbose_name='ملاحظات')
+
+    class Meta:
+        verbose_name        = 'إعطاء دواء'
+        verbose_name_plural  = 'سجلات إعطاء الأدوية'
+        unique_together      = ('checkin', 'medication')
+
+    def __str__(self):
+        return f'{self.medication.name} — {"أُعطي" if self.given else "لم يُعطَ"}'
 
 
 # ── Guardian Portal Auth Token ─────────────────────────────────────────────────

@@ -8,7 +8,11 @@
       "Bash(npm run *)",
       "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\\\\backend\"; venv\\\\Scripts\\\\activate; python manage.py runserver' -WindowStyle Normal)",
       "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\\\\frontend\"; npm run dev' -WindowStyle Normal)",
-      "PowerShell(Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/api/' -TimeoutSec 3 -UseBasicParsing; \"Backend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Backend: $\\($_.Exception.Message\\)\" }; try { $r = Invoke-WebRequest -Uri 'http://localhost:3000' -TimeoutSec 5 -UseBasicParsing; \"Frontend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Frontend: $\\($_.Exception.Message\\)\" })"
+      "PowerShell(Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/api/' -TimeoutSec 3 -UseBasicParsing; \"Backend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Backend: $\\($_.Exception.Message\\)\" }; try { $r = Invoke-WebRequest -Uri 'http://localhost:3000' -TimeoutSec 5 -UseBasicParsing; \"Frontend: OK \\($\\($r.StatusCode\\)\\)\" } catch { \"Frontend: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(cd \"c:\\\\Users\\\\hitha\\\\Downloads\\\\Rwad_ERP - LAST\\\\frontend\"; npx tsc --noEmit 2>&1 | Where-Object { $_ -match \"error TS\" } | Select-Object -First 20)",
+      "Bash(python -c \"import sys; sys.path.insert\\(0,'backend'\\); import django; from django.conf import settings\")",
+      "Bash(xargs ls -la)",
+      "Bash(xargs cat)"
     ]
   }
 }

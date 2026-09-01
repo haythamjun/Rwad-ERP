@@ -12,4 +12,5 @@ urlpatterns = [
     path('api/auth/', include('apps.accounts.urls')),
     path('api/', include('apps.students.urls')),
     path('api/', include('apps.core.urls')),
+    path('api/', include('apps.assessments.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

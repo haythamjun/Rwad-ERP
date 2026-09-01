@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { auditLogsApi } from '@/lib/api';
 import { ClipboardList, Search } from 'lucide-react';
 
 interface AuditLog {
@@ -29,8 +29,9 @@ export default function AuditLogsPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    api.get('/core/audit-logs/')
+    auditLogsApi.list()
       .then((res) => setLogs(res.data.results ?? res.data))
+      .catch(() => setLogs([]))
       .finally(() => setLoading(false));
   }, []);
 

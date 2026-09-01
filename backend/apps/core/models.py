@@ -20,6 +20,58 @@ class Branch(models.Model):
         return self.name
 
 
+class SiteSettings(models.Model):
+    """صف واحد فقط (Singleton) — معلومات المركز الظاهرة في المستندات الرسمية مثل إشعار القبول."""
+    center_name_ar = models.CharField(max_length=200, default='مركز رؤية للتأهيل', verbose_name='اسم المركز (عربي)')
+    center_name_en = models.CharField(max_length=200, blank=True, default='Roya Rehabilitation Center', verbose_name='اسم المركز (إنجليزي)')
+    phone          = models.CharField(max_length=20,  blank=True, verbose_name='رقم التواصل')
+    email          = models.EmailField(blank=True, verbose_name='البريد الإلكتروني')
+    website        = models.CharField(max_length=200, blank=True, verbose_name='الموقع الإلكتروني')
+    address        = models.CharField(max_length=300, blank=True, verbose_name='العنوان')
+    logo           = models.ImageField(upload_to='site/', null=True, blank=True, verbose_name='الشعار')
+    updated_at     = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'إعدادات المركز'
+        verbose_name_plural  = 'إعدادات المركز'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return self.center_name_ar or 'إعدادات المركز'
+
+
+class Bus(models.Model):
+    chassis_number = models.CharField(max_length=50, unique=True, verbose_name='رقم الهيكل')
+    plate_number   = models.CharField(max_length=20,  unique=True, verbose_name='رقم اللوحة')
+    brand          = models.CharField(max_length=100, verbose_name='ماركة المركبة')
+    manufacture_year = models.PositiveIntegerField(verbose_name='سنة الصنع')
+    serial_number  = models.CharField(max_length=50, blank=True, verbose_name='الرقم التسلسلي')
+    branch = models.ForeignKey(
+        Branch, on_delete=models.CASCADE,
+        related_name='buses', verbose_name='الفرع',
+    )
+    registration_expiry = models.DateField(verbose_name='تاريخ انتهاء الاستمارة')
+    inspection_expiry   = models.DateField(verbose_name='تاريخ انتهاء الفحص الدوري')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'باص'
+        verbose_name_plural  = 'الباصات'
+        ordering             = ['-created_at']
+
+    def __str__(self):
+        return f'{self.brand} — {self.plate_number}'
+
+
 class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = 'create', 'إضافة'

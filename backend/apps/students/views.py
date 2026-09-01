@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 
 import csv
 import io
+import re
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -24,15 +25,8 @@ from .serializers import (
     StudentAttachmentSerializer,
 )
 from .filters import StudentFilter
-from .permissions import CanWrite, CanDelete, CanExport, CanImport
+from .permissions import CanWrite, CanDelete, CanExport, CanImport, CanViewMedical, CanEditMedical
 from apps.core.utils import log_action
-
-
-def _disability_display(student):
-    """Comma-joined Arabic labels for a student's disability_type list."""
-    type_map = dict(Student.DisabilityType.choices)
-    types = student.disability_type if isinstance(student.disability_type, list) else []
-    return '، '.join(type_map.get(t, t) for t in types if t)
 
 
 def _apply_scope(user, qs):
@@ -102,8 +96,27 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Reject student
+# Accept / Reject student
 # ──────────────────────────────────────────────────────────────────────────────
+
+class AcceptStudentView(APIView):
+    """Activate a pending student. Requires CanDelete (manager+) so the same
+    person who registers a student cannot also approve their own submission —
+    mirrors RejectStudentView's permission level for a real approval workflow."""
+    permission_classes = [CanDelete]
+
+    def post(self, request, pk):
+        student = get_object_or_404(Student, pk=pk)
+        if student.status != Student.Status.PENDING:
+            return Response(
+                {'detail': 'لا يمكن قبول طالب حالته الحالية ليست "قيد انتظار القبول".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        student.status = Student.Status.ACTIVE
+        student.save(update_fields=['status', 'updated_at'])
+        log_action(request, 'update', student, f'قبول الطالب: {student}')
+        return Response({'status': 'active'})
+
 
 class RejectStudentView(APIView):
     permission_classes = [CanDelete]
@@ -308,7 +321,7 @@ class StudentExportView(APIView):
             # بيانات المستفيد
             'رقم الملف', 'تاريخ التسجيل', 'الاسم الأول', 'اسم الأب', 'اسم الجد', 'اسم العائلة',
             'رقم الهوية', 'تاريخ الميلاد', 'الجنس', 'الجنسية', 'الحالة',
-            'نوع الإعاقة', 'درجة الإعاقة', 'التشخيص', 'جهة الإحالة',
+            'نوع الإعاقة ودرجتها', 'التشخيص', 'درجة الذكاء', 'جهة الإحالة',
             # بيانات ولي الأمر
             'اسم ولي الأمر', 'صلة القرابة', 'رقم هوية ولي الأمر',
             'رقم الجوال', 'جوال إضافي', 'البريد الإلكتروني',
@@ -355,9 +368,9 @@ class StudentExportView(APIView):
                 student.get_gender_display(),
                 student.nationality,
                 student.get_status_display(),
-                _disability_display(student),
-                student.get_disability_degree_display() if student.disability_degree else '',
+                student.disability_display,
                 student.diagnosis or '',
+                student.iq_score if student.iq_score is not None else '',
                 student.get_referral_source_display()  if student.referral_source  else '',
                 # بيانات ولي الأمر
                 guardian.full_name          if guardian else '',
@@ -430,6 +443,27 @@ DEGREE_MAP = {
     'شديدة': 'severe', 'severe': 'severe',
     'شديدة جداً': 'profound', 'profound': 'profound',
 }
+
+
+def _parse_disability_cell(raw):
+    """Parse a 'نوع (درجة)، نوع (درجة)' cell into [{'type', 'degree'}, ...].
+    Degree in parentheses is optional; entries are separated by an Arabic or
+    Latin comma. Unrecognized type tokens are silently skipped."""
+    if not raw:
+        return []
+    entries = []
+    for chunk in re.split(r'[,،]', raw):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        m = re.match(r'^(.+?)\s*\((.+?)\)\s*$', chunk)
+        type_label, degree_label = (m.group(1).strip(), m.group(2).strip()) if m else (chunk, '')
+        t = DISABILITY_MAP.get(type_label)
+        if not t:
+            continue
+        entries.append({'type': t, 'degree': DEGREE_MAP.get(degree_label, '')})
+    return entries
+
 
 EDU_MAP = {
     'لا يتعلم': 'none', 'none': 'none',
@@ -543,13 +577,22 @@ class StudentImportView(APIView):
             status_val        = STATUS_MAP.get(_cell(row, 8) if len(row) > 8 else '', 'pending') or 'pending'
             reg_date_raw      = _cell(row, 9) if len(row) > 9 else ''
             disability_raw    = _cell(row, 10) if len(row) > 10 else ''
-            degree_raw        = _cell(row, 11) if len(row) > 11 else ''
-            diagnosis         = _cell(row, 12) if len(row) > 12 else ''
+            diagnosis         = _cell(row, 11) if len(row) > 11 else ''
+            iq_score_raw      = _cell(row, 12) if len(row) > 12 else ''
             edu_raw           = _cell(row, 13) if len(row) > 13 else ''
             school_name       = _cell(row, 14) if len(row) > 14 else ''
             grade             = _cell(row, 15) if len(row) > 15 else ''
             referral_raw      = _cell(row, 16) if len(row) > 16 else ''
             notes             = _cell(row, 17) if len(row) > 17 else ''
+
+            iq_score = None
+            if iq_score_raw:
+                try:
+                    parsed_iq = int(float(iq_score_raw))
+                    if 1 <= parsed_iq <= 200:
+                        iq_score = parsed_iq
+                except (ValueError, TypeError):
+                    pass  # قيمة غير رقمية — تُترك فارغة بدل رفض الصف بالكامل
 
             from datetime import date as date_type2
             try:
@@ -574,9 +617,9 @@ class StudentImportView(APIView):
                 nationality       = nationality,
                 status            = status_val,
                 registration_date = reg_date,
-                disability_type   = [DISABILITY_MAP[t.strip()] for t in disability_raw.split(',') if t.strip() in DISABILITY_MAP],
-                disability_degree = DEGREE_MAP.get(degree_raw, ''),
+                disability_type   = _parse_disability_cell(disability_raw),
                 diagnosis         = diagnosis,
+                iq_score          = iq_score,
                 educational_level = EDU_MAP.get(edu_raw, ''),
                 school_name       = school_name,
                 grade             = grade,
@@ -614,9 +657,11 @@ class StudentImportTemplateView(APIView):
             'الجنسية *',
             'الحالة (نشط / في انتظار القبول / غير نشط / خرّيج / موقوف / محوّل)',
             'تاريخ التسجيل (YYYY-MM-DD)',
-            'نوع الإعاقة (إعاقة ذهنية / طيف التوحد / متلازمة داون / إعاقة حركية / إعاقة سمعية / إعاقة بصرية / إعاقة لغوية / نطقية / صعوبات تعلم / اضطراب سلوكي / إعاقة مركّبة / أخرى)',
-            'درجة الإعاقة (بسيطة / متوسطة / شديدة / شديدة جداً)',
+            'نوع الإعاقة ودرجتها — نوع (درجة)، نوع (درجة)... — الأنواع: إعاقة ذهنية / طيف التوحد / متلازمة داون / '
+            'إعاقة حركية / إعاقة سمعية / إعاقة بصرية / إعاقة لغوية / نطقية / صعوبات تعلم / اضطراب سلوكي / إعاقة مركّبة / أخرى '
+            '— الدرجات: بسيطة / متوسطة / شديدة / شديدة جداً (اختيارية)',
             'التشخيص التفصيلي',
+            'درجة الذكاء (رقم، اختياري)',
             'المستوى التعليمي (لا يتعلم / رياض أطفال / ابتدائي / متوسط / ثانوي / جامعي / برنامج تربية خاصة)',
             'اسم المدرسة',
             'الصف / المرحلة',
@@ -638,7 +683,7 @@ class StudentImportTemplateView(APIView):
         # صف مثال
         example = [
             'محمد', 'أحمد', 'سعد', 'العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
-            'نشط', '2024-01-10', 'طيف التوحد', 'متوسطة', 'تشخيص طيف التوحد درجة 2',
+            'نشط', '2024-01-10', 'طيف التوحد (متوسطة)، إعاقة حركية (شديدة)', 'تشخيص طيف التوحد درجة 2', '85',
             'برنامج تربية خاصة', 'مدرسة الأمل', 'الثالث الابتدائي', 'مستشفى / عيادة', '',
         ]
         ex_fill = PatternFill(start_color='EEF2F8', end_color='EEF2F8', fill_type='solid')
@@ -678,7 +723,7 @@ class StudentExportCsvView(APIView):
         writer.writerow([
             'رقم الملف', 'تاريخ التسجيل', 'الاسم الأول', 'اسم الأب', 'اسم الجد', 'اسم العائلة',
             'رقم الهوية', 'تاريخ الميلاد', 'الجنس', 'الجنسية', 'الحالة',
-            'نوع الإعاقة', 'درجة الإعاقة', 'التشخيص', 'جهة الإحالة',
+            'نوع الإعاقة ودرجتها', 'التشخيص', 'درجة الذكاء', 'جهة الإحالة',
             'اسم ولي الأمر', 'صلة القرابة', 'رقم هوية ولي الأمر',
             'رقم الجوال', 'جوال إضافي', 'البريد الإلكتروني',
             'العنوان', 'جهة التواصل الرئيسية', 'ملاحظات ولي الأمر',
@@ -705,9 +750,9 @@ class StudentExportCsvView(APIView):
                 student.get_gender_display(),
                 student.nationality,
                 student.get_status_display(),
-                _disability_display(student),
-                student.get_disability_degree_display() if student.disability_degree else '',
+                student.disability_display,
                 student.diagnosis or '',
+                student.iq_score if student.iq_score is not None else '',
                 student.get_referral_source_display() if student.referral_source else '',
                 guardian.full_name if guardian else '',
                 guardian.get_relationship_display() if guardian else '',
@@ -820,13 +865,22 @@ class StudentImportCsvView(APIView):
             status_val     = STATUS_MAP.get(_c(8), 'pending') or 'pending'
             reg_date_raw   = _c(9)
             disability_raw = _c(10)
-            degree_raw     = _c(11)
-            diagnosis      = _c(12)
+            diagnosis      = _c(11)
+            iq_score_raw   = _c(12)
             edu_raw        = _c(13)
             school_name    = _c(14)
             grade          = _c(15)
             referral_raw   = _c(16)
             notes          = _c(17)
+
+            iq_score = None
+            if iq_score_raw:
+                try:
+                    parsed_iq = int(float(iq_score_raw))
+                    if 1 <= parsed_iq <= 200:
+                        iq_score = parsed_iq
+                except (ValueError, TypeError):
+                    pass  # قيمة غير رقمية — تُترك فارغة بدل رفض الصف بالكامل
 
             try:
                 reg_date = (
@@ -847,9 +901,9 @@ class StudentImportCsvView(APIView):
                 nationality       = nationality,
                 status            = status_val,
                 registration_date = reg_date,
-                disability_type   = [DISABILITY_MAP[t.strip()] for t in disability_raw.split(',') if t.strip() in DISABILITY_MAP],
-                disability_degree = DEGREE_MAP.get(degree_raw, ''),
+                disability_type   = _parse_disability_cell(disability_raw),
                 diagnosis         = diagnosis,
+                iq_score          = iq_score,
                 educational_level = EDU_MAP.get(edu_raw, ''),
                 school_name       = school_name,
                 grade             = grade,
@@ -882,9 +936,9 @@ class StudentImportCsvTemplateView(APIView):
             'الجنسية',
             'الحالة (نشط / في انتظار القبول / غير نشط / خرّيج / موقوف / محوّل)',
             'تاريخ التسجيل (YYYY-MM-DD)',
-            'نوع الإعاقة',
-            'درجة الإعاقة (بسيطة / متوسطة / شديدة / شديدة جداً)',
+            'نوع الإعاقة ودرجتها (نوع (درجة)، نوع (درجة)... — الدرجة اختيارية)',
             'التشخيص التفصيلي',
+            'درجة الذكاء (رقم، اختياري)',
             'المستوى التعليمي',
             'اسم المدرسة',
             'الصف / المرحلة',
@@ -893,7 +947,7 @@ class StudentImportCsvTemplateView(APIView):
         ])
         writer.writerow([
             'محمد', 'أحمد', 'سعد', 'العتيبي', '1234567890', '2010-05-15', 'ذكر', 'سعودي',
-            'نشط', '2024-01-10', 'طيف التوحد', 'متوسطة', 'تشخيص طيف التوحد درجة 2',
+            'نشط', '2024-01-10', 'طيف التوحد (متوسطة)، إعاقة حركية (شديدة)', 'تشخيص طيف التوحد درجة 2', '85',
             'برنامج تربية خاصة', 'مدرسة الأمل', 'الثالث الابتدائي', 'مستشفى / عيادة', '',
         ])
         return response
@@ -902,17 +956,21 @@ class StudentImportCsvTemplateView(APIView):
 # ── Attendance ─────────────────────────────────────────────────────────────────
 from .models import StudentAttendance
 from .serializers import StudentAttendanceSerializer
-from django.db.models import Q
+from django.db.models import Q, Count
 
 
 class AttendanceListCreateView(generics.ListCreateAPIView):
     serializer_class   = StudentAttendanceSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class   = None          # always return full list (no pagination)
     filter_backends    = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields   = ['status', 'attendance_date', 'branch', 'guardian_notified']
     ordering_fields    = ['attendance_date', 'created_at']
     ordering           = ['-attendance_date']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanWrite()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
@@ -950,7 +1008,13 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
 
 class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = StudentAttendanceSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return [CanWrite()]
+        if self.request.method == 'DELETE':
+            return [CanDelete()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
@@ -958,6 +1022,160 @@ class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
         if student_pk:
             return qs.filter(student_id=student_pk)
         return qs
+
+
+# ── الجدول الدراسي ─────────────────────────────────────────────────────────────
+from .models import StudentSchedule
+from .serializers import StudentScheduleSerializer
+
+
+class ScheduleListCreateView(generics.ListCreateAPIView):
+    serializer_class   = StudentScheduleSerializer
+    pagination_class   = None  # الجدول كامل دائمًا — لا حاجة للترقيم
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanWrite()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = StudentSchedule.objects.select_related('student', 'specialist')
+        if student_pk:
+            return qs.filter(student_id=student_pk)
+        return qs
+
+    def perform_create(self, serializer):
+        from django.db import IntegrityError
+        student_pk = self.kwargs.get('student_pk')
+        try:
+            if student_pk:
+                student = get_object_or_404(Student, pk=student_pk)
+                day = serializer.validated_data.get('day')
+                start_time = serializer.validated_data.get('start_time')
+                if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
+                    raise drf_serializers.ValidationError(
+                        {'non_field_errors': ['هذه الحصة محجوزة مسبقاً لهذا الطالب']}
+                    )
+                serializer.save(student=student)
+            else:
+                serializer.save()
+        except IntegrityError:
+            raise drf_serializers.ValidationError(
+                {'non_field_errors': ['هذه الحصة محجوزة مسبقاً لهذا الطالب']}
+            )
+
+
+class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = StudentScheduleSerializer
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH']:
+            return [CanWrite()]
+        if self.request.method == 'DELETE':
+            return [CanDelete()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = StudentSchedule.objects.select_related('student', 'specialist')
+        if student_pk:
+            return qs.filter(student_id=student_pk)
+        return qs
+
+
+class ScheduleBulkCreateView(APIView):
+    """POST /api/schedule/bulk/ — ينشئ نفس الحصة (يوم/وقت/مادة/أخصائي) لعدة طلاب دفعة واحدة."""
+    permission_classes = [CanWrite]
+
+    def post(self, request):
+        student_ids = request.data.get('student_ids') or []
+        day         = request.data.get('day')
+        start_time  = request.data.get('start_time')
+        subject     = (request.data.get('subject') or '').strip()
+        specialist_id = request.data.get('specialist') or None
+        notes       = request.data.get('notes') or ''
+
+        if not student_ids:
+            return Response({'detail': 'يرجى اختيار طالب واحد على الأقل.'}, status=status.HTTP_400_BAD_REQUEST)
+        if day not in StudentSchedule.Day.values:
+            return Response({'detail': 'اليوم غير صحيح.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not subject:
+            return Response({'detail': 'اسم المادة / الحصة مطلوب.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # يتحقق من صحة الوقت عبر نفس الـ serializer المستخدم للإنشاء الفردي
+        time_check = StudentScheduleSerializer(data={'day': day, 'start_time': start_time, 'subject': subject})
+        if not time_check.is_valid():
+            return Response(time_check.errors, status=status.HTTP_400_BAD_REQUEST)
+        start_time = time_check.validated_data['start_time']
+
+        created, skipped, errors = 0, 0, []
+        for sid in student_ids:
+            student = Student.objects.filter(pk=sid).first()
+            if not student:
+                continue
+            if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
+                skipped += 1
+                errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': 'لديه حصة أخرى في هذا الوقت'})
+                continue
+            StudentSchedule.objects.create(
+                student=student, day=day, start_time=start_time,
+                subject=subject, specialist_id=specialist_id, notes=notes,
+            )
+            created += 1
+
+        log_action(request, 'create', None, f'إنشاء حصة جماعية "{subject}" لـ {created} طالب')
+        return Response({'created': created, 'skipped': skipped, 'errors': errors})
+
+
+class ScheduleClassesView(APIView):
+    """
+    GET /api/schedule/classes/?branch=ID
+    يجمع سجلات الجدول الفردية حسب (اليوم، الوقت، المادة، الأخصائي) لطلاب فرع معيّن،
+    فيعرض كل "حصة جماعية" مع قائمة الطلاب المسجّلين فيها.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        branch_id = request.query_params.get('branch')
+        if not branch_id:
+            return Response({'detail': 'معامل branch مطلوب.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        slots = (
+            StudentSchedule.objects
+            .filter(student__branch_id=branch_id)
+            .select_related('student', 'specialist')
+            .order_by('day', 'start_time', 'student__first_name')
+        )
+
+        day_order = {d: i for i, d in enumerate(StudentSchedule.Day.values)}
+        day_labels = dict(StudentSchedule.Day.choices)
+
+        groups = {}
+        for slot in slots:
+            key = (slot.day, slot.start_time, slot.subject, slot.specialist_id)
+            if key not in groups:
+                groups[key] = {
+                    'day': slot.day,
+                    'day_display': day_labels.get(slot.day, slot.day),
+                    'start_time': slot.start_time,
+                    'subject': slot.subject,
+                    'specialist': slot.specialist_id,
+                    'specialist_name': (slot.specialist.get_full_name() or slot.specialist.username) if slot.specialist else None,
+                    'students': [],
+                }
+            groups[key]['students'].append({
+                'slot_id': slot.id,
+                'student_id': slot.student_id,
+                'student_name': slot.student.full_name,
+            })
+
+        result = list(groups.values())
+        for g in result:
+            g['student_count'] = len(g['students'])
+        result.sort(key=lambda g: (day_order.get(g['day'], 99), g['start_time']))
+
+        return Response(result)
 
 
 class AttendanceSheetView(APIView):
@@ -1006,6 +1224,207 @@ class AttendanceSheetView(APIView):
                 'branch_id':    s.branch_id,
                 'branch_name':  s.branch.name if s.branch else None,
                 'attendance':   StudentAttendanceSerializer(att).data if att else None,
+            })
+
+        return Response(result)
+
+
+# ── الملف الطبي ───────────────────────────────────────────────────────────────
+from .models import (
+    StudentMedicalProfile, MedicalVisit, Medication,
+    DailyMedicalCheckIn,
+)
+from .serializers import (
+    StudentMedicalProfileSerializer, MedicalVisitSerializer, MedicationSerializer,
+    DailyMedicalCheckInSerializer,
+)
+
+
+class MedicalProfileView(APIView):
+    """GET/POST/PUT — سجل واحد لكل طالب (شبيه بـ FamilyInfoView)."""
+
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT']:
+            return [CanEditMedical()]
+        return [CanViewMedical()]
+
+    def get(self, request, student_pk):
+        student = get_object_or_404(Student, pk=student_pk)
+        try:
+            profile = student.medical_profile
+        except StudentMedicalProfile.DoesNotExist:
+            return Response({'detail': 'لا يوجد ملف طبي لهذا الطالب بعد'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(StudentMedicalProfileSerializer(profile).data)
+
+    def post(self, request, student_pk):
+        student = get_object_or_404(Student, pk=student_pk)
+        if hasattr(student, 'medical_profile'):
+            return Response(
+                {'detail': 'يوجد بالفعل ملف طبي لهذا الطالب. استخدم PUT للتعديل.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = StudentMedicalProfileSerializer(data=request.data)
+        if serializer.is_valid():
+            profile = serializer.save(student=student)
+            log_action(request, 'create', profile, str(profile))
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, student_pk):
+        student = get_object_or_404(Student, pk=student_pk)
+        try:
+            profile = student.medical_profile
+        except StudentMedicalProfile.DoesNotExist:
+            return Response({'detail': 'لا يوجد ملف طبي. استخدم POST لإنشائه أولاً.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = StudentMedicalProfileSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            log_action(request, 'update', profile, str(profile))
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MedicalVisitListCreateView(generics.ListCreateAPIView):
+    serializer_class = MedicalVisitSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditMedical()]
+        return [CanViewMedical()]
+
+    def get_queryset(self):
+        return MedicalVisit.objects.filter(student_id=self.kwargs['student_pk']).select_related('evaluated_by')
+
+    def perform_create(self, serializer):
+        student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        visit = serializer.save(student=student)
+        log_action(self.request, 'create', visit, str(visit))
+
+
+class MedicalVisitDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = MedicalVisitSerializer
+    permission_classes = [CanEditMedical]
+
+    def get_queryset(self):
+        return MedicalVisit.objects.filter(student_id=self.kwargs['student_pk'])
+
+
+class MedicationListCreateView(generics.ListCreateAPIView):
+    serializer_class = MedicationSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditMedical()]
+        return [CanViewMedical()]
+
+    def get_queryset(self):
+        return Medication.objects.filter(student_id=self.kwargs['student_pk'])
+
+    def perform_create(self, serializer):
+        student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        med = serializer.save(student=student)
+        log_action(self.request, 'create', med, str(med))
+
+
+class MedicationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = MedicationSerializer
+    permission_classes = [CanEditMedical]
+
+    def get_queryset(self):
+        return Medication.objects.filter(student_id=self.kwargs['student_pk'])
+
+
+class DailyCheckInListCreateView(generics.ListCreateAPIView):
+    serializer_class = DailyMedicalCheckInSerializer
+    pagination_class = None
+    filter_backends  = [DjangoFilterBackend]
+    filterset_fields  = ['check_date']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditMedical()]
+        return [CanViewMedical()]
+
+    def get_queryset(self):
+        return (
+            DailyMedicalCheckIn.objects
+            .filter(student_id=self.kwargs['student_pk'])
+            .select_related('checked_by')
+            .prefetch_related('medication_records__medication')
+        )
+
+    def perform_create(self, serializer):
+        student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        check_date = serializer.validated_data.get('check_date')
+        if DailyMedicalCheckIn.objects.filter(student=student, check_date=check_date).exists():
+            raise drf_serializers.ValidationError(
+                {'non_field_errors': ['تم تسجيل تشيك إن طبي لهذا الطالب مسبقاً في هذا اليوم']}
+            )
+        checkin = serializer.save(student=student)
+        log_action(self.request, 'create', checkin, str(checkin))
+
+
+class DailyCheckInDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = DailyMedicalCheckInSerializer
+    permission_classes = [CanEditMedical]
+
+    def get_queryset(self):
+        return (
+            DailyMedicalCheckIn.objects
+            .filter(student_id=self.kwargs['student_pk'])
+            .prefetch_related('medication_records__medication')
+        )
+
+
+class MedicalCheckInSheetView(APIView):
+    """
+    GET /api/medical/sheet/?date=YYYY-MM-DD&branch=ID[&search=text]
+    نفس منطق AttendanceSheetView — يدمج طلاب الفرع مع حالة التشيك إن الطبي لليوم المطلوب.
+    """
+    permission_classes = [CanViewMedical]
+
+    def get(self, request):
+        check_date = request.query_params.get('date')
+        branch     = request.query_params.get('branch')
+        search     = request.query_params.get('search', '').strip()
+
+        if not check_date:
+            return Response({'error': 'date parameter is required'}, status=400)
+        if not branch:
+            return Response({'error': 'branch parameter is required'}, status=400)
+
+        students_qs = Student.objects.filter(status='active', branch_id=branch).select_related('branch')
+        if search:
+            students_qs = students_qs.filter(
+                Q(first_name__icontains=search)  |
+                Q(family_name__icontains=search) |
+                Q(file_number__icontains=search)
+            )
+        students_qs = students_qs.order_by('first_name', 'family_name')
+
+        checkin_map = {
+            c.student_id: c
+            for c in DailyMedicalCheckIn.objects.filter(
+                check_date=check_date, student__in=students_qs,
+            ).select_related('checked_by').prefetch_related('medication_records__medication')
+        }
+        active_meds_count = {
+            m['student_id']: m['n']
+            for m in Medication.objects.filter(student__in=students_qs, is_active=True)
+                .values('student_id').annotate(n=Count('id'))
+        }
+
+        result = []
+        for s in students_qs:
+            checkin = checkin_map.get(s.id)
+            result.append({
+                'student_id':          s.id,
+                'student_name':        s.full_name,
+                'file_number':         s.file_number,
+                'active_medications_count': active_meds_count.get(s.id, 0),
+                'checkin':             DailyMedicalCheckInSerializer(checkin).data if checkin else None,
             })
 
         return Response(result)

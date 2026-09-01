@@ -44,6 +44,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
+class UserPickerSerializer(serializers.ModelSerializer):
+    """نسخة خفيفة لقوائم الاختيار (مثل اختيار الأخصائي بالجدول الدراسي) — متاحة لأي
+    مستخدم مسجّل دخول، بلا بيانات تواصل أو صلاحيات حساسة (خلاف UserSerializer الكامل)."""
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    full_name    = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = User
+        fields = ['id', 'username', 'full_name', 'role', 'role_display']
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+
 class UserSerializer(serializers.ModelSerializer):
     role_display         = serializers.CharField(source='get_role_display', read_only=True)
     full_name            = serializers.SerializerMethodField()

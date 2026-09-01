@@ -26,7 +26,7 @@ def convert_disability_type_to_list(apps, schema_editor):
             for row_id, dt in rows:
                 new_val = json_lib.dumps([dt] if dt else [])
                 cursor.execute(
-                    "UPDATE students_student SET disability_type = ? WHERE id = ?",
+                    "UPDATE students_student SET disability_type = %s WHERE id = %s",
                     [new_val, row_id],
                 )
 

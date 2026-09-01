@@ -24,6 +24,18 @@ export function formatDateTime(dateStr: string | null | undefined): string {
   });
 }
 
+export function formatWhatsAppPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('966')) {
+    // Handle 9660XXXXXXXXX → 966XXXXXXXXX
+    if (digits.length === 13 && digits[3] === '0') return '966' + digits.slice(4);
+    return digits;
+  }
+  if (digits.startsWith('0') && digits.length === 10) return '966' + digits.slice(1);
+  if (digits.length === 9 && digits.startsWith('5')) return '966' + digits;
+  return digits;
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -7,8 +7,9 @@ import { Save, Upload, X } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { branchesApi } from '@/lib/api';
-import type { StudentFormData, Branch } from '@/types';
+import { branchesApi, busesApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import type { StudentFormData, Branch, Bus, DisabilityEntry } from '@/types';
 
 const schema = z.object({
   // أساسية
@@ -37,9 +38,10 @@ const schema = z.object({
     }, 'تاريخ الميلاد غير صحيح (أكثر من 100 سنة)'),
   gender:            z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
   nationality:       z.string().min(1, 'الجنسية مطلوبة'),
-  // إعاقة (disability_type managed as separate state — not in schema)
-  disability_degree: z.string().optional(),
+  // إعاقة (disability_type مع درجة كل نوع — يُدار كحالة منفصلة، ليس ضمن الفورم)
   diagnosis:         z.string().min(1, 'التشخيص التفصيلي مطلوب'),
+  iq_score:          z.string().optional()
+    .refine(v => !v || (!isNaN(Number(v)) && Number(v) >= 1 && Number(v) <= 200), 'درجة الذكاء يجب أن تكون رقمًا بين 1 و 200'),
   // تعليم
   educational_level: z.string().optional(),
   school_name:       z.string().optional(),
@@ -60,6 +62,7 @@ const schema = z.object({
     }, 'تاريخ التسجيل لا يمكن أن يكون في المستقبل'),
   notes:             z.string().optional(),
   branch:            z.string().optional(),
+  bus:               z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -68,7 +71,7 @@ interface Props {
   onSubmit: (data: StudentFormData) => void;
   loading?: boolean;
   defaultValues?: Partial<FormValues>;
-  initialDisabilityTypes?: string[];
+  initialDisabilityTypes?: DisabilityEntry[];
 }
 
 // ── Options ──────────────────────────────────────────────────────────────────
@@ -155,9 +158,15 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   const [photo, setPhoto]                 = useState<File | null>(null);
   const [photoPreview, setPreview]        = useState<string | null>(null);
   const fileRef                           = useRef<HTMLInputElement>(null);
-  const [disabilityTypes, setDisTypes]    = useState<string[]>(initialDisabilityTypes || []);
+  // key = disability type code, value = its own degree ('' if not yet chosen)
+  const [disabilityDegrees, setDisDegrees] = useState<Record<string, string>>(
+    () => Object.fromEntries((initialDisabilityTypes || []).map(e => [e.type, e.degree || '']))
+  );
+  const currentUser                       = useAuthStore((s) => s.user);
+  // "قبول الطالب" (pending -> active) يتطلب صلاحية مدير فأعلى — عبر زر مخصص، وليس هذا النموذج.
+  const canActivateFromPending = defaultValues?.status !== 'pending' || !!currentUser?.can_delete;
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       status:            'pending',
@@ -168,10 +177,18 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   });
 
   const referralSource = watch('referral_source');
+  const currentBranch  = watch('branch');
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
     queryFn:  () => branchesApi.list().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+
+  // الباصات الخاصة بفرع الطالب الحالي فقط
+  const { data: buses = [] } = useQuery<Bus[]>({
+    queryKey: ['buses', currentBranch],
+    queryFn:  () => busesApi.list({ branch: currentBranch }).then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    enabled:  !!currentBranch,
   });
 
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,11 +199,13 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   };
 
   const submit = (values: FormValues) => {
-    if (disabilityTypes.length === 0) {
+    if (Object.keys(disabilityDegrees).length === 0) {
       toast.error('يرجى اختيار نوع الإعاقة على الأقل');
       return;
     }
-    onSubmit({ ...values, disability_type: disabilityTypes, photo } as StudentFormData);
+    const disability_type: DisabilityEntry[] = Object.entries(disabilityDegrees)
+      .map(([type, degree]) => ({ type, degree }));
+    onSubmit({ ...values, disability_type, photo } as StudentFormData);
   };
 
   return (
@@ -304,23 +323,47 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
             <label className="form-label">الحالة</label>
             <select {...register('status')} className="form-input">
               <option value="pending">في انتظار القبول</option>
-              <option value="active">نشط</option>
+              {canActivateFromPending && <option value="active">نشط</option>}
               <option value="inactive">غير نشط</option>
               <option value="graduated">خرّيج</option>
               <option value="suspended">موقوف</option>
               <option value="transferred">محوّل</option>
             </select>
+            {!canActivateFromPending && (
+              <p className="text-xs text-gray-400 mt-1">
+                قبول الطالب يتطلب صلاحية مدير فأعلى — استخدم زر "قبول الطالب" في صفحة الملف.
+              </p>
+            )}
           </div>
 
           {branches.length > 0 && (
             <div>
               <label className="form-label">الفرع</label>
-              <select {...register('branch')} className="form-input">
+              <select
+                {...register('branch')}
+                className="form-input"
+                onChange={e => { setValue('branch', e.target.value); setValue('bus', ''); }}
+              >
                 <option value="">-- بدون فرع --</option>
                 {branches.filter(b => b.is_active).map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {currentBranch && (
+            <div>
+              <label className="form-label">الباص</label>
+              <select {...register('bus')} className="form-input">
+                <option value="">-- بدون نقل --</option>
+                {buses.map(b => (
+                  <option key={b.id} value={b.id}>{b.brand} — {b.plate_number}</option>
+                ))}
+              </select>
+              {currentBranch && buses.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">لا يوجد باصات مسجّلة لهذا الفرع.</p>
+              )}
             </div>
           )}
         </div>
@@ -331,19 +374,19 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
         <SectionTitle num="٢" title="الإعاقة والتشخيص" />
 
         <div className="space-y-4">
-          {/* نوع الإعاقة — متعدد الاختيار */}
+          {/* نوع الإعاقة — متعدد الاختيار، كل نوع له درجته الخاصة */}
           <div>
             <label className="form-label">
               نوع الإعاقة <span className="text-red-500">*</span>
-              {disabilityTypes.length > 0 && (
+              {Object.keys(disabilityDegrees).length > 0 && (
                 <span className="mr-2 text-xs font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
-                  {disabilityTypes.length} مختار
+                  {Object.keys(disabilityDegrees).length} مختار
                 </span>
               )}
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
               {DISABILITY_TYPES.map(o => {
-                const checked = disabilityTypes.includes(o.value);
+                const checked = o.value in disabilityDegrees;
                 return (
                   <label
                     key={o.value}
@@ -358,11 +401,12 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
                       className="w-4 h-4 accent-primary-600 flex-shrink-0"
                       checked={checked}
                       onChange={e => {
-                        if (e.target.checked) {
-                          setDisTypes(prev => [...prev, o.value]);
-                        } else {
-                          setDisTypes(prev => prev.filter(t => t !== o.value));
-                        }
+                        setDisDegrees(prev => {
+                          const next = { ...prev };
+                          if (e.target.checked) next[o.value] = '';
+                          else delete next[o.value];
+                          return next;
+                        });
                       }}
                     />
                     <span className="text-sm">{o.label}</span>
@@ -370,18 +414,36 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
                 );
               })}
             </div>
+
+            {/* درجة كل نوع إعاقة مختار — على حدة */}
+            {Object.keys(disabilityDegrees).length > 0 && (
+              <div className="mt-3 space-y-2">
+                {DISABILITY_TYPES.filter(o => o.value in disabilityDegrees).map(o => (
+                  <div key={o.value} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                    <span className="text-sm text-gray-700 flex-1">{o.label}</span>
+                    <select
+                      className="form-input py-1.5 text-sm w-44"
+                      value={disabilityDegrees[o.value]}
+                      onChange={e => setDisDegrees(prev => ({ ...prev, [o.value]: e.target.value }))}
+                    >
+                      <option value="">-- درجة الإعاقة --</option>
+                      {DISABILITY_DEGREES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
-            <div>
-              <label className="form-label">درجة الإعاقة</label>
-              <select {...register('disability_degree')} className="form-input">
-                <option value="">-- اختر --</option>
-                {DISABILITY_DEGREES.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="form-label">درجة الذكاء</label>
+            <input
+              type="number" min="1" max="200"
+              {...register('iq_score')}
+              className="form-input md:w-1/2"
+              placeholder="مثال: 85"
+            />
+            {errors.iq_score && <p className="text-red-500 text-xs mt-1">{errors.iq_score.message}</p>}
           </div>
 
           <div>

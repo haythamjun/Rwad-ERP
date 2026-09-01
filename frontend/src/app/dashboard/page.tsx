@@ -1,15 +1,26 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Users, UserCheck, Clock, UserX, TrendingUp, FileText, Building2, MapPin } from 'lucide-react';
+import {
+  Users, UserCheck, Clock, UserX, TrendingUp, FileText, Building2, MapPin,
+  Bus, UserCog, XCircle, AlertTriangle,
+} from 'lucide-react';
 import { dashboardApi, studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import type { PaginatedResponse, Student } from '@/types';
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'مدير النظام', manager: 'مدير', specialist: 'أخصائي', reception: 'استقبال', viewer: 'مشاهد',
+};
+
 interface DashboardStats {
   total:     number;
   by_status: Record<string, number>;
-  branches:  { id: number; name: string; location: string; student_count: number }[];
+  branches:  { id: number; name: string; location: string; student_count: number; male_count: number; female_count: number }[];
+  bus_count: number;
+  buses_needing_renewal: number;
+  user_count: number;
+  users_by_role: Record<string, number>;
 }
 
 interface StatCardProps {
@@ -52,8 +63,13 @@ export default function DashboardPage() {
   const pending   = stats?.by_status?.pending     || 0;
   const graduated = stats?.by_status?.graduated   || 0;
   const inactive  = stats?.by_status?.inactive    || 0;
+  const rejected  = stats?.by_status?.rejected    || 0;
   const branches  = stats?.branches               || [];
   const recent    = studentsData?.results         || [];
+  const busCount        = stats?.bus_count             || 0;
+  const busesRenewal    = stats?.buses_needing_renewal || 0;
+  const userCount       = stats?.user_count            || 0;
+  const usersByRole     = stats?.users_by_role         || {};
 
   return (
     <div className="space-y-6">
@@ -74,6 +90,15 @@ export default function DashboardPage() {
         <StatCard title="خرّيج"          value={graduated} icon={<TrendingUp size={22}/>}color="text-blue-600"    bg="bg-blue-50" />
         <StatCard title="غير نشط"        value={inactive}  icon={<UserX size={22}/>}     color="text-gray-600"    bg="bg-gray-100" />
         <StatCard title="إجمالي الملفات" value={total}     icon={<FileText size={22}/>}  color="text-purple-600"  bg="bg-purple-50" />
+        <StatCard title="مرفوض"          value={rejected}  icon={<XCircle size={22}/>}   color="text-rose-600"    bg="bg-rose-50" />
+        <StatCard title="عدد الباصات"    value={busCount}  icon={<Bus size={22}/>}       color="text-teal-600"    bg="bg-teal-50" />
+        <StatCard
+          title="باصات تحتاج تجديد" value={busesRenewal}
+          icon={busesRenewal > 0 ? <AlertTriangle size={22}/> : <Bus size={22}/>}
+          color={busesRenewal > 0 ? 'text-red-600' : 'text-gray-600'}
+          bg={busesRenewal > 0 ? 'bg-red-50' : 'bg-gray-100'}
+        />
+        <StatCard title="مستخدمو النظام" value={userCount} icon={<UserCog size={22}/>}   color="text-indigo-600"  bg="bg-indigo-50" />
       </div>
 
       {/* Branches */}
@@ -100,7 +125,30 @@ export default function DashboardPage() {
                 <div className="text-center flex-shrink-0">
                   <p className="text-2xl font-bold text-primary-600">{b.student_count}</p>
                   <p className="text-xs text-gray-400">طالب</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5 whitespace-nowrap">
+                    <span className="text-blue-500">{b.male_count} ذكر</span>
+                    {' · '}
+                    <span className="text-pink-500">{b.female_count} أنثى</span>
+                  </p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Users by role */}
+      {Object.keys(usersByRole).length > 0 && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <UserCog size={18} className="text-primary-600" />
+            <h3 className="section-title mb-0">المستخدمون حسب الدور</h3>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {Object.entries(usersByRole).map(([role, count]) => (
+              <div key={role} className="text-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <p className="text-xl font-bold text-indigo-600">{count}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{ROLE_LABELS[role] || role}</p>
               </div>
             ))}
           </div>

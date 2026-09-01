@@ -22,7 +22,7 @@ class AttachmentInline(admin.TabularInline):
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
     list_display  = ['file_number', 'first_name', 'family_name', 'national_id', 'disability_type', 'gender', 'status', 'registration_date']
-    list_filter   = ['status', 'gender', 'nationality', 'disability_type', 'disability_degree', 'educational_level', 'referral_source']
+    list_filter   = ['status', 'gender', 'nationality', 'educational_level', 'referral_source']
     search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number', 'diagnosis']
     readonly_fields = ['file_number', 'created_by', 'created_at', 'updated_at']
     inlines       = [GuardianInline, FamilyInfoInline, AttachmentInline]
@@ -36,7 +36,7 @@ class StudentAdmin(admin.ModelAdmin):
             'fields': ('first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'date_of_birth', 'gender', 'nationality', 'photo'),
         }),
         ('الإعاقة والتشخيص', {
-            'fields': ('disability_type', 'disability_degree', 'diagnosis'),
+            'fields': ('disability_type', 'diagnosis', 'iq_score'),
         }),
         ('المعلومات التعليمية', {
             'fields': ('educational_level', 'school_name', 'grade'),

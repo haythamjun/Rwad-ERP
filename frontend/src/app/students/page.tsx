@@ -145,7 +145,7 @@ export default function StudentsPage() {
                 </button>
               </>
             )}
-            {user?.can_delete && (
+            {user?.can_write && (
               <Link href="/students/rejected" className="btn-secondary text-rose-600 border-rose-200 hover:bg-rose-50">
                 <XCircle size={16} />
                 المرفوضون

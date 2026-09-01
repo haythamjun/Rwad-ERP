@@ -1,27 +1,21 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { X, Printer, MessageSquare, CheckCircle, FileText, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { Student } from '@/types';
+import { formatWhatsAppPhone } from '@/lib/utils';
+import { siteSettingsApi } from '@/lib/api';
+import type { Student, SiteSettings } from '@/types';
 
 interface Props {
   student: Student;
   onClose: () => void;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const DEFAULT_NAME_AR = 'مركز رؤية للتأهيل';
+const DEFAULT_NAME_EN = 'Roya Rehabilitation Center';
 
-function formatWhatsAppPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('966')) {
-    // Handle 9660XXXXXXXXX → 966XXXXXXXXX
-    if (digits.length === 13 && digits[3] === '0') return '966' + digits.slice(4);
-    return digits;
-  }
-  if (digits.startsWith('0') && digits.length === 10) return '966' + digits.slice(1);
-  if (digits.length === 9 && digits.startsWith('5')) return '966' + digits;
-  return digits;
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function todayArabic(): string {
   return new Date().toLocaleDateString('ar-SA', {
@@ -31,10 +25,23 @@ function todayArabic(): string {
 
 // ── Letter HTML (full printable document) ─────────────────────────────────────
 
-function buildLetterHTML(student: Student, guardianName: string, today: string): string {
+interface CenterInfo {
+  nameAr: string;
+  nameEn: string;
+  phone: string;
+  website: string;
+  logoUrl: string | null;
+  initial: string;
+}
+
+function buildLetterHTML(student: Student, guardianName: string, today: string, center: CenterInfo): string {
   const branchRow = student.branch_name
     ? `<tr><td>الفرع:</td><td>${student.branch_name}</td></tr>`
     : '';
+  const logoHTML = center.logoUrl
+    ? `<img src="${center.logoUrl}" alt="الشعار" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : center.initial;
+  const contactLine = [center.phone, center.website].filter(Boolean).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
 
   return `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -59,7 +66,7 @@ body{
 }
 /* watermark */
 .page::after{
-  content:'مركز رؤية';
+  content:'${center.nameAr}';
   position:absolute;top:50%;left:50%;
   transform:translate(-50%,-50%) rotate(-30deg);
   font-size:90px;font-weight:800;
@@ -132,10 +139,10 @@ body{
 <body>
 <div class="page">
   <div class="hdr">
-    <div class="logo">ر</div>
+    <div class="logo">${logoHTML}</div>
     <div class="org">
-      <h1>مركز رؤية للتأهيل</h1>
-      <p>Roya Rehabilitation Center</p>
+      <h1>${center.nameAr}</h1>
+      ${center.nameEn ? `<p>${center.nameEn}</p>` : ''}
     </div>
     <div style="width:68px"></div>
   </div>
@@ -154,7 +161,7 @@ body{
   <p class="para">السلام عليكم ورحمة الله وبركاته،</p>
 
   <p class="para">
-    يسعد إدارة مركز رؤية للتأهيل أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز،
+    يسعد إدارة ${center.nameAr} أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز،
     وذلك بعد استيفاء جميع الشروط والمتطلبات المطلوبة. ونسأل الله تعالى أن يُوفّق
     الجميع لما فيه خير المستفيد وأسرته الكريمة.
   </p>
@@ -178,14 +185,16 @@ body{
   <div class="sig-row">
     <div class="sig-block">
       <span>مع خالص التحيات،</span>
-      <strong>إدارة مركز رؤية للتأهيل</strong>
+      <strong>إدارة ${center.nameAr}</strong>
       <span style="color:#9ca3af;font-size:12px">${today}</span>
     </div>
     <div class="stamp">الخاتم<br>الرسمي</div>
   </div>
 
+  ${contactLine ? `<div class="footer" style="border-top:0;padding-top:0;margin-top:14px;color:#6b7280;font-size:12px" dir="ltr">${contactLine}</div>` : ''}
+
   <div class="footer">
-    صدر هذا الإشعار إلكترونياً من نظام رؤية الإداري &nbsp;|&nbsp; جميع الحقوق محفوظة © مركز رؤية للتأهيل
+    صدر هذا الإشعار إلكترونياً &nbsp;|&nbsp; جميع الحقوق محفوظة © ${center.nameAr}
   </div>
 </div>
 </body>
@@ -202,9 +211,24 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
   const today = todayArabic();
   const guardianName = primaryGuardian?.full_name || '...............';
 
+  const { data: settings } = useQuery<SiteSettings>({
+    queryKey: ['site-settings'],
+    queryFn:  () => siteSettingsApi.get().then(r => r.data),
+  });
+
+  const nameAr = settings?.center_name_ar || DEFAULT_NAME_AR;
+  const center = {
+    nameAr,
+    nameEn:  settings?.center_name_en || DEFAULT_NAME_EN,
+    phone:   settings?.phone || '',
+    website: settings?.website || '',
+    logoUrl: settings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${settings.logo}` : null,
+    initial: nameAr.trim().charAt(0) || 'ر',
+  };
+
   // ── Print / Save PDF ──────────────────────────────────────────────────────
   const handlePrint = () => {
-    const html = buildLetterHTML(student, guardianName, today);
+    const html = buildLetterHTML(student, guardianName, today, center);
     const win = window.open('', '_blank', 'width=820,height=960');
     if (!win) {
       toast.error('يرجى السماح بفتح النوافذ المنبثقة في المتصفح');
@@ -225,7 +249,7 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
     const msg = [
       'بسم الله الرحمن الرحيم',
       '',
-      '🌟 *مركز رؤية للتأهيل*',
+      `🌟 *${center.nameAr}*`,
       '*إشعار قبول وتسجيل* ✅',
       '──────────────────',
       `ولي أمر المستفيد / *${primaryGuardian.full_name}*`,
@@ -237,8 +261,10 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
       student.branch_name ? `🏢 *الفرع:* ${student.branch_name}` : '',
       '',
       'نرجو التواصل مع إدارة المركز للاطلاع على البرنامج والمواعيد.',
+      center.phone ? `📞 ${center.phone}` : '',
+      center.website ? `🌐 ${center.website}` : '',
       '',
-      '💙 *مع تحيات إدارة مركز رؤية للتأهيل*',
+      `💙 *مع تحيات إدارة ${center.nameAr}*`,
     ].filter(Boolean).join('\n');
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -272,10 +298,14 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
             <div className="p-5 text-sm" dir="rtl">
               {/* Center header */}
               <div className="flex items-center gap-3 pb-4 border-b border-gray-100 mb-4">
-                <div className="w-11 h-11 rounded-full bg-[#0F2A47] flex items-center justify-center text-white font-bold text-lg flex-shrink-0">ر</div>
+                <div className="w-11 h-11 rounded-full bg-[#0F2A47] flex items-center justify-center text-white font-bold text-lg flex-shrink-0 overflow-hidden">
+                  {center.logoUrl
+                    ? <img src={center.logoUrl} alt="الشعار" className="w-full h-full object-cover" />
+                    : center.initial}
+                </div>
                 <div className="flex-1 text-center">
-                  <p className="font-bold text-gray-800">مركز رؤية للتأهيل</p>
-                  <p className="text-[11px] text-gray-400">Roya Rehabilitation Center</p>
+                  <p className="font-bold text-gray-800">{center.nameAr}</p>
+                  {center.nameEn && <p className="text-[11px] text-gray-400">{center.nameEn}</p>}
                 </div>
                 <div className="w-11" />
               </div>
@@ -297,7 +327,7 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
               </p>
               <p className="text-[12px] text-gray-500 mb-3">السلام عليكم ورحمة الله وبركاته،</p>
               <p className="text-[12px] text-gray-600 mb-4 leading-relaxed">
-                يسعد إدارة مركز رؤية للتأهيل أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز...
+                يسعد إدارة {center.nameAr} أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز...
               </p>
 
               {/* Student card */}
@@ -335,7 +365,7 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
               <div className="flex justify-between items-end pt-2">
                 <div className="text-[12px] text-gray-600">
                   <p>مع خالص التحيات،</p>
-                  <p className="font-bold text-[#0F2A47] mt-1">إدارة مركز رؤية للتأهيل</p>
+                  <p className="font-bold text-[#0F2A47] mt-1">إدارة {center.nameAr}</p>
                 </div>
                 <div className="w-14 h-14 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-300 text-center leading-tight">
                   الخاتم

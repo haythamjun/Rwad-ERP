@@ -78,6 +78,8 @@ export const studentsApi = {
     });
   },
   delete: (id: number) => api.delete(`/students/${id}/`),
+  accept: (id: number) =>
+    api.post(`/students/${id}/accept/`),
   reject: (id: number, reason: string) =>
     api.post(`/students/${id}/reject/`, { reason }),
   restore: (id: number) =>
@@ -134,6 +136,23 @@ export const branchesApi = {
   delete: (id: number)                    => api.delete(`/branches/${id}/`),
 };
 
+export const siteSettingsApi = {
+  get:    () => api.get('/settings/'),
+  update: (data: FormData | Record<string, unknown>) => {
+    const isFormData = data instanceof FormData;
+    return api.patch('/settings/', data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    });
+  },
+};
+
+export const busesApi = {
+  list:   (params?: Record<string, unknown>) => api.get('/buses/', { params }),
+  create: (data: Record<string, unknown>)    => api.post('/buses/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/buses/${id}/`, data),
+  delete: (id: number)                       => api.delete(`/buses/${id}/`),
+};
+
 // ─────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────
@@ -156,6 +175,80 @@ export const attendanceApi = {
   // Daily attendance sheet — all active students + their record for a date
   sheet: (params: { date: string; branch?: string; search?: string }) =>
     api.get('/attendance/sheet/', { params }),
+};
+
+// ─────────────────────────────────────────────
+// الجدول الدراسي
+// ─────────────────────────────────────────────
+export const scheduleApi = {
+  list: (studentId: number) =>
+    api.get(`/students/${studentId}/schedule/`),
+  create: (studentId: number, data: unknown) =>
+    api.post(`/students/${studentId}/schedule/`, data),
+  update: (studentId: number, id: number, data: unknown) =>
+    api.patch(`/students/${studentId}/schedule/${id}/`, data),
+  delete: (studentId: number, id: number) =>
+    api.delete(`/students/${studentId}/schedule/${id}/`),
+  // حصص جماعية — عدة طلاب دفعة واحدة
+  bulkCreate: (data: unknown) => api.post('/schedule/bulk/', data),
+  classes:    (branchId: number) => api.get('/schedule/classes/', { params: { branch: branchId } }),
+};
+
+// ─────────────────────────────────────────────
+// الملف الطبي
+// ─────────────────────────────────────────────
+export const medicalApi = {
+  getProfile:    (studentId: number) => api.get(`/students/${studentId}/medical-profile/`),
+  createProfile: (studentId: number, data: unknown) => api.post(`/students/${studentId}/medical-profile/`, data),
+  updateProfile: (studentId: number, data: unknown) => api.put(`/students/${studentId}/medical-profile/`, data),
+
+  visits: {
+    list:   (studentId: number) => api.get(`/students/${studentId}/medical-visits/`),
+    create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/medical-visits/`, data),
+    delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/medical-visits/${id}/`),
+  },
+  medications: {
+    list:   (studentId: number) => api.get(`/students/${studentId}/medications/`),
+    create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/medications/`, data),
+    update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/medications/${id}/`, data),
+    delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/medications/${id}/`),
+  },
+  checkins: {
+    list:   (studentId: number) => api.get(`/students/${studentId}/medical-checkins/`),
+    create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/medical-checkins/`, data),
+    update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/medical-checkins/${id}/`, data),
+  },
+  sheet: (params: { date: string; branch: number; search?: string }) => api.get('/medical/sheet/', { params }),
+};
+
+// ─────────────────────────────────────────────
+// المقاييس والخطط الدراسية
+// ─────────────────────────────────────────────
+export const assessmentsApi = {
+  // مكتبة المقاييس
+  list:    () => api.get('/assessments/'),
+  detail:  (id: number) => api.get(`/assessments/${id}/`),
+  create:  (data: unknown) => api.post('/assessments/', data),
+  update:  (id: number, data: unknown) => api.patch(`/assessments/${id}/`, data),
+  delete:  (id: number) => api.delete(`/assessments/${id}/`),
+};
+
+export const studentAssessmentsApi = {
+  list:   (studentId: number) => api.get(`/students/${studentId}/assessments/`),
+  detail: (studentId: number, id: number) => api.get(`/students/${studentId}/assessments/${id}/`),
+  create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/assessments/`, data),
+  update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/assessments/${id}/`, data),
+  delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/assessments/${id}/`),
+};
+
+// ─────────────────────────────────────────────
+// التقارير
+// ─────────────────────────────────────────────
+export const reportsApi = {
+  attendance: (params: { date_from: string; date_to: string; branch?: string; student?: string }) =>
+    api.get('/reports/attendance/', { params }),
+  attendanceExport: (params: { date_from: string; date_to: string; branch?: string; student?: string }) =>
+    api.get('/reports/attendance/export/', { params, responseType: 'blob' }),
 };
 
 // ─────────────────────────────────────────────

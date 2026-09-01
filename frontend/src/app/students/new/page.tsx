@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, Save, Upload, X, Plus, Trash2, UserPlus, FileText,
+  ArrowLeft, ArrowRight, Save, Upload, X, Plus, Trash2, UserPlus, FileText, Check,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, branchesApi } from '@/lib/api';
 import type { Branch } from '@/types';
@@ -26,9 +26,10 @@ const schema = z.object({
     .refine(v => new Date(v) <= new Date(), 'لا يمكن أن يكون في المستقبل'),
   gender:      z.enum(['male', 'female'], { required_error: 'الجنس مطلوب' }),
   nationality: z.string().min(1, 'الجنسية مطلوبة'),
-  // disability_type managed as separate state — not in schema
-  disability_degree:      z.string().optional(),
+  // disability_type (with its per-type degrees) managed as separate state — not in schema
   diagnosis:              z.string().min(1, 'التشخيص التفصيلي مطلوب'),
+  iq_score:               z.string().optional()
+    .refine(v => !v || (!isNaN(Number(v)) && Number(v) >= 1 && Number(v) <= 200), 'درجة الذكاء يجب أن تكون رقمًا بين 1 و 200'),
   educational_level:      z.string().optional(),
   school_name:            z.string().optional(),
   grade:                  z.string().optional(),
@@ -119,7 +120,7 @@ const HOUSING_TYPE = [
 // ─── Required attachments ────────────────────────────────────────────────────
 const REQUIRED_ATTACHMENTS = [
   { type: 'national_id',    label: 'صورة الهوية الوطنية' },
-  { type: 'family_card',    label: 'كرت الأسرة' },
+  { type: 'family_card',    label: 'كرت العائلة' },
   { type: 'medical_report', label: 'التقرير الطبي' },
 ] as const;
 
@@ -135,6 +136,71 @@ function SectionTitle({ num, title }: { num: string; title: string }) {
   );
 }
 
+// ─── Wizard steps ──────────────────────────────────────────────────────────────
+const STEPS = [
+  { num: 1, label: 'البيانات الشخصية' },
+  { num: 2, label: 'الإعاقة والتشخيص' },
+  { num: 3, label: 'التعليم وجهة الإحالة' },
+  { num: 4, label: 'ولي الأمر والأسرة' },
+  { num: 5, label: 'المرفقات والملاحظات' },
+] as const;
+
+function ProgressBar({ current }: { current: number }) {
+  return (
+    <div className="card">
+      <div className="flex items-start">
+        {STEPS.map((s, i) => (
+          <div key={s.num} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
+            <div className="flex flex-col items-center gap-1.5 w-20 flex-shrink-0">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 transition-colors ${
+                  s.num < current
+                    ? 'bg-primary-600 text-white'
+                    : s.num === current
+                    ? 'bg-primary-600 text-white ring-4 ring-primary-100'
+                    : 'bg-gray-100 text-gray-400'
+                }`}
+              >
+                {s.num < current ? <Check size={16} /> : s.num}
+              </div>
+              <span
+                className={`text-[11px] font-medium text-center leading-tight ${
+                  s.num <= current ? 'text-primary-700' : 'text-gray-400'
+                }`}
+              >
+                {s.label}
+              </span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className={`flex-1 h-0.5 mx-1 mb-5 transition-colors ${s.num < current ? 'bg-primary-600' : 'bg-gray-200'}`} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Step navigation row ────────────────────────────────────────────────────────
+function StepNav({
+  step, onBack, onNext, nextLabel = 'التالي', nextDisabled = false,
+}: {
+  step: number; onBack?: () => void; onNext: () => void; nextLabel?: string; nextDisabled?: boolean;
+}) {
+  return (
+    <div className="flex justify-end gap-3">
+      {step > 1 && onBack && (
+        <button type="button" onClick={onBack} className="btn-secondary">
+          <ArrowRight size={16} /> العودة
+        </button>
+      )}
+      <button type="button" onClick={onNext} disabled={nextDisabled} className="btn-primary px-8">
+        {nextLabel} {nextLabel === 'التالي' && <ArrowLeft size={16} />}
+      </button>
+    </div>
+  );
+}
+
 let _keyCounter = 0;
 const nextKey = () => String(++_keyCounter);
 
@@ -143,7 +209,7 @@ export default function NewStudentPage() {
   const router = useRouter();
 
   // ── Basic form ──────────────────────────────────────────────────────────
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       status:            'pending',
@@ -153,6 +219,14 @@ export default function NewStudentPage() {
   });
   const referralSource = watch('referral_source');
 
+  // ── Wizard step ──────────────────────────────────────────────────────────
+  const [step, setStep] = useState(1);
+  const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const STEP_1_FIELDS = ['first_name', 'middle_name', 'grandfather_name', 'family_name',
+    'national_id', 'date_of_birth', 'gender', 'nationality', 'registration_date'] as const;
+  const STEP_2_FIELDS = ['diagnosis', 'iq_score'] as const;
+
   // ── Branches ─────────────────────────────────────────────────────────────
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
@@ -160,7 +234,8 @@ export default function NewStudentPage() {
   });
 
   // ── Disability types (multi-select state) ────────────────────────────────
-  const [disabilityTypes, setDisTypes] = useState<string[]>([]);
+  // key = disability type code, value = its own degree ('' if not yet chosen)
+  const [disabilityDegrees, setDisDegrees] = useState<Record<string, string>>({});
 
   // ── Photo ────────────────────────────────────────────────────────────────
   const [photo, setPhoto]         = useState<File | null>(null);
@@ -225,12 +300,46 @@ export default function NewStudentPage() {
   const updateAttachment = (key: string, field: 'type' | 'name', val: string) =>
     setAttachments(prev => prev.map(a => a._key === key ? { ...a, [field]: val } : a));
 
+  // ── Wizard navigation ────────────────────────────────────────────────────
+  const goBack = () => { setStep(s => Math.max(1, s - 1)); scrollTop(); };
+
+  const goNext = async () => {
+    if (step === 1) {
+      if (!(await trigger(STEP_1_FIELDS))) return;
+    }
+    if (step === 2) {
+      if (Object.keys(disabilityDegrees).length === 0) {
+        toast.error('يرجى اختيار نوع الإعاقة على الأقل'); return;
+      }
+      if (!(await trigger(STEP_2_FIELDS))) return;
+    }
+    if (step === 4) {
+      if (guardians.length === 0) {
+        toast.error('يرجى إضافة ولي أمر واحد على الأقل'); return;
+      }
+      for (const g of guardians) {
+        if (!g.full_name.trim()) { toast.error('يرجى إدخال اسم ولي الأمر'); return; }
+        if (!/^\d{10}$/.test(g.phone)) { toast.error(`رقم جوال ولي الأمر "${g.full_name}" غير صحيح`); return; }
+      }
+      if (showFamily) {
+        if (!family.family_size || !family.sibling_order || !family.parents_status) {
+          toast.error('يرجى تعبئة الحقول الإلزامية في بيانات الأسرة'); return;
+        }
+        if (Number(family.sibling_order) > Number(family.family_size)) {
+          toast.error('ترتيب المستفيد لا يمكن أن يكون أكبر من عدد أفراد الأسرة'); return;
+        }
+      }
+    }
+    setStep(s => Math.min(5, s + 1));
+    scrollTop();
+  };
+
   // ── Save all ─────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
 
   const saveAll = async (data: FormValues) => {
     // Validate disability types
-    if (disabilityTypes.length === 0) {
+    if (Object.keys(disabilityDegrees).length === 0) {
       toast.error('يرجى اختيار نوع الإعاقة على الأقل');
       return;
     }
@@ -274,7 +383,9 @@ export default function NewStudentPage() {
       Object.entries(data).forEach(([k, v]) => {
         if (v !== null && v !== undefined && v !== '') fd.append(k, String(v));
       });
-      fd.append('disability_type', JSON.stringify(disabilityTypes));
+      fd.append('disability_type', JSON.stringify(
+        Object.entries(disabilityDegrees).map(([type, degree]) => ({ type, degree }))
+      ));
       if (photo) fd.append('photo', photo);
       const res = await studentsApi.create(fd);
       const sid: number = res.data.id;
@@ -367,7 +478,7 @@ export default function NewStudentPage() {
     <div className="space-y-5 max-w-4xl">
       <Header
         title="إضافة طالب جديد"
-        subtitle="أدخل جميع بيانات المستفيد في هذه الصفحة"
+        subtitle={`الخطوة ${step} من ${STEPS.length} — ${STEPS[step - 1].label}`}
         actions={
           <Link href="/students" className="btn-secondary">
             <ArrowLeft size={16} /> العودة للقائمة
@@ -375,13 +486,17 @@ export default function NewStudentPage() {
         }
       />
 
+      <ProgressBar current={step} />
+
       <form onSubmit={handleSubmit(saveAll, (errs) => {
         const first = Object.values(errs)[0] as { message?: string } | undefined;
         toast.error(`يوجد حقول مطلوبة — ${first?.message || 'يرجى مراجعة البيانات الأساسية'}`, { duration: 5000 });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       })} className="space-y-5">
 
-        {/* ══ ١. البيانات الشخصية ══════════════════════════════════════════ */}
+        {/* ══ خطوة ١: البيانات الشخصية ═══════════════════════════════════════ */}
+        {step === 1 && (
+        <>
         <div className="card">
           <SectionTitle num="١" title="البيانات الشخصية" />
 
@@ -493,25 +608,30 @@ export default function NewStudentPage() {
             )}
           </div>
         </div>
+        <StepNav step={step} onNext={goNext} />
+        </>
+        )}
 
-        {/* ══ ٢. الإعاقة والتشخيص ═════════════════════════════════════════ */}
+        {/* ══ خطوة ٢: الإعاقة والتشخيص ════════════════════════════════════════ */}
+        {step === 2 && (
+        <>
         <div className="card">
           <SectionTitle num="٢" title="الإعاقة والتشخيص" />
           <div className="space-y-4">
 
-            {/* نوع الإعاقة — متعدد الاختيار */}
+            {/* نوع الإعاقة — متعدد الاختيار، كل نوع له درجته الخاصة */}
             <div>
               <label className="form-label">
                 نوع الإعاقة <span className="text-red-500">*</span>
-                {disabilityTypes.length > 0 && (
+                {Object.keys(disabilityDegrees).length > 0 && (
                   <span className="mr-2 text-xs font-normal text-primary-600 bg-primary-50 px-2 py-0.5 rounded-full">
-                    {disabilityTypes.length} مختار
+                    {Object.keys(disabilityDegrees).length} مختار
                   </span>
                 )}
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
                 {DISABILITY_TYPES.map(o => {
-                  const checked = disabilityTypes.includes(o.value);
+                  const checked = o.value in disabilityDegrees;
                   return (
                     <label
                       key={o.value}
@@ -526,11 +646,12 @@ export default function NewStudentPage() {
                         className="w-4 h-4 accent-primary-600 flex-shrink-0"
                         checked={checked}
                         onChange={e => {
-                          if (e.target.checked) {
-                            setDisTypes(prev => [...prev, o.value]);
-                          } else {
-                            setDisTypes(prev => prev.filter(t => t !== o.value));
-                          }
+                          setDisDegrees(prev => {
+                            const next = { ...prev };
+                            if (e.target.checked) next[o.value] = '';
+                            else delete next[o.value];
+                            return next;
+                          });
                         }}
                       />
                       <span className="text-sm">{o.label}</span>
@@ -538,16 +659,36 @@ export default function NewStudentPage() {
                   );
                 })}
               </div>
+
+              {/* درجة كل نوع إعاقة مختار — على حدة */}
+              {Object.keys(disabilityDegrees).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {DISABILITY_TYPES.filter(o => o.value in disabilityDegrees).map(o => (
+                    <div key={o.value} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                      <span className="text-sm text-gray-700 flex-1">{o.label}</span>
+                      <select
+                        className="form-input py-1.5 text-sm w-44"
+                        value={disabilityDegrees[o.value]}
+                        onChange={e => setDisDegrees(prev => ({ ...prev, [o.value]: e.target.value }))}
+                      >
+                        <option value="">-- درجة الإعاقة --</option>
+                        {DISABILITY_DEGREES.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">درجة الإعاقة</label>
-                <select {...register('disability_degree')} className="form-input">
-                  <option value="">-- اختر --</option>
-                  {DISABILITY_DEGREES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
+            <div>
+              <label className="form-label">درجة الذكاء</label>
+              <input
+                type="number" min="1" max="200"
+                {...register('iq_score')}
+                className="form-input md:w-1/2"
+                placeholder="مثال: 85"
+              />
+              {errors.iq_score && <p className="text-red-500 text-xs mt-1">{errors.iq_score.message}</p>}
             </div>
 
             <div>
@@ -558,8 +699,13 @@ export default function NewStudentPage() {
             </div>
           </div>
         </div>
+        <StepNav step={step} onBack={goBack} onNext={goNext} />
+        </>
+        )}
 
-        {/* ══ ٣. المعلومات التعليمية ══════════════════════════════════════ */}
+        {/* ══ خطوة ٣: المعلومات التعليمية وجهة الإحالة ═══════════════════════ */}
+        {step === 3 && (
+        <>
         <div className="card">
           <SectionTitle num="٣" title="المعلومات التعليمية" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -599,7 +745,13 @@ export default function NewStudentPage() {
             </div>
           </div>
         </div>
+        <StepNav step={step} onBack={goBack} onNext={goNext} />
+        </>
+        )}
 
+        {/* ══ خطوة ٤: ولي الأمر وبيانات الأسرة ════════════════════════════════ */}
+        {step === 4 && (
+        <>
         {/* ══ ٥. أولياء الأمور ════════════════════════════════════════════ */}
         <div className="card">
           <div className="flex items-center justify-between mb-5 pb-2 border-b border-gray-100">
@@ -792,7 +944,13 @@ export default function NewStudentPage() {
             </div>
           )}
         </div>
+        <StepNav step={step} onBack={goBack} onNext={goNext} />
+        </>
+        )}
 
+        {/* ══ خطوة ٥: المرفقات والملاحظات العامة ══════════════════════════════ */}
+        {step === 5 && (
+        <>
         {/* ══ ٧. المرفقات ═════════════════════════════════════════════════ */}
         <div className="card">
           <div className="flex items-center gap-3 mb-5 pb-2 border-b border-gray-100">
@@ -939,6 +1097,9 @@ export default function NewStudentPage() {
 
         {/* ── Submit ─────────────────────────────────────────────────────── */}
         <div className="flex justify-end gap-3 pb-6">
+          <button type="button" onClick={goBack} disabled={saving} className="btn-secondary">
+            <ArrowRight size={16} /> العودة
+          </button>
           <Link href="/students" className="btn-secondary">إلغاء</Link>
           <button type="submit" disabled={saving} className="btn-primary px-10 py-2.5">
             {saving ? (
@@ -954,6 +1115,8 @@ export default function NewStudentPage() {
             )}
           </button>
         </div>
+        </>
+        )}
 
       </form>
     </div>

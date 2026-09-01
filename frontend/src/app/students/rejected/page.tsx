@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Search, XCircle, RotateCcw, Eye } from 'lucide-react';
+import { ArrowLeft, Search, XCircle, RotateCcw, Eye, MessageSquare } from 'lucide-react';
 import { studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatWhatsAppPhone } from '@/lib/utils';
 import type { PaginatedResponse, Student } from '@/types';
 import Header from '@/components/layout/Header';
 
@@ -34,6 +34,12 @@ export default function RejectedStudentsPage() {
     },
     onError: () => toast.error('فشل استعادة الطالب'),
   });
+
+  const contactGuardian = (studentName: string, phone: string) => {
+    const waPhone = formatWhatsAppPhone(phone);
+    const msg = `مرحبًا، نتواصل معكم من مركز رؤية للتأهيل بخصوص طلب تسجيل ${studentName}.`;
+    window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
 
   const students = data?.results || [];
   const totalPages = Math.ceil((data?.count || 0) / 20);
@@ -85,6 +91,7 @@ export default function RejectedStudentsPage() {
                 <th className="text-right py-3 px-4 font-semibold text-rose-700">تاريخ التسجيل</th>
                 <th className="text-right py-3 px-4 font-semibold text-rose-700">تاريخ الرفض</th>
                 <th className="text-right py-3 px-4 font-semibold text-rose-700">سبب الرفض</th>
+                <th className="text-right py-3 px-4 font-semibold text-rose-700">ولي الأمر</th>
                 <th className="py-3 px-4" />
               </tr>
             </thead>
@@ -109,8 +116,27 @@ export default function RejectedStudentsPage() {
                       <span className="text-gray-300">—</span>
                     )}
                   </td>
+                  <td className="py-3 px-4 text-xs">
+                    {s.primary_guardian ? (
+                      <div>
+                        <p className="text-gray-700">{s.primary_guardian.name}</p>
+                        <p className="text-gray-400" dir="ltr">{s.primary_guardian.phone}</p>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2 justify-end">
+                      {s.primary_guardian?.phone && (
+                        <button
+                          onClick={() => contactGuardian(s.full_name, s.primary_guardian!.phone)}
+                          className="flex items-center gap-1 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C4A] font-medium py-1 px-2 rounded-lg text-xs transition-colors"
+                          title="تواصل عبر واتساب"
+                        >
+                          <MessageSquare size={12} /> تواصل
+                        </button>
+                      )}
                       <Link
                         href={`/students/${s.id}`}
                         className="btn-secondary py-1 px-2 text-xs"
