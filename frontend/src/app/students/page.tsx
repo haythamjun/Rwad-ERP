@@ -5,10 +5,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Plus, Search, Download, Filter, ChevronRight, ChevronLeft, Upload, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { studentsApi } from '@/lib/api';
+import { studentsApi, branchesApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { downloadBlob, STATUS_COLORS } from '@/lib/utils';
-import type { PaginatedResponse, Student, StudentFilters } from '@/types';
+import type { PaginatedResponse, Student, StudentFilters, Branch } from '@/types';
 import Header from '@/components/layout/Header';
 import ImportModal from '@/components/students/ImportModal';
 
@@ -57,6 +57,12 @@ export default function StudentsPage() {
   const canExport = user?.is_admin || studentsPerm?.can_export === true;
   const canImport = user?.is_admin || studentsPerm?.can_import === true;
 
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ['branches'],
+    queryFn: () => branchesApi.list().then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+  const showBranchFilter = branches.length > 1;
+
   const { data, isLoading } = useQuery<PaginatedResponse<Student>>({
     queryKey: ['students', filters],
     queryFn: () =>
@@ -66,6 +72,7 @@ export default function StudentsPage() {
           status:          filters.status          || undefined,
           gender:          filters.gender          || undefined,
           disability_type: filters.disability_type || undefined,
+          branch:          filters.branch          || undefined,
           page: filters.page,
         })
         .then((r) => r.data),
@@ -164,6 +171,20 @@ export default function StudentsPage() {
       {/* Filters */}
       <div className="card p-4">
         <div className="flex flex-wrap gap-3">
+          {showBranchFilter && (
+            <select
+              className="form-input w-44"
+              value={filters.branch ?? ''}
+              onChange={(e) =>
+                setFilters({ ...filters, branch: e.target.value || undefined, page: 1 })
+              }
+            >
+              <option value="">جميع الفروع</option>
+              {branches.map((b) => (
+                <option key={b.id} value={String(b.id)}>{b.name}</option>
+              ))}
+            </select>
+          )}
           <div className="relative flex-1 min-w-[200px]">
             <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -209,7 +230,7 @@ export default function StudentsPage() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          {(filters.search || filters.status || filters.gender) && (
+          {(filters.search || filters.status || filters.gender || filters.disability_type || filters.branch) && (
             <button
               className="btn-secondary"
               onClick={() => setFilters({ page: 1 })}

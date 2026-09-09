@@ -673,6 +673,7 @@ export interface StudentFilters {
   status?: StudentStatus | '';
   gender?: Gender | '';
   disability_type?: DisabilityType;
+  branch?: number | string;
   nationality?: string;
   registration_from?: string;
   registration_to?: string;
