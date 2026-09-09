@@ -407,6 +407,69 @@ def _build_attendance_report(request):
     return date_from, date_to, summary, rows
 
 
+_WEEKDAY_AR = {
+    0: 'الاثنين', 1: 'الثلاثاء', 2: 'الأربعاء', 3: 'الخميس',
+    4: 'الجمعة', 5: 'السبت', 6: 'الأحد',
+}
+
+
+def _daily_attendance_rows(request):
+    """تفصيل يومي — صف واحد لكل سجل حضور محفوظ ضمن المدى، مرتّبًا حسب اسم الطالب
+    ثم التاريخ. الأيام بلا سجل لا تظهر (غياب ضمنيًا). تُطبَّق نفس تصفية صلاحية
+    المستخدم (الفرع/المدينة) ومعامِلات branch/student، لكن حسب فرع الطالب لا فرع
+    السجل — إذ إن فرع السجل حقل اختياري وقد يكون فارغًا فيُسقِط صفوفًا صحيحة."""
+    from apps.students.models import StudentAttendance
+
+    today = date.today()
+    date_from = parse_date(request.query_params.get('date_from', '')) or today.replace(day=1)
+    date_to   = parse_date(request.query_params.get('date_to', '')) or today
+
+    qs = (
+        StudentAttendance.objects
+        .filter(attendance_date__gte=date_from, attendance_date__lte=date_to)
+        .select_related('student', 'student__branch', 'branch')
+    )
+
+    user = request.user
+    if not user.is_admin:
+        if user.assigned_branch_id:
+            qs = qs.filter(student__branch_id=user.assigned_branch_id)
+        elif user.assigned_city:
+            qs = qs.filter(student__branch__city=user.assigned_city)
+
+    branch_param = request.query_params.get('branch')
+    if branch_param:
+        qs = qs.filter(student__branch_id=branch_param)
+
+    student_param = request.query_params.get('student')
+    if student_param:
+        qs = qs.filter(student_id=student_param)
+
+    rows = []
+    for a in qs:
+        st = a.student
+        reason = {
+            'absent':          a.absence_reason,
+            'excused_absence': a.absence_reason,
+            'late':            a.late_reason,
+            'early_leave':     a.early_leave_reason,
+        }.get(a.status, '')
+        note = ' — '.join(p for p in [(reason or '').strip(), (a.notes or '').strip()] if p)
+        rows.append({
+            'date':         a.attendance_date,
+            'weekday':      _WEEKDAY_AR[a.attendance_date.weekday()],
+            'file_number':  st.file_number,
+            'student_name': st.full_name,
+            'branch_name':  a.branch.name if a.branch_id else (st.branch.name if st.branch_id else ''),
+            'status':       a.get_status_display(),
+            'check_in':     a.check_in_time.strftime('%H:%M') if a.check_in_time else '',
+            'check_out':    a.check_out_time.strftime('%H:%M') if a.check_out_time else '',
+            'note':         note,
+        })
+    rows.sort(key=lambda r: (r['student_name'], r['date']))
+    return date_from, date_to, rows
+
+
 class AttendanceReportView(APIView):
     """تقرير الحضور والانصراف — إحصائيات مجمّعة عبر مدى تاريخي (وليس تسجيلًا يوميًا)."""
     permission_classes = [CanViewReports]
@@ -425,23 +488,27 @@ class AttendanceReportExportView(APIView):
     permission_classes = [CanViewReports]
 
     def get(self, request):
-        date_from, date_to, summary, rows = _build_attendance_report(request)
+        date_from, date_to, rows = _daily_attendance_rows(request)
 
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = 'تقرير الحضور'
+        ws.title = 'تفصيل الحضور اليومي'
         ws.sheet_view.rightToLeft = True
+
+        headers = ['التاريخ', 'اليوم', 'رقم الملف', 'اسم الطالب', 'الفرع',
+                   'الحالة', 'وقت الحضور', 'وقت الانصراف', 'السبب / الملاحظات']
+        widths  = [13, 11, 14, 26, 18, 14, 12, 12, 40]
+        ncols   = len(headers)
 
         title_fill = PatternFill(start_color='0F2A47', end_color='0F2A47', fill_type='solid')
         title_font = Font(color='FFFFFF', bold=True, size=13)
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
-        cell = ws.cell(row=1, column=1, value=f'تقرير الحضور والانصراف — من {date_from} إلى {date_to}')
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+        cell = ws.cell(row=1, column=1, value=f'تقرير الحضور والانصراف اليومي — من {date_from} إلى {date_to}')
         cell.fill = title_fill
         cell.font = title_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[1].height = 24
 
-        headers = ['رقم الملف', 'اسم الطالب', 'الفرع', 'حاضر', 'غائب', 'متأخر', 'غياب بعذر', 'انصراف مبكر', 'أيام الدراسة المتوقعة', 'نسبة الحضور %']
         header_fill = PatternFill(start_color='1E3A5F', end_color='1E3A5F', fill_type='solid')
         header_font = Font(color='FFFFFF', bold=True, size=11)
         ws.row_dimensions[2].height = 22
@@ -450,18 +517,20 @@ class AttendanceReportExportView(APIView):
             c.fill = header_fill
             c.font = header_font
             c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            ws.column_dimensions[c.column_letter].width = 16
+            ws.column_dimensions[c.column_letter].width = widths[col_idx - 1]
 
         alt_fill = PatternFill(start_color='EEF2F8', end_color='EEF2F8', fill_type='solid')
         for row_idx, r in enumerate(rows, 3):
             values = [
-                r['file_number'], r['student_name'], r['branch_name'] or '',
-                r['present'], r['absent'], r['late'], r['excused_absence'], r['early_leave'],
-                r['total'], r['attendance_rate'],
+                str(r['date']), r['weekday'], r['file_number'], r['student_name'],
+                r['branch_name'], r['status'], r['check_in'], r['check_out'], r['note'],
             ]
             for col_idx, value in enumerate(values, 1):
                 c = ws.cell(row=row_idx, column=col_idx, value=value)
-                c.alignment = Alignment(horizontal='center', vertical='center')
+                c.alignment = Alignment(
+                    horizontal='center', vertical='center',
+                    wrap_text=(col_idx == ncols),
+                )
                 if row_idx % 2 == 0:
                     c.fill = alt_fill
 
@@ -471,5 +540,5 @@ class AttendanceReportExportView(APIView):
         response['Content-Disposition'] = f'attachment; filename="attendance_report_{date_from}_{date_to}.xlsx"'
         wb.save(response)
 
-        log_action(request, 'export', None, f'تصدير تقرير الحضور والانصراف ({date_from} إلى {date_to})')
+        log_action(request, 'export', None, f'تصدير تقرير الحضور والانصراف اليومي ({date_from} إلى {date_to})')
         return response
