@@ -4,6 +4,7 @@ from rest_framework.permissions import SAFE_METHODS
 
 from apps.accounts.permissions import IsAdmin
 from apps.students.models import Student
+from apps.students.views import _scope_by_student, _assert_student_in_scope
 
 from .models import Assessment, StudentAssessment
 from .permissions import CanViewAssessments, CanEditAssessments
@@ -60,15 +61,19 @@ class StudentAssessmentListCreateView(generics.ListCreateAPIView):
         student_pk = self.kwargs.get('student_pk')
         qs = StudentAssessment.objects.select_related('assessment', 'started_by').prefetch_related('answers')
         if student_pk:
-            return qs.filter(student_id=student_pk)
-        return qs
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
 
     def perform_create(self, serializer):
         student_pk = self.kwargs.get('student_pk')
         if student_pk:
             student = get_object_or_404(Student, pk=student_pk)
+            _assert_student_in_scope(self.request.user, student)
             serializer.save(student=student)
         else:
+            student = serializer.validated_data.get('student')
+            if student is not None:
+                _assert_student_in_scope(self.request.user, student)
             serializer.save()
 
 
@@ -84,5 +89,5 @@ class StudentAssessmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         student_pk = self.kwargs.get('student_pk')
         qs = StudentAssessment.objects.select_related('assessment', 'started_by').prefetch_related('answers')
         if student_pk:
-            return qs.filter(student_id=student_pk)
-        return qs
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)

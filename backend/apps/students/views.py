@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -30,7 +31,7 @@ from apps.core.utils import log_action
 
 
 def _apply_scope(user, qs):
-    """Restrict queryset to the user's assigned branch or city. Admin sees all."""
+    """Restrict a Student queryset to the user's assigned branch or city. Admin sees all."""
     if user.is_admin:
         return qs
     if user.assigned_branch_id:
@@ -38,6 +39,50 @@ def _apply_scope(user, qs):
     if user.assigned_city:
         return qs.filter(branch__city=user.assigned_city)
     return qs
+
+
+def _scope_branch_ids(user):
+    """أرقام الفروع المسموح بها للمستخدم: None تعني بلا تقييد (مدير، أو مستخدم بلا
+    فرع/مدينة معيَّنة). عدا ذلك قائمة أرقام فروع — فرعه المعيَّن، أو كل فروع مدينته."""
+    if user.is_admin:
+        return None
+    if user.assigned_branch_id:
+        return [user.assigned_branch_id]
+    if user.assigned_city:
+        from apps.core.models import Branch
+        return list(
+            Branch.objects.filter(city=user.assigned_city).values_list('id', flat=True)
+        )
+    return None
+
+
+def _scope_by_student(user, qs, path='student'):
+    """يقصر queryset لنموذج مرتبط بـ Student على فروع المستخدم عبر <path>__branch_id."""
+    ids = _scope_branch_ids(user)
+    if ids is None:
+        return qs
+    return qs.filter(**{f'{path}__branch_id__in': ids})
+
+
+def _assert_student_in_scope(user, student):
+    """يرفع 403 إن كان الطالب خارج نطاق فروع المستخدم (يُستخدم عند الإنشاء/التعديل
+    حيث نجلب الطالب بـ get_object_or_404)."""
+    ids = _scope_branch_ids(user)
+    if ids is not None and student.branch_id not in ids:
+        raise PermissionDenied('لا تملك صلاحية الوصول لبيانات هذا الفرع')
+
+
+def _assert_branch_in_scope(user, branch_id):
+    """يرفع 403 إن طلب مستخدم مقيَّد فرعًا خارج نطاقه (لمسارات معامل branch الصريح)."""
+    ids = _scope_branch_ids(user)
+    if ids is None or branch_id is None:
+        return
+    try:
+        branch_id = int(branch_id)
+    except (TypeError, ValueError):
+        raise PermissionDenied('معامل الفرع غير صالح')
+    if branch_id not in ids:
+        raise PermissionDenied('لا تملك صلاحية الوصول لبيانات هذا الفرع')
 
 
 class StudentListCreateView(generics.ListCreateAPIView):
@@ -156,7 +201,10 @@ class GuardianListCreateView(generics.ListCreateAPIView):
     serializer_class = GuardianSerializer
 
     def get_queryset(self):
-        return Guardian.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            Guardian.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -165,6 +213,7 @@ class GuardianListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, student)
         guardian = serializer.save(student=student)
         log_action(self.request, 'create', guardian, str(guardian))
 
@@ -173,7 +222,10 @@ class GuardianDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = GuardianSerializer
 
     def get_queryset(self):
-        return Guardian.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            Guardian.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -203,6 +255,7 @@ class FamilyInfoView(APIView):
 
     def get(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         try:
             family = student.family_info
         except FamilyInfo.DoesNotExist:
@@ -215,6 +268,7 @@ class FamilyInfoView(APIView):
 
     def post(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         if hasattr(student, 'family_info'):
             return Response(
                 {'detail': 'يوجد بالفعل سجل أسرة لهذا الطالب. استخدم PUT للتعديل.'},
@@ -229,6 +283,7 @@ class FamilyInfoView(APIView):
 
     def put(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         try:
             family = student.family_info
         except FamilyInfo.DoesNotExist:
@@ -253,7 +308,10 @@ class StudentAttachmentListView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return StudentAttachment.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            StudentAttachment.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -262,6 +320,7 @@ class StudentAttachmentListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, student)
         attachment = serializer.save(student=student, uploaded_by=self.request.user)
         log_action(self.request, 'create', attachment, str(attachment))
 
@@ -271,7 +330,10 @@ class StudentAttachmentDeleteView(generics.DestroyAPIView):
     permission_classes = [CanDelete]
 
     def get_queryset(self):
-        return StudentAttachment.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            StudentAttachment.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
     def perform_destroy(self, instance):
         log_action(self.request, 'delete', instance, str(instance))
@@ -974,16 +1036,12 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        if student_pk:
-            return (
-                StudentAttendance.objects
-                .filter(student_id=student_pk)
-                .select_related('branch', 'recorded_by', 'updated_by')
-            )
-        return (
-            StudentAttendance.objects
-            .select_related('student', 'branch', 'recorded_by', 'updated_by')
+        qs = StudentAttendance.objects.select_related(
+            'student', 'branch', 'recorded_by', 'updated_by'
         )
+        if student_pk:
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
 
     def perform_create(self, serializer):
         from django.db import IntegrityError
@@ -991,6 +1049,7 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
         try:
             if student_pk:
                 student = get_object_or_404(Student, pk=student_pk)
+                _assert_student_in_scope(self.request.user, student)
                 # Manual duplicate-date check (UniqueTogetherValidator removed from serializer)
                 date = serializer.validated_data.get('attendance_date')
                 if StudentAttendance.objects.filter(student=student, attendance_date=date).exists():
@@ -999,6 +1058,9 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
                     )
                 serializer.save(student=student)
             else:
+                student = serializer.validated_data.get('student')
+                if student is not None:
+                    _assert_student_in_scope(self.request.user, student)
                 serializer.save()
         except IntegrityError:
             raise drf_serializers.ValidationError(
@@ -1018,10 +1080,10 @@ class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = StudentAttendance.objects.select_related('branch', 'recorded_by', 'updated_by')
+        qs = StudentAttendance.objects.select_related('student', 'branch', 'recorded_by', 'updated_by')
         if student_pk:
-            return qs.filter(student_id=student_pk)
-        return qs
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
 
 
 # ── الجدول الدراسي ─────────────────────────────────────────────────────────────
@@ -1042,8 +1104,8 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
         student_pk = self.kwargs.get('student_pk')
         qs = StudentSchedule.objects.select_related('student', 'specialist')
         if student_pk:
-            return qs.filter(student_id=student_pk)
-        return qs
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
 
     def perform_create(self, serializer):
         from django.db import IntegrityError
@@ -1051,6 +1113,7 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
         try:
             if student_pk:
                 student = get_object_or_404(Student, pk=student_pk)
+                _assert_student_in_scope(self.request.user, student)
                 day = serializer.validated_data.get('day')
                 start_time = serializer.validated_data.get('start_time')
                 if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
@@ -1059,6 +1122,9 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
                     )
                 serializer.save(student=student)
             else:
+                student = serializer.validated_data.get('student')
+                if student is not None:
+                    _assert_student_in_scope(self.request.user, student)
                 serializer.save()
         except IntegrityError:
             raise drf_serializers.ValidationError(
@@ -1080,8 +1146,8 @@ class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
         student_pk = self.kwargs.get('student_pk')
         qs = StudentSchedule.objects.select_related('student', 'specialist')
         if student_pk:
-            return qs.filter(student_id=student_pk)
-        return qs
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
 
 
 class ScheduleBulkCreateView(APIView):
@@ -1109,10 +1175,16 @@ class ScheduleBulkCreateView(APIView):
             return Response(time_check.errors, status=status.HTTP_400_BAD_REQUEST)
         start_time = time_check.validated_data['start_time']
 
+        allowed_ids = _scope_branch_ids(request.user)
+
         created, skipped, errors = 0, 0, []
         for sid in student_ids:
             student = Student.objects.filter(pk=sid).first()
             if not student:
+                continue
+            if allowed_ids is not None and student.branch_id not in allowed_ids:
+                skipped += 1
+                errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': 'خارج نطاق فرعك'})
                 continue
             if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
                 skipped += 1
@@ -1140,6 +1212,7 @@ class ScheduleClassesView(APIView):
         branch_id = request.query_params.get('branch')
         if not branch_id:
             return Response({'detail': 'معامل branch مطلوب.'}, status=status.HTTP_400_BAD_REQUEST)
+        _assert_branch_in_scope(request.user, branch_id)
 
         slots = (
             StudentSchedule.objects
@@ -1193,8 +1266,11 @@ class AttendanceSheetView(APIView):
 
         if not date:
             return Response({'error': 'date parameter is required'}, status=400)
+        if branch:
+            _assert_branch_in_scope(request.user, branch)
 
         students_qs = Student.objects.filter(status='active').select_related('branch')
+        students_qs = _apply_scope(request.user, students_qs)
         if branch:
             students_qs = students_qs.filter(branch_id=branch)
         if search:
@@ -1250,6 +1326,7 @@ class MedicalProfileView(APIView):
 
     def get(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         try:
             profile = student.medical_profile
         except StudentMedicalProfile.DoesNotExist:
@@ -1258,6 +1335,7 @@ class MedicalProfileView(APIView):
 
     def post(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         if hasattr(student, 'medical_profile'):
             return Response(
                 {'detail': 'يوجد بالفعل ملف طبي لهذا الطالب. استخدم PUT للتعديل.'},
@@ -1272,6 +1350,7 @@ class MedicalProfileView(APIView):
 
     def put(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
         try:
             profile = student.medical_profile
         except StudentMedicalProfile.DoesNotExist:
@@ -1294,10 +1373,14 @@ class MedicalVisitListCreateView(generics.ListCreateAPIView):
         return [CanViewMedical()]
 
     def get_queryset(self):
-        return MedicalVisit.objects.filter(student_id=self.kwargs['student_pk']).select_related('evaluated_by')
+        return _scope_by_student(
+            self.request.user,
+            MedicalVisit.objects.filter(student_id=self.kwargs['student_pk']).select_related('evaluated_by'),
+        )
 
     def perform_create(self, serializer):
         student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, student)
         visit = serializer.save(student=student)
         log_action(self.request, 'create', visit, str(visit))
 
@@ -1307,7 +1390,10 @@ class MedicalVisitDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [CanEditMedical]
 
     def get_queryset(self):
-        return MedicalVisit.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            MedicalVisit.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
 
 class MedicationListCreateView(generics.ListCreateAPIView):
@@ -1320,10 +1406,14 @@ class MedicationListCreateView(generics.ListCreateAPIView):
         return [CanViewMedical()]
 
     def get_queryset(self):
-        return Medication.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            Medication.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
     def perform_create(self, serializer):
         student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, student)
         med = serializer.save(student=student)
         log_action(self.request, 'create', med, str(med))
 
@@ -1333,7 +1423,10 @@ class MedicationDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [CanEditMedical]
 
     def get_queryset(self):
-        return Medication.objects.filter(student_id=self.kwargs['student_pk'])
+        return _scope_by_student(
+            self.request.user,
+            Medication.objects.filter(student_id=self.kwargs['student_pk']),
+        )
 
 
 class DailyCheckInListCreateView(generics.ListCreateAPIView):
@@ -1348,15 +1441,17 @@ class DailyCheckInListCreateView(generics.ListCreateAPIView):
         return [CanViewMedical()]
 
     def get_queryset(self):
-        return (
+        return _scope_by_student(
+            self.request.user,
             DailyMedicalCheckIn.objects
             .filter(student_id=self.kwargs['student_pk'])
             .select_related('checked_by')
-            .prefetch_related('medication_records__medication')
+            .prefetch_related('medication_records__medication'),
         )
 
     def perform_create(self, serializer):
         student = get_object_or_404(Student, pk=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, student)
         check_date = serializer.validated_data.get('check_date')
         if DailyMedicalCheckIn.objects.filter(student=student, check_date=check_date).exists():
             raise drf_serializers.ValidationError(
@@ -1371,10 +1466,11 @@ class DailyCheckInDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [CanEditMedical]
 
     def get_queryset(self):
-        return (
+        return _scope_by_student(
+            self.request.user,
             DailyMedicalCheckIn.objects
             .filter(student_id=self.kwargs['student_pk'])
-            .prefetch_related('medication_records__medication')
+            .prefetch_related('medication_records__medication'),
         )
 
 
@@ -1394,6 +1490,7 @@ class MedicalCheckInSheetView(APIView):
             return Response({'error': 'date parameter is required'}, status=400)
         if not branch:
             return Response({'error': 'branch parameter is required'}, status=400)
+        _assert_branch_in_scope(request.user, branch)
 
         students_qs = Student.objects.filter(status='active', branch_id=branch).select_related('branch')
         if search:
