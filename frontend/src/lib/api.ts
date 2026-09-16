@@ -167,6 +167,11 @@ export const busesApi = {
   delete: (id: number)                       => api.delete(`/buses/${id}/`),
 };
 
+export const busShiftsApi = {
+  // POST يعمل upsert — ينشئ الفترة لو غير موجودة أو يحدّثها لو موجودة
+  save: (busId: number, data: Record<string, unknown>) => api.post(`/buses/${busId}/shifts/`, data),
+};
+
 // ─────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────

@@ -107,6 +107,33 @@ class Bus(models.Model):
         return f'{self.brand} — {self.plate_number}'
 
 
+class BusShift(models.Model):
+    """فترة تشغيل على باص معيّن (صباحي/مسائي) — لكل فترة سائق ومشرف/ة مستقلان،
+    بما إن نفس الباص (المركبة) قد يشتغل عليه طاقم مختلف صباحًا عن مساءً."""
+    class Shift(models.TextChoices):
+        MORNING = 'morning', 'صباحي'
+        EVENING = 'evening', 'مسائي'
+
+    bus = models.ForeignKey(
+        Bus, on_delete=models.CASCADE,
+        related_name='shifts', verbose_name='الباص',
+    )
+    shift = models.CharField(max_length=10, choices=Shift.choices, verbose_name='الفترة')
+    driver_name     = models.CharField(max_length=150, blank=True, verbose_name='اسم السائق')
+    supervisor_name = models.CharField(max_length=150, blank=True, verbose_name='اسم المشرف/ة')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'فترة تشغيل الباص'
+        verbose_name_plural  = 'فترات تشغيل الباصات'
+        unique_together      = ('bus', 'shift')
+        ordering             = ['bus', 'shift']
+
+    def __str__(self):
+        return f'{self.bus} — {self.get_shift_display()}'
+
+
 class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = 'create', 'إضافة'

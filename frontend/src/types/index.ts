@@ -56,6 +56,19 @@ export interface Holiday {
   created_at: string;
 }
 
+export type BusShiftType = 'morning' | 'evening';
+
+export interface BusShift {
+  id: number;
+  bus: number;
+  shift: BusShiftType;
+  shift_display: string;
+  driver_name: string;
+  supervisor_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Bus {
   id: number;
   chassis_number: string;
@@ -65,6 +78,7 @@ export interface Bus {
   serial_number: string;
   branch: number;
   branch_name: string;
+  shifts: BusShift[];
   registration_expiry: string;
   inspection_expiry: string;
   created_at: string;
@@ -146,6 +160,9 @@ export interface Student {
   branch_name?: string | null;
   bus?: number | null;
   bus_display?: string | null;
+  bus_shift?: BusShiftType | '';
+  bus_shift_display?: string | null;
+  residence_address?: string;
   first_name: string;
   middle_name: string;
   grandfather_name: string;
@@ -212,6 +229,8 @@ export interface StudentFormData {
   referral_source_detail?: string;
   // نقل
   bus?: number | string;
+  bus_shift?: BusShiftType | '';
+  residence_address?: string;
   // حالة
   status: StudentStatus;
   registration_date: string;

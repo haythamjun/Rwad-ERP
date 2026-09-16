@@ -37,4 +37,4 @@ class StudentFilter(django_filters.FilterSet):
 
     class Meta:
         model  = Student
-        fields = ['status', 'gender', 'nationality', 'referral_source', 'branch']
+        fields = ['status', 'gender', 'nationality', 'referral_source', 'branch', 'bus']

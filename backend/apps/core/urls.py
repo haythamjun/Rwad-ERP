@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     AuditLogListView, BranchListCreateView, BranchDetailView,
     BusListCreateView, BusDetailView, DashboardStatsView,
+    BusShiftListCreateView, BusShiftDetailView,
     SiteSettingsView, AttendanceReportView, AttendanceReportExportView,
     AcademicTermListCreateView, AcademicTermDetailView,
     HolidayListCreateView, HolidayDetailView,
@@ -13,6 +14,8 @@ urlpatterns = [
     path('branches/<int:pk>/',  BranchDetailView.as_view(),    name='branch-detail'),
     path('buses/',              BusListCreateView.as_view(),   name='bus-list'),
     path('buses/<int:pk>/',     BusDetailView.as_view(),       name='bus-detail'),
+    path('buses/<int:bus_pk>/shifts/',         BusShiftListCreateView.as_view(), name='bus-shift-list'),
+    path('buses/<int:bus_pk>/shifts/<int:pk>/', BusShiftDetailView.as_view(),    name='bus-shift-detail'),
     path('dashboard/stats/',    DashboardStatsView.as_view(),  name='dashboard-stats'),
     path('settings/',           SiteSettingsView.as_view(),    name='site-settings'),
     # الفصول الدراسية والعطل الرسمية — لاحتساب أيام الدراسة المتوقعة بالتقارير

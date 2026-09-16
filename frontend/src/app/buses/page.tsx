@@ -2,15 +2,20 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { busesApi, branchesApi } from '@/lib/api';
+import { busesApi, busShiftsApi, branchesApi, studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { Bus as BusType, Branch } from '@/types';
+import type { Bus as BusType, Branch, Student, BusShiftType } from '@/types';
 import Header from '@/components/layout/Header';
 import {
-  Plus, Pencil, Trash2, X, Save,
-  Bus as BusIcon, ShieldAlert, Building2, AlertTriangle,
+  Plus, Pencil, Trash2, X, Save, Users, UserCog,
+  Bus as BusIcon, ShieldAlert, Building2, AlertTriangle, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const SHIFT_LABELS: { value: BusShiftType; label: string }[] = [
+  { value: 'morning', label: 'الفترة الصباحية' },
+  { value: 'evening', label: 'الفترة المسائية' },
+];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR + 1 - 1980 + 1 }, (_, i) => CURRENT_YEAR + 1 - i);
@@ -39,6 +44,16 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
     branch:               bus?.branch ? String(bus.branch) : '',
     registration_expiry:  bus?.registration_expiry  || '',
     inspection_expiry:    bus?.inspection_expiry    || '',
+  });
+  const [shifts, setShifts] = useState<Record<BusShiftType, { driver_name: string; supervisor_name: string }>>({
+    morning: {
+      driver_name: bus?.shifts.find(s => s.shift === 'morning')?.driver_name || '',
+      supervisor_name: bus?.shifts.find(s => s.shift === 'morning')?.supervisor_name || '',
+    },
+    evening: {
+      driver_name: bus?.shifts.find(s => s.shift === 'evening')?.driver_name || '',
+      supervisor_name: bus?.shifts.find(s => s.shift === 'evening')?.supervisor_name || '',
+    },
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -162,13 +177,36 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
               {errors.inspection_expiry && <p className="text-red-500 text-xs mt-1">{errors.inspection_expiry}</p>}
             </div>
           </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <p className="form-label flex items-center gap-1 mb-3"><UserCog size={12}/> طاقم الفترات (سائق ومشرف/ة كل فترة على حدة)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {SHIFT_LABELS.map(({ value, label }) => (
+                <div key={value} className="bg-gray-50 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-semibold text-gray-600">{label}</p>
+                  <input
+                    className="form-input py-1.5 text-sm"
+                    placeholder="اسم السائق"
+                    value={shifts[value].driver_name}
+                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], driver_name: e.target.value } }))}
+                  />
+                  <input
+                    className="form-input py-1.5 text-sm"
+                    placeholder="اسم المشرف/ة"
+                    value={shifts[value].supervisor_name}
+                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], supervisor_name: e.target.value } }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
           <button onClick={onClose} className="btn-secondary">إلغاء</button>
           <button
             disabled={loading}
-            onClick={() => { if (validate()) onSave(form); }}
+            onClick={() => { if (validate()) onSave({ ...form, shifts }); }}
             className="btn-primary px-6"
           >
             {loading
@@ -176,6 +214,59 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
               : <span className="flex items-center gap-1.5"><Save size={14}/> حفظ</span>
             }
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bus Roster Modal ───────────────────────────────────────────────────────────
+function BusStudentsModal({ bus, onClose }: { bus: BusType; onClose: () => void }) {
+  const { data: students = [], isLoading } = useQuery<Student[]>({
+    queryKey: ['bus-roster', bus.id],
+    queryFn: () => studentsApi.list({ bus: bus.id, page_size: 200 }).then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-base font-bold text-gray-800">طلاب الباص — {bus.brand} {bus.plate_number}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{students.length} طالب مسند</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
+        </div>
+        <div className="p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="animate-spin w-6 h-6 border-4 border-primary-600 border-t-transparent rounded-full" />
+            </div>
+          ) : students.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-8">لا يوجد طلاب مسندون لهذا الباص</p>
+          ) : (
+            <div className="space-y-2">
+              {students.map((s) => (
+                <div key={s.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="font-medium text-gray-800 text-sm">{s.full_name}</p>
+                    {s.bus_shift_display && (
+                      <span className="badge text-xs bg-primary-50 text-primary-700">{s.bus_shift_display}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{s.file_number}</p>
+                  {s.residence_address && (
+                    <p className="text-xs text-gray-500 mt-1 flex items-start gap-1">
+                      <MapPin size={11} className="mt-0.5 flex-shrink-0"/> {s.residence_address}
+                    </p>
+                  )}
+                  {s.primary_guardian && (
+                    <p className="text-xs text-gray-400 mt-1">ولي الأمر: {s.primary_guardian.name} — {s.primary_guardian.phone}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -190,6 +281,7 @@ export default function BusesPage() {
   const [modalOpen,  setModalOpen]  = useState(false);
   const [editTarget, setEditTarget] = useState<BusType | null>(null);
   const [deleteId,   setDeleteId]   = useState<number | null>(null);
+  const [rosterBus,  setRosterBus]  = useState<BusType | null>(null);
 
   const { data: buses = [], isLoading } = useQuery<BusType[]>({
     queryKey: ['buses'],
@@ -201,14 +293,33 @@ export default function BusesPage() {
     queryFn:  () => branchesApi.list().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
+  // تُحفَظ فترة الباص فقط لو أُدخل اسم سائق أو مشرف/ة لها — لا نُنشئ فترة فاضية
+  const saveShifts = async (busId: number, shifts: Record<string, { driver_name: string; supervisor_name: string }>) => {
+    await Promise.all(
+      Object.entries(shifts)
+        .filter(([, v]) => v.driver_name.trim() || v.supervisor_name.trim())
+        .map(([shift, v]) => busShiftsApi.save(busId, { shift, ...v }))
+    );
+  };
+
   const createMutation = useMutation({
-    mutationFn: (d: Record<string, unknown>) => busesApi.create(d),
+    mutationFn: async (d: Record<string, unknown>) => {
+      const { shifts, ...busData } = d;
+      const res = await busesApi.create(busData);
+      await saveShifts(res.data.id, shifts as Record<string, { driver_name: string; supervisor_name: string }>);
+      return res;
+    },
     onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['buses'] }); closeModal(); toast.success('تم إضافة الباص'); },
     onError:    () => toast.error('حدث خطأ أثناء الحفظ — تأكد أن رقم الهيكل واللوحة غير مكررين'),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, d }: { id: number; d: Record<string, unknown> }) => busesApi.update(id, d),
+    mutationFn: async ({ id, d }: { id: number; d: Record<string, unknown> }) => {
+      const { shifts, ...busData } = d;
+      const res = await busesApi.update(id, busData);
+      await saveShifts(id, shifts as Record<string, { driver_name: string; supervisor_name: string }>);
+      return res;
+    },
     onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['buses'] }); closeModal(); toast.success('تم تحديث الباص'); },
     onError:    () => toast.error('حدث خطأ أثناء التحديث'),
   });
@@ -300,9 +411,25 @@ export default function BusesPage() {
                         <span className="text-xs text-gray-400 font-mono" dir="ltr">تسلسلي: {b.serial_number}</span>
                       )}
                     </div>
+                    {b.shifts.length > 0 && (
+                      <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                        {b.shifts.map((s) => (
+                          <span key={s.id} className="flex items-center gap-1 text-xs bg-primary-50 text-primary-700 rounded-lg px-2 py-0.5">
+                            <UserCog size={11}/> {s.shift_display}: {[s.driver_name, s.supervisor_name].filter(Boolean).join(' — ') || '—'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setRosterBus(b)}
+                      className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                      title="عرض الطلاب"
+                    >
+                      <Users size={14}/>
+                    </button>
                     <button
                       onClick={() => { setEditTarget(b); setModalOpen(true); }}
                       className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -337,6 +464,8 @@ export default function BusesPage() {
           }}
         />
       )}
+
+      {rosterBus && <BusStudentsModal bus={rosterBus} onClose={() => setRosterBus(null)} />}
 
       {deleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">

@@ -116,6 +116,7 @@ class StudentListSerializer(serializers.ModelSerializer):
     age                      = serializers.IntegerField(read_only=True)
     primary_guardian         = serializers.SerializerMethodField()
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
+    bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -128,6 +129,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'disability_type', 'disability_type_display',
             'registration_date', 'photo',
             'branch', 'branch_name',
+            'bus', 'bus_shift', 'bus_shift_display', 'residence_address',
             'primary_guardian', 'created_at', 'updated_at',
             'rejection_reason',
         ]
@@ -156,6 +158,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     created_by_name          = serializers.SerializerMethodField()
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_display               = serializers.SerializerMethodField()
+    bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -166,7 +169,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'photo',
             'branch', 'branch_name',
-            'bus', 'bus_display',
+            'bus', 'bus_display', 'bus_shift', 'bus_shift_display', 'residence_address',
             # إعاقة
             'disability_type', 'disability_type_display',
             'diagnosis', 'iq_score',
@@ -214,7 +217,7 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             # إحالة
             'referral_source', 'referral_source_detail',
             # نقل
-            'bus',
+            'bus', 'bus_shift', 'residence_address',
             # حالة
             'status', 'registration_date', 'notes',
             'branch',

@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 
 from rest_framework import generics, serializers, status
@@ -11,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Q
-from .models import AuditLog, Branch, Bus, SiteSettings, AcademicTerm, Holiday
+from .models import AuditLog, Branch, Bus, BusShift, SiteSettings, AcademicTerm, Holiday
 from .permissions import CanViewReports
 from .utils import log_action
 from apps.accounts.permissions import IsManagerOrAbove, IsAdmin
@@ -158,14 +159,31 @@ class SiteSettingsView(APIView):
 
 # ── Bus ────────────────────────────────────────────────────────────────────────
 
+class BusShiftSerializer(serializers.ModelSerializer):
+    shift_display = serializers.CharField(source='get_shift_display', read_only=True)
+
+    class Meta:
+        model  = BusShift
+        fields = [
+            'id', 'bus', 'shift', 'shift_display',
+            'driver_name', 'supervisor_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'bus', 'created_at', 'updated_at']
+        # نفس حيلة "الطالب من الـ URL" المستخدمة بباقي النماذج المتداخلة — الباص
+        # يُملأ من الـ URL لا الـ body، لذلك يُزال UniqueTogetherValidator ويُنفَّذ
+        # التحقق يدويًا بالـ view (إنشاء أو تحديث الفترة الموجودة بدل رفضها).
+        validators = []
+
+
 class BusSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source='branch.name', read_only=True)
+    shifts      = BusShiftSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Bus
         fields = [
             'id', 'chassis_number', 'plate_number', 'brand', 'manufacture_year',
-            'serial_number', 'branch', 'branch_name',
+            'serial_number', 'branch', 'branch_name', 'shifts',
             'registration_expiry', 'inspection_expiry',
             'created_at', 'updated_at',
         ]
@@ -189,13 +207,50 @@ class BusListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return Bus.objects.select_related('branch').order_by('-created_at')
+        return Bus.objects.select_related('branch').prefetch_related('shifts').order_by('-created_at')
 
 
 class BusDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = BusSerializer
     permission_classes = [IsAdmin]
-    queryset           = Bus.objects.select_related('branch')
+    queryset           = Bus.objects.select_related('branch').prefetch_related('shifts')
+
+
+class BusShiftListCreateView(generics.ListCreateAPIView):
+    """فترات تشغيل باص معيّن (صباحي/مسائي) — POST تنشئ الفترة لو ما كانت موجودة،
+    أو تُحدِّثها لو كانت موجودة (upsert)، عشان الواجهة تتعامل معها كحقل واحد بسيط."""
+    serializer_class = BusShiftSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAdmin()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        return BusShift.objects.filter(bus_id=self.kwargs['bus_pk'])
+
+    def create(self, request, *args, **kwargs):
+        bus = get_object_or_404(Bus, pk=self.kwargs['bus_pk'])
+        shift = request.data.get('shift')
+        existing = BusShift.objects.filter(bus=bus, shift=shift).first()
+        if existing:
+            serializer = self.get_serializer(existing, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(bus=bus)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class BusShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class   = BusShiftSerializer
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        return BusShift.objects.filter(bus_id=self.kwargs['bus_pk'])
 
 
 # ── Dashboard stats ────────────────────────────────────────────────────────────

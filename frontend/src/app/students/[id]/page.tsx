@@ -497,6 +497,8 @@ export default function StudentDetailPage() {
               <InfoRow label="الجنسية"                 value={student.nationality} />
               <InfoRow label="الفرع"                   value={student.branch_name || '—'} />
               <InfoRow label="الباص"                   value={student.bus_display || '—'} />
+              <InfoRow label="فترة الباص"              value={student.bus_shift_display || '—'} />
+              <InfoRow label="عنوان السكن"             value={student.residence_address || '—'} />
               <InfoRow label="الحالة"                  value={student.status_display} />
               <InfoRow label="تاريخ التسجيل"          value={formatDate(student.registration_date)} />
             </div>

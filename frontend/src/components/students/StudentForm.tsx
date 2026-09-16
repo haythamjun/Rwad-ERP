@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Save, Upload, X } from 'lucide-react';
+import { Save, Upload, X, MapPin } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -63,6 +63,8 @@ const schema = z.object({
   notes:             z.string().optional(),
   branch:            z.string().optional(),
   bus:               z.string().optional(),
+  bus_shift:         z.string().optional(),
+  residence_address: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -178,6 +180,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
 
   const referralSource = watch('referral_source');
   const currentBranch  = watch('branch');
+  const currentBus     = watch('bus');
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ['branches'],
@@ -366,6 +369,27 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
               )}
             </div>
           )}
+
+          {currentBus && (
+            <div>
+              <label className="form-label">فترة الباص</label>
+              <select {...register('bus_shift')} className="form-input">
+                <option value="">-- غير محدّدة --</option>
+                <option value="morning">صباحي</option>
+                <option value="evening">مسائي</option>
+              </select>
+            </div>
+          )}
+
+          <div className="md:col-span-2">
+            <label className="form-label flex items-center gap-1"><MapPin size={12}/> عنوان السكن</label>
+            <textarea
+              {...register('residence_address')}
+              rows={2}
+              className="form-input resize-none"
+              placeholder="الحي، الشارع... (قد يختلف عن عنوان ولي الأمر إن كان الطالب يسكن عند أقارب أو غيرهم)"
+            />
+          </div>
         </div>
       </div>
 

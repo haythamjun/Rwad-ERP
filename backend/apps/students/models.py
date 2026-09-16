@@ -71,6 +71,18 @@ class Student(models.Model):
         related_name='students',
         verbose_name='الباص',
     )
+
+    class BusShiftChoice(models.TextChoices):
+        MORNING = 'morning', 'صباحي'
+        EVENING = 'evening', 'مسائي'
+
+    bus_shift = models.CharField(
+        max_length=10, choices=BusShiftChoice.choices, blank=True,
+        verbose_name='فترة الباص',
+    )
+    # منفصل تمامًا عن عنوان ولي الأمر — قد يسكن الطالب عند أقارب أو غير ولي أمره
+    residence_address = models.TextField(blank=True, verbose_name='عنوان السكن')
+
     registration_date = models.DateField(
         default=timezone.now, verbose_name='تاريخ التسجيل'
     )
