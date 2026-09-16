@@ -271,6 +271,8 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                   <option value="specialist">أخصائي</option>
                   <option value="reception">استقبال</option>
                   <option value="viewer">مشاهد</option>
+                  <option value="driver">سائق</option>
+                  <option value="bus_supervisor">مشرف/ة الباص</option>
                 </select>
               </div>
 

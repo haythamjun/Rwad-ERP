@@ -9,6 +9,8 @@ class User(AbstractUser):
         SPECIALIST = 'specialist', 'أخصائي'
         RECEPTION = 'reception', 'استقبال'
         VIEWER = 'viewer', 'مشاهد'
+        DRIVER = 'driver', 'سائق'
+        BUS_SUPERVISOR = 'bus_supervisor', 'مشرف/ة الباص'
 
     role = models.CharField(
         max_length=20,

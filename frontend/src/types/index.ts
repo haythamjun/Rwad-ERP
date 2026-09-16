@@ -63,8 +63,10 @@ export interface BusShift {
   bus: number;
   shift: BusShiftType;
   shift_display: string;
-  driver_name: string;
-  supervisor_name: string;
+  driver: number | null;
+  driver_name: string | null;
+  supervisor: number | null;
+  supervisor_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -105,7 +107,7 @@ export interface User {
   last_name: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'manager' | 'specialist' | 'reception' | 'viewer';
+  role: 'admin' | 'manager' | 'specialist' | 'reception' | 'viewer' | 'driver' | 'bus_supervisor';
   role_display: string;
   can_write: boolean;
   can_delete: boolean;

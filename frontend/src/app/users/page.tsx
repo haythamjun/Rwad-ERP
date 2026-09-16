@@ -11,11 +11,13 @@ import UserFormModal from '@/components/users/UserFormModal';
 import { ShieldAlert, UserPlus, Pencil, Trash2, Check, Shield } from 'lucide-react';
 
 const ROLE_COLORS: Record<string, string> = {
-  admin:      'bg-red-100 text-red-700',
-  manager:    'bg-orange-100 text-orange-700',
-  specialist: 'bg-blue-100 text-blue-700',
-  reception:  'bg-green-100 text-green-700',
-  viewer:     'bg-gray-100 text-gray-600',
+  admin:          'bg-red-100 text-red-700',
+  manager:        'bg-orange-100 text-orange-700',
+  specialist:     'bg-blue-100 text-blue-700',
+  reception:      'bg-green-100 text-green-700',
+  viewer:         'bg-gray-100 text-gray-600',
+  driver:         'bg-teal-100 text-teal-700',
+  bus_supervisor: 'bg-purple-100 text-purple-700',
 };
 
 export default function UsersPage() {

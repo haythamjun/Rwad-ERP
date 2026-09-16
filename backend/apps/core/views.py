@@ -160,19 +160,32 @@ class SiteSettingsView(APIView):
 # ── Bus ────────────────────────────────────────────────────────────────────────
 
 class BusShiftSerializer(serializers.ModelSerializer):
-    shift_display = serializers.CharField(source='get_shift_display', read_only=True)
+    shift_display    = serializers.CharField(source='get_shift_display', read_only=True)
+    driver_name      = serializers.SerializerMethodField()
+    supervisor_name  = serializers.SerializerMethodField()
 
     class Meta:
         model  = BusShift
         fields = [
             'id', 'bus', 'shift', 'shift_display',
-            'driver_name', 'supervisor_name', 'created_at', 'updated_at',
+            'driver', 'driver_name', 'supervisor', 'supervisor_name',
+            'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'bus', 'created_at', 'updated_at']
         # نفس حيلة "الطالب من الـ URL" المستخدمة بباقي النماذج المتداخلة — الباص
         # يُملأ من الـ URL لا الـ body، لذلك يُزال UniqueTogetherValidator ويُنفَّذ
         # التحقق يدويًا بالـ view (إنشاء أو تحديث الفترة الموجودة بدل رفضها).
         validators = []
+
+    def get_driver_name(self, obj):
+        if obj.driver:
+            return obj.driver.get_full_name() or obj.driver.username
+        return None
+
+    def get_supervisor_name(self, obj):
+        if obj.supervisor:
+            return obj.supervisor.get_full_name() or obj.supervisor.username
+        return None
 
 
 class BusSerializer(serializers.ModelSerializer):

@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { busesApi, busShiftsApi, branchesApi, studentsApi } from '@/lib/api';
+import { busesApi, busShiftsApi, branchesApi, studentsApi, authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { Bus as BusType, Branch, Student, BusShiftType } from '@/types';
+import type { Bus as BusType, Branch, Student, BusShiftType, User } from '@/types';
 import Header from '@/components/layout/Header';
 import {
   Plus, Pencil, Trash2, X, Save, Users, UserCog,
@@ -45,17 +45,24 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
     registration_expiry:  bus?.registration_expiry  || '',
     inspection_expiry:    bus?.inspection_expiry    || '',
   });
-  const [shifts, setShifts] = useState<Record<BusShiftType, { driver_name: string; supervisor_name: string }>>({
+  const [shifts, setShifts] = useState<Record<BusShiftType, { driver: string; supervisor: string }>>({
     morning: {
-      driver_name: bus?.shifts.find(s => s.shift === 'morning')?.driver_name || '',
-      supervisor_name: bus?.shifts.find(s => s.shift === 'morning')?.supervisor_name || '',
+      driver: bus?.shifts.find(s => s.shift === 'morning')?.driver ? String(bus.shifts.find(s => s.shift === 'morning')!.driver) : '',
+      supervisor: bus?.shifts.find(s => s.shift === 'morning')?.supervisor ? String(bus.shifts.find(s => s.shift === 'morning')!.supervisor) : '',
     },
     evening: {
-      driver_name: bus?.shifts.find(s => s.shift === 'evening')?.driver_name || '',
-      supervisor_name: bus?.shifts.find(s => s.shift === 'evening')?.supervisor_name || '',
+      driver: bus?.shifts.find(s => s.shift === 'evening')?.driver ? String(bus.shifts.find(s => s.shift === 'evening')!.driver) : '',
+      supervisor: bus?.shifts.find(s => s.shift === 'evening')?.supervisor ? String(bus.shifts.find(s => s.shift === 'evening')!.supervisor) : '',
     },
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ['users-for-bus-shifts'],
+    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+  const drivers = allUsers.filter(u => u.role === 'driver');
+  const supervisors = allUsers.filter(u => u.role === 'bus_supervisor');
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -184,21 +191,30 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
               {SHIFT_LABELS.map(({ value, label }) => (
                 <div key={value} className="bg-gray-50 rounded-xl p-3 space-y-2">
                   <p className="text-xs font-semibold text-gray-600">{label}</p>
-                  <input
+                  <select
                     className="form-input py-1.5 text-sm"
-                    placeholder="اسم السائق"
-                    value={shifts[value].driver_name}
-                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], driver_name: e.target.value } }))}
-                  />
-                  <input
+                    value={shifts[value].driver}
+                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], driver: e.target.value } }))}
+                  >
+                    <option value="">-- السائق --</option>
+                    {drivers.map(d => <option key={d.id} value={d.id}>{d.full_name}</option>)}
+                  </select>
+                  <select
                     className="form-input py-1.5 text-sm"
-                    placeholder="اسم المشرف/ة"
-                    value={shifts[value].supervisor_name}
-                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], supervisor_name: e.target.value } }))}
-                  />
+                    value={shifts[value].supervisor}
+                    onChange={e => setShifts(s => ({ ...s, [value]: { ...s[value], supervisor: e.target.value } }))}
+                  >
+                    <option value="">-- المشرف/ة --</option>
+                    {supervisors.map(sup => <option key={sup.id} value={sup.id}>{sup.full_name}</option>)}
+                  </select>
                 </div>
               ))}
             </div>
+            {(drivers.length === 0 || supervisors.length === 0) && (
+              <p className="text-xs text-gray-400 mt-2">
+                لإضافة سائق أو مشرف/ة جديد، أضفه أولًا من شاشة "المستخدمون" بدور "سائق" أو "مشرف/ة الباص".
+              </p>
+            )}
           </div>
         </div>
 
@@ -294,11 +310,16 @@ export default function BusesPage() {
   });
 
   // تُحفَظ فترة الباص فقط لو أُدخل اسم سائق أو مشرف/ة لها — لا نُنشئ فترة فاضية
-  const saveShifts = async (busId: number, shifts: Record<string, { driver_name: string; supervisor_name: string }>) => {
+  // تُحفَظ فترة الباص فقط لو اختير سائق أو مشرف/ة لها — لا نُنشئ فترة فاضية
+  const saveShifts = async (busId: number, shifts: Record<string, { driver: string; supervisor: string }>) => {
     await Promise.all(
       Object.entries(shifts)
-        .filter(([, v]) => v.driver_name.trim() || v.supervisor_name.trim())
-        .map(([shift, v]) => busShiftsApi.save(busId, { shift, ...v }))
+        .filter(([, v]) => v.driver || v.supervisor)
+        .map(([shift, v]) => busShiftsApi.save(busId, {
+          shift,
+          driver: v.driver || null,
+          supervisor: v.supervisor || null,
+        }))
     );
   };
 
@@ -306,7 +327,7 @@ export default function BusesPage() {
     mutationFn: async (d: Record<string, unknown>) => {
       const { shifts, ...busData } = d;
       const res = await busesApi.create(busData);
-      await saveShifts(res.data.id, shifts as Record<string, { driver_name: string; supervisor_name: string }>);
+      await saveShifts(res.data.id, shifts as Record<string, { driver: string; supervisor: string }>);
       return res;
     },
     onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['buses'] }); closeModal(); toast.success('تم إضافة الباص'); },
@@ -317,7 +338,7 @@ export default function BusesPage() {
     mutationFn: async ({ id, d }: { id: number; d: Record<string, unknown> }) => {
       const { shifts, ...busData } = d;
       const res = await busesApi.update(id, busData);
-      await saveShifts(id, shifts as Record<string, { driver_name: string; supervisor_name: string }>);
+      await saveShifts(id, shifts as Record<string, { driver: string; supervisor: string }>);
       return res;
     },
     onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['buses'] }); closeModal(); toast.success('تم تحديث الباص'); },

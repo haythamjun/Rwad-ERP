@@ -119,8 +119,16 @@ class BusShift(models.Model):
         related_name='shifts', verbose_name='الباص',
     )
     shift = models.CharField(max_length=10, choices=Shift.choices, verbose_name='الفترة')
-    driver_name     = models.CharField(max_length=150, blank=True, verbose_name='اسم السائق')
-    supervisor_name = models.CharField(max_length=150, blank=True, verbose_name='اسم المشرف/ة')
+    driver = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, limit_choices_to={'role': 'driver'},
+        related_name='driven_bus_shifts', verbose_name='السائق',
+    )
+    supervisor = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, limit_choices_to={'role': 'bus_supervisor'},
+        related_name='supervised_bus_shifts', verbose_name='المشرف/ة',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
