@@ -422,7 +422,7 @@ class MedicalVisitSerializer(serializers.ModelSerializer):
     class Meta:
         model  = MedicalVisit
         fields = [
-            'id', 'student', 'visit_date', 'status', 'status_display', 'notes',
+            'id', 'student', 'visit_date', 'status', 'status_display', 'temperature', 'notes',
             'evaluated_by', 'evaluated_by_name', 'created_at',
         ]
         read_only_fields = ['id', 'student', 'evaluated_by', 'created_at']

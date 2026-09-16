@@ -23,6 +23,11 @@ function todayArabic(): string {
   });
 }
 
+// "ابنكم" أو "ابنتكم" حسب جنس الطالب الفعلي — بدل عرض الاثنين معًا دائمًا
+function childTerm(gender: Student['gender']): string {
+  return gender === 'female' ? 'ابنتكم' : 'ابنكم';
+}
+
 // ── Letter HTML (full printable document) ─────────────────────────────────────
 
 interface CenterInfo {
@@ -161,7 +166,7 @@ body{
   <p class="para">السلام عليكم ورحمة الله وبركاته،</p>
 
   <p class="para">
-    يسعد إدارة ${center.nameAr} أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز،
+    يسعد إدارة ${center.nameAr} أن تُبشّركم بقبول وتسجيل ${childTerm(student.gender)} في المركز،
     وذلك بعد استيفاء جميع الشروط والمتطلبات المطلوبة. ونسأل الله تعالى أن يُوفّق
     الجميع لما فيه خير المستفيد وأسرته الكريمة.
   </p>
@@ -327,7 +332,7 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
               </p>
               <p className="text-[12px] text-gray-500 mb-3">السلام عليكم ورحمة الله وبركاته،</p>
               <p className="text-[12px] text-gray-600 mb-4 leading-relaxed">
-                يسعد إدارة {center.nameAr} أن تُبشّركم بقبول وتسجيل ابنكم / كريمتكم في المركز...
+                يسعد إدارة {center.nameAr} أن تُبشّركم بقبول وتسجيل {childTerm(student.gender)} في المركز...
               </p>
 
               {/* Student card */}

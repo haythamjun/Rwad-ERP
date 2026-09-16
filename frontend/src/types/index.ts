@@ -460,6 +460,7 @@ export interface MedicalVisit {
   visit_date: string;
   status: MedicalVisitStatus;
   status_display: string;
+  temperature?: number | string | null;
   notes?: string;
   evaluated_by?: number | null;
   evaluated_by_name?: string | null;

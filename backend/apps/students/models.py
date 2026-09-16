@@ -497,6 +497,9 @@ class MedicalVisit(models.Model):
     )
     visit_date   = models.DateField(verbose_name='تاريخ الزيارة')
     status       = models.CharField(max_length=10, choices=Status.choices, verbose_name='الحالة')
+    temperature  = models.DecimalField(
+        max_digits=4, decimal_places=1, null=True, blank=True, verbose_name='درجة الحرارة',
+    )  # متطلب وزاري — تُسجَّل بكل زيارة تقييم دورية
     notes        = models.TextField(blank=True, verbose_name='ملاحظات')
     evaluated_by = models.ForeignKey(
         'accounts.User', on_delete=models.SET_NULL,

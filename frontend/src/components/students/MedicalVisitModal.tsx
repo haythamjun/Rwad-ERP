@@ -6,9 +6,10 @@ import { z } from 'zod';
 import { X, Save } from 'lucide-react';
 
 const schema = z.object({
-  visit_date: z.string().min(1, 'تاريخ الزيارة مطلوب'),
-  status:     z.enum(['stable', 'unstable']),
-  notes:      z.string().optional(),
+  visit_date:  z.string().min(1, 'تاريخ الزيارة مطلوب'),
+  status:      z.enum(['stable', 'unstable']),
+  temperature: z.string().optional(),
+  notes:       z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -24,7 +25,7 @@ const today = new Date().toISOString().split('T')[0];
 export default function MedicalVisitModal({ onClose, onSave, loading }: Props) {
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { visit_date: today, status: 'stable', notes: '' },
+    defaultValues: { visit_date: today, status: 'stable', temperature: '', notes: '' },
   });
 
   return (
@@ -35,8 +36,11 @@ export default function MedicalVisitModal({ onClose, onSave, loading }: Props) {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
-        <form onSubmit={handleSubmit((v) => onSave(v))} className="p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form
+          onSubmit={handleSubmit((v) => onSave({ ...v, temperature: v.temperature?.trim() ? v.temperature : undefined }))}
+          className="p-5 space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="form-label">تاريخ الزيارة <span className="text-red-500">*</span></label>
               <input type="date" dir="ltr" className="form-input" max={today} {...register('visit_date')} />
@@ -48,6 +52,10 @@ export default function MedicalVisitModal({ onClose, onSave, loading }: Props) {
                 <option value="stable">مستقر</option>
                 <option value="unstable">غير مستقر</option>
               </select>
+            </div>
+            <div>
+              <label className="form-label">درجة الحرارة</label>
+              <input type="number" min="30" max="45" step="0.1" dir="ltr" className="form-input" {...register('temperature')} placeholder="37.0" />
             </div>
           </div>
 

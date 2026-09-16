@@ -1056,6 +1056,9 @@ export default function StudentDetailPage() {
                         <span className={`badge text-xs ${v.status === 'stable' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {v.status_display}
                         </span>
+                        {v.temperature != null && v.temperature !== '' && (
+                          <span className="badge text-xs bg-orange-100 text-orange-700">🌡 {v.temperature}°</span>
+                        )}
                       </div>
                       {v.notes && <p className="text-xs text-gray-500 mt-0.5">{v.notes}</p>}
                       {v.evaluated_by_name && <p className="text-xs text-gray-400 mt-0.5">بواسطة: {v.evaluated_by_name}</p>}
