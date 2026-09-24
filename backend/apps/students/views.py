@@ -1028,6 +1028,7 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
     filterset_fields   = ['status', 'attendance_date', 'branch', 'guardian_notified']
     ordering_fields    = ['attendance_date', 'created_at']
     ordering           = ['-attendance_date']
+    module_permission_key = 'attendance'
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -1070,6 +1071,7 @@ class AttendanceListCreateView(generics.ListCreateAPIView):
 
 class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = StudentAttendanceSerializer
+    module_permission_key = 'attendance'
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -1094,6 +1096,7 @@ from .serializers import StudentScheduleSerializer
 class ScheduleListCreateView(generics.ListCreateAPIView):
     serializer_class   = StudentScheduleSerializer
     pagination_class   = None  # الجدول كامل دائمًا — لا حاجة للترقيم
+    module_permission_key = 'schedule'
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -1134,6 +1137,7 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
 
 class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class   = StudentScheduleSerializer
+    module_permission_key = 'schedule'
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -1153,6 +1157,7 @@ class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
 class ScheduleBulkCreateView(APIView):
     """POST /api/schedule/bulk/ — ينشئ نفس الحصة (يوم/وقت/مادة/أخصائي) لعدة طلاب دفعة واحدة."""
     permission_classes = [CanWrite]
+    module_permission_key = 'schedule'
 
     def post(self, request):
         student_ids = request.data.get('student_ids') or []

@@ -90,7 +90,7 @@ export interface Bus {
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses';
 
 export interface ModulePermission {
   module: ModuleKey;

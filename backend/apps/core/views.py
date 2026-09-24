@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Q
 from .models import AuditLog, Branch, Bus, BusShift, SiteSettings, AcademicTerm, Holiday
-from .permissions import CanViewReports
+from .permissions import CanViewReports, CanWriteBuses
 from .utils import log_action
 from apps.accounts.permissions import IsManagerOrAbove, IsAdmin
 
@@ -216,7 +216,7 @@ class BusListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAdmin()]
+            return [CanWriteBuses()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -224,9 +224,13 @@ class BusListCreateView(generics.ListCreateAPIView):
 
 
 class BusDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class   = BusSerializer
-    permission_classes = [IsAdmin]
-    queryset           = Bus.objects.select_related('branch').prefetch_related('shifts')
+    serializer_class = BusSerializer
+    queryset         = Bus.objects.select_related('branch').prefetch_related('shifts')
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [CanWriteBuses()]
 
 
 class BusShiftListCreateView(generics.ListCreateAPIView):
@@ -237,7 +241,7 @@ class BusShiftListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAdmin()]
+            return [CanWriteBuses()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -259,8 +263,12 @@ class BusShiftListCreateView(generics.ListCreateAPIView):
 
 
 class BusShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class   = BusShiftSerializer
-    permission_classes = [IsAdmin]
+    serializer_class = BusShiftSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [CanWriteBuses()]
 
     def get_queryset(self):
         return BusShift.objects.filter(bus_id=self.kwargs['bus_pk'])

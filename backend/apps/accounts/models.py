@@ -68,6 +68,9 @@ class UserModulePermission(models.Model):
         MEDICAL_FILE = 'medical_file', 'الملف الطبي'
         ASSESSMENTS  = 'assessments',  'المقاييس والخطط الدراسية'
         REPORTS      = 'reports',      'التقارير'
+        ATTENDANCE   = 'attendance',   'الحضور والغياب'
+        SCHEDULE     = 'schedule',     'الجدول الدراسي'
+        BUSES        = 'buses',        'الباصات'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.
