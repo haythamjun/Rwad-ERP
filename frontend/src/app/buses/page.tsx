@@ -8,7 +8,7 @@ import type { Bus as BusType, Branch, Student, BusShiftType, User } from '@/type
 import Header from '@/components/layout/Header';
 import {
   Plus, Pencil, Trash2, X, Save, Users, UserCog,
-  Bus as BusIcon, ShieldAlert, Building2, AlertTriangle, MapPin,
+  Bus as BusIcon, Building2, AlertTriangle, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -358,14 +358,7 @@ export default function BusesPage() {
 
   const closeModal = () => { setModalOpen(false); setEditTarget(null); };
 
-  if (!user?.is_admin) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <ShieldAlert size={48} className="text-red-400" />
-        <p className="text-gray-500">غير مصرح لك بالوصول لهذه الصفحة</p>
-      </div>
-    );
-  }
+  const canWrite = user?.is_admin || user?.permissions?.some(p => p.module === 'buses' && p.can_edit);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -385,12 +378,14 @@ export default function BusesPage() {
               <p className="text-xs text-gray-400">بيانات المركبات وربطها بفروع المركز</p>
             </div>
           </div>
-          <button
-            onClick={() => { setEditTarget(null); setModalOpen(true); }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus size={15} /> إضافة باص
-          </button>
+          {canWrite && (
+            <button
+              onClick={() => { setEditTarget(null); setModalOpen(true); }}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus size={15} /> إضافة باص
+            </button>
+          )}
         </div>
 
         {isLoading ? (
@@ -451,20 +446,24 @@ export default function BusesPage() {
                     >
                       <Users size={14}/>
                     </button>
-                    <button
-                      onClick={() => { setEditTarget(b); setModalOpen(true); }}
-                      className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                      title="تعديل"
-                    >
-                      <Pencil size={14}/>
-                    </button>
-                    <button
-                      onClick={() => setDeleteId(b.id)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      title="حذف"
-                    >
-                      <Trash2 size={14}/>
-                    </button>
+                    {canWrite && (
+                      <button
+                        onClick={() => { setEditTarget(b); setModalOpen(true); }}
+                        className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        title="تعديل"
+                      >
+                        <Pencil size={14}/>
+                      </button>
+                    )}
+                    {canWrite && (
+                      <button
+                        onClick={() => setDeleteId(b.id)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="حذف"
+                      >
+                        <Trash2 size={14}/>
+                      </button>
+                    )}
                   </div>
                 </div>
               );

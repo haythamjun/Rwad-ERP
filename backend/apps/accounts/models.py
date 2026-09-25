@@ -71,6 +71,7 @@ class UserModulePermission(models.Model):
         ATTENDANCE   = 'attendance',   'الحضور والغياب'
         SCHEDULE     = 'schedule',     'الجدول الدراسي'
         BUSES        = 'buses',        'الباصات'
+        CLASSROOMS   = 'classrooms',   'الفصول'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.

@@ -172,6 +172,13 @@ export const busShiftsApi = {
   save: (busId: number, data: Record<string, unknown>) => api.post(`/buses/${busId}/shifts/`, data),
 };
 
+export const classroomsApi = {
+  list:   (params?: Record<string, unknown>) => api.get('/classrooms/', { params }),
+  create: (data: Record<string, unknown>)    => api.post('/classrooms/', data),
+  update: (id: number, data: Record<string, unknown>) => api.patch(`/classrooms/${id}/`, data),
+  delete: (id: number)                       => api.delete(`/classrooms/${id}/`),
+};
+
 // ─────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────

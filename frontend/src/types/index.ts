@@ -87,10 +87,22 @@ export interface Bus {
   updated_at: string;
 }
 
+export interface Classroom {
+  id: number;
+  name: string;
+  branch: number;
+  branch_name: string;
+  teacher: number | null;
+  teacher_name: string | null;
+  student_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms';
 
 export interface ModulePermission {
   module: ModuleKey;
@@ -165,6 +177,8 @@ export interface Student {
   bus_shift?: BusShiftType | '';
   bus_shift_display?: string | null;
   residence_address?: string;
+  classroom?: number | null;
+  classroom_name?: string | null;
   first_name: string;
   middle_name: string;
   grandfather_name: string;
@@ -233,6 +247,7 @@ export interface StudentFormData {
   bus?: number | string;
   bus_shift?: BusShiftType | '';
   residence_address?: string;
+  classroom?: number | string;
   // حالة
   status: StudentStatus;
   registration_date: string;

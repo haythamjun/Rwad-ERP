@@ -117,6 +117,7 @@ class StudentListSerializer(serializers.ModelSerializer):
     primary_guardian         = serializers.SerializerMethodField()
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
+    classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -130,6 +131,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'registration_date', 'photo',
             'branch', 'branch_name',
             'bus', 'bus_shift', 'bus_shift_display', 'residence_address',
+            'classroom', 'classroom_name',
             'primary_guardian', 'created_at', 'updated_at',
             'rejection_reason',
         ]
@@ -159,6 +161,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_display               = serializers.SerializerMethodField()
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
+    classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
 
     class Meta:
         model  = Student
@@ -170,6 +173,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'nationality', 'photo',
             'branch', 'branch_name',
             'bus', 'bus_display', 'bus_shift', 'bus_shift_display', 'residence_address',
+            'classroom', 'classroom_name',
             # إعاقة
             'disability_type', 'disability_type_display',
             'diagnosis', 'iq_score',
@@ -218,6 +222,8 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'referral_source', 'referral_source_detail',
             # نقل
             'bus', 'bus_shift', 'residence_address',
+            # فصل
+            'classroom',
             # حالة
             'status', 'registration_date', 'notes',
             'branch',
@@ -269,6 +275,11 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
         branch = attrs.get('branch', getattr(self.instance, 'branch', None) if self.instance else None)
         if bus and bus.branch_id != (branch.id if branch else None):
             raise serializers.ValidationError({'bus': 'هذا الباص لا يتبع فرع الطالب.'})
+
+        # الفصل يجب أن يتبع نفس فرع الطالب
+        classroom = attrs.get('classroom', getattr(self.instance, 'classroom', None) if self.instance else None)
+        if classroom and classroom.branch_id != (branch.id if branch else None):
+            raise serializers.ValidationError({'classroom': 'هذا الفصل لا يتبع فرع الطالب.'})
 
         return attrs
 

@@ -28,3 +28,17 @@ class CanWriteBuses(BasePermission):
         return request.user.module_permissions.filter(
             module='buses', can_edit=True
         ).exists()
+
+
+class CanWriteClassrooms(BasePermission):
+    """نفس مبدأ CanWriteBuses — بلا مسار دور افتراضي، فقط منح صريح عبر صلاحية موديول 'classrooms'."""
+    message = 'ليس لديك صلاحية لتعديل بيانات الفصول'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='classrooms', can_edit=True
+        ).exists()

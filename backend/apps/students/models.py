@@ -71,6 +71,13 @@ class Student(models.Model):
         related_name='students',
         verbose_name='الباص',
     )
+    classroom = models.ForeignKey(
+        'core.Classroom',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='students',
+        verbose_name='الفصل',
+    )
 
     class BusShiftChoice(models.TextChoices):
         MORNING = 'morning', 'صباحي'

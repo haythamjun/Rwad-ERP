@@ -142,6 +142,32 @@ class BusShift(models.Model):
         return f'{self.bus} — {self.get_shift_display()}'
 
 
+class Classroom(models.Model):
+    """فصل دراسي (صف) — معلم/ة ثابت لمجموعة طلاب، لأغراض التصنيف والعرض فقط
+    حاليًا (بلا أي تكامل مع الحضور أو الجدول)."""
+    name    = models.CharField(max_length=100, verbose_name='اسم الفصل')
+    branch  = models.ForeignKey(
+        Branch, on_delete=models.CASCADE,
+        related_name='classrooms', verbose_name='الفرع',
+    )
+    teacher = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='taught_classrooms', verbose_name='المعلم/ة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'فصل'
+        verbose_name_plural  = 'الفصول'
+        unique_together      = ('branch', 'name')
+        ordering             = ['branch', 'name']
+
+    def __str__(self):
+        return f'{self.name} — {self.branch}'
+
+
 class AuditLog(models.Model):
     class Action(models.TextChoices):
         CREATE = 'create', 'إضافة'

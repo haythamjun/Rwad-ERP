@@ -3,6 +3,7 @@ from .views import (
     AuditLogListView, BranchListCreateView, BranchDetailView,
     BusListCreateView, BusDetailView, DashboardStatsView,
     BusShiftListCreateView, BusShiftDetailView,
+    ClassroomListCreateView, ClassroomDetailView,
     SiteSettingsView, AttendanceReportView, AttendanceReportExportView,
     AcademicTermListCreateView, AcademicTermDetailView,
     HolidayListCreateView, HolidayDetailView,
@@ -16,6 +17,8 @@ urlpatterns = [
     path('buses/<int:pk>/',     BusDetailView.as_view(),       name='bus-detail'),
     path('buses/<int:bus_pk>/shifts/',         BusShiftListCreateView.as_view(), name='bus-shift-list'),
     path('buses/<int:bus_pk>/shifts/<int:pk>/', BusShiftDetailView.as_view(),    name='bus-shift-detail'),
+    path('classrooms/',             ClassroomListCreateView.as_view(), name='classroom-list'),
+    path('classrooms/<int:pk>/',    ClassroomDetailView.as_view(),     name='classroom-detail'),
     path('dashboard/stats/',    DashboardStatsView.as_view(),  name='dashboard-stats'),
     path('settings/',           SiteSettingsView.as_view(),    name='site-settings'),
     # الفصول الدراسية والعطل الرسمية — لاحتساب أيام الدراسة المتوقعة بالتقارير

@@ -7,9 +7,9 @@ import { Save, Upload, X, MapPin } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { branchesApi, busesApi } from '@/lib/api';
+import { branchesApi, busesApi, classroomsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { StudentFormData, Branch, Bus, DisabilityEntry } from '@/types';
+import type { StudentFormData, Branch, Bus, Classroom, DisabilityEntry } from '@/types';
 
 const schema = z.object({
   // أساسية
@@ -65,6 +65,7 @@ const schema = z.object({
   bus:               z.string().optional(),
   bus_shift:         z.string().optional(),
   residence_address: z.string().optional(),
+  classroom:         z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -191,6 +192,13 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   const { data: buses = [] } = useQuery<Bus[]>({
     queryKey: ['buses', currentBranch],
     queryFn:  () => busesApi.list({ branch: currentBranch }).then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    enabled:  !!currentBranch,
+  });
+
+  // الفصول الخاصة بفرع الطالب الحالي فقط
+  const { data: classrooms = [] } = useQuery<Classroom[]>({
+    queryKey: ['classrooms', currentBranch],
+    queryFn:  () => classroomsApi.list({ branch: currentBranch }).then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
     enabled:  !!currentBranch,
   });
 
@@ -345,7 +353,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
               <select
                 {...register('branch')}
                 className="form-input"
-                onChange={e => { setValue('branch', e.target.value); setValue('bus', ''); }}
+                onChange={e => { setValue('branch', e.target.value); setValue('bus', ''); setValue('classroom', ''); }}
               >
                 <option value="">-- بدون فرع --</option>
                 {branches.filter(b => b.is_active).map(b => (
@@ -378,6 +386,21 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
                 <option value="morning">صباحي</option>
                 <option value="evening">مسائي</option>
               </select>
+            </div>
+          )}
+
+          {currentBranch && (
+            <div>
+              <label className="form-label">الفصل</label>
+              <select {...register('classroom')} className="form-input">
+                <option value="">-- بدون فصل --</option>
+                {classrooms.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {currentBranch && classrooms.length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">لا يوجد فصول مسجّلة لهذا الفرع.</p>
+              )}
             </div>
           )}
 

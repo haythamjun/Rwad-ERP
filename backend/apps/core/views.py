@@ -12,8 +12,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Count, Q
-from .models import AuditLog, Branch, Bus, BusShift, SiteSettings, AcademicTerm, Holiday
-from .permissions import CanViewReports, CanWriteBuses
+from .models import AuditLog, Branch, Bus, BusShift, Classroom, SiteSettings, AcademicTerm, Holiday
+from .permissions import CanViewReports, CanWriteBuses, CanWriteClassrooms
 from .utils import log_action
 from apps.accounts.permissions import IsManagerOrAbove, IsAdmin
 
@@ -272,6 +272,55 @@ class BusShiftDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return BusShift.objects.filter(bus_id=self.kwargs['bus_pk'])
+
+
+# ── الفصول ──────────────────────────────────────────────────────────────────────
+
+class ClassroomSerializer(serializers.ModelSerializer):
+    branch_name   = serializers.CharField(source='branch.name', read_only=True)
+    teacher_name  = serializers.SerializerMethodField()
+    student_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = Classroom
+        fields = [
+            'id', 'name', 'branch', 'branch_name',
+            'teacher', 'teacher_name', 'student_count',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_teacher_name(self, obj):
+        if obj.teacher:
+            return obj.teacher.get_full_name() or obj.teacher.username
+        return None
+
+    def get_student_count(self, obj):
+        return obj.students.count()
+
+
+class ClassroomListCreateView(generics.ListCreateAPIView):
+    serializer_class = ClassroomSerializer
+    pagination_class = None
+    filterset_fields = ['branch']
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanWriteClassrooms()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        return Classroom.objects.select_related('branch', 'teacher').order_by('branch', 'name')
+
+
+class ClassroomDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ClassroomSerializer
+    queryset         = Classroom.objects.select_related('branch', 'teacher')
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [CanWriteClassrooms()]
 
 
 # ── Dashboard stats ────────────────────────────────────────────────────────────
