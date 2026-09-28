@@ -111,18 +111,23 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     assigned_branch = serializers.PrimaryKeyRelatedField(
         queryset=Branch.objects.all(), allow_null=True, required=False
     )
+    # اختياري — يُرسَل فقط لو المدير يبي يغيّر كلمة مرور المستخدم من شاشة التعديل
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
 
     class Meta:
         model  = User
         fields = [
             'first_name', 'last_name', 'email', 'role', 'phone', 'is_active',
-            'permissions', 'assigned_branch', 'assigned_city',
+            'permissions', 'assigned_branch', 'assigned_city', 'password',
         ]
 
     def update(self, instance, validated_data):
         permissions_data = validated_data.pop('permissions', None)
+        password = validated_data.pop('password', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
         instance.save()
         if permissions_data is not None:
             instance.module_permissions.all().delete()
