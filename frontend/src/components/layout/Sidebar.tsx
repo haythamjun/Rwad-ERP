@@ -21,7 +21,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, mediaUrl } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { authApi, siteSettingsApi } from '@/lib/api';
 import type { SiteSettings } from '@/types';
@@ -58,7 +58,7 @@ export default function Sidebar() {
     staleTime: 5 * 60 * 1000,
   });
   const centerName   = settings?.center_name_ar || 'Roya - رؤية';
-  const logoUrl      = settings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${settings.logo}` : null;
+  const logoUrl      = mediaUrl(settings?.logo);
   const logoInitial  = centerName.trim().charAt(0) || 'ر';
 
   const handleLogout = async () => {

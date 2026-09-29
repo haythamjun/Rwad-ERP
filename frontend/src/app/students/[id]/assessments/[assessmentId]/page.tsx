@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { ArrowRight, Save, ListChecks, Printer } from 'lucide-react';
 import { assessmentsApi, studentAssessmentsApi, studentsApi, siteSettingsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { formatDate } from '@/lib/utils';
+import { formatDate, mediaUrl } from '@/lib/utils';
 import Header from '@/components/layout/Header';
 import type {
   AssessmentDetail, StudentAssessment, AssessmentQuestion, AssessmentSection,
@@ -253,7 +253,7 @@ export default function StudentAssessmentFillPage() {
       return;
     }
     const centerNameAr = siteSettings?.center_name_ar || DEFAULT_NAME_AR;
-    const logoUrl = siteSettings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${siteSettings.logo}` : null;
+    const logoUrl = mediaUrl(siteSettings?.logo);
     const html = buildPlanHTML(student, studentAssessment, template, answers, centerNameAr, logoUrl);
     const win = window.open('', '_blank', 'width=900,height=1000');
     if (!win) {

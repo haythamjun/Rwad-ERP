@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { X, Printer, MessageSquare, CheckCircle, FileText, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { formatWhatsAppPhone } from '@/lib/utils';
+import { formatWhatsAppPhone, mediaUrl } from '@/lib/utils';
 import { siteSettingsApi } from '@/lib/api';
 import type { Student, SiteSettings } from '@/types';
 
@@ -227,7 +227,7 @@ export default function AcceptanceLetterModal({ student, onClose }: Props) {
     nameEn:  settings?.center_name_en || DEFAULT_NAME_EN,
     phone:   settings?.phone || '',
     website: settings?.website || '',
-    logoUrl: settings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${settings.logo}` : null,
+    logoUrl: mediaUrl(settings?.logo),
     initial: nameAr.trim().charAt(0) || 'ر',
   };
 

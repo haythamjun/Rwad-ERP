@@ -36,6 +36,15 @@ export function formatWhatsAppPhone(phone: string): string {
   return digits;
 }
 
+// حقول الملفات (شعار، صورة، مرفق) ترجع من الـ API مسار نسبي مع التخزين المحلي
+// (يحتاج بادئة NEXT_PUBLIC_MEDIA_URL)، أو رابط كامل جاهز مع تخزين S3/R2 — لا نضيف
+// البادئة إلا لو المسار مو رابط كامل أصلاً.
+export function mediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (/^https?:\/\//.test(path)) return path;
+  return `${process.env.NEXT_PUBLIC_MEDIA_URL || ''}${path}`;
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { branchesApi, siteSettingsApi, termsApi, holidaysApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { mediaUrl } from '@/lib/utils';
 import type { Branch, SiteSettings, WeekDay, AcademicTerm, Holiday } from '@/types';
 import { WEEK_DAYS } from '@/types';
 import Header from '@/components/layout/Header';
@@ -67,7 +68,7 @@ function SiteSettingsCard() {
     onError: () => toast.error('حدث خطأ أثناء الحفظ'),
   });
 
-  const currentLogo = logoPreview || (settings?.logo ? `${process.env.NEXT_PUBLIC_MEDIA_URL}${settings.logo}` : null);
+  const currentLogo = logoPreview || mediaUrl(settings?.logo);
 
   return (
     <div className="card">

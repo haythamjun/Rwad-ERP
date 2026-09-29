@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { formatDate, STATUS_COLORS } from '@/lib/utils';
+import { formatDate, STATUS_COLORS, mediaUrl } from '@/lib/utils';
 import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
 import type {
   Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData,
@@ -433,7 +433,7 @@ export default function StudentDetailPage() {
       <div className="card flex flex-wrap items-center gap-6">
         <div className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-2xl flex-shrink-0 overflow-hidden">
           {student.photo ? (
-            <img src={`${process.env.NEXT_PUBLIC_MEDIA_URL}${student.photo}`} alt={student.full_name} className="w-full h-full object-cover" />
+            <img src={mediaUrl(student.photo) ?? undefined} alt={student.full_name} className="w-full h-full object-cover" />
           ) : (
             student.full_name[0]
           )}
@@ -773,7 +773,7 @@ export default function StudentDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <a
-                        href={`${process.env.NEXT_PUBLIC_MEDIA_URL}${att.file}`}
+                        href={mediaUrl(att.file) ?? undefined}
                         target="_blank"
                         rel="noreferrer"
                         className="btn-secondary py-1 px-2 text-xs"
