@@ -35,6 +35,8 @@ if os.environ.get('AWS_STORAGE_BUCKET_NAME'):
     AWS_S3_FILE_OVERWRITE   = False
     AWS_DEFAULT_ACL         = None
     _custom_domain = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '')
+    AWS_S3_CUSTOM_DOMAIN = _custom_domain or None
+    AWS_QUERYSTRING_AUTH = False
     MEDIA_URL = (
         f'https://{_custom_domain}/'
         if _custom_domain
