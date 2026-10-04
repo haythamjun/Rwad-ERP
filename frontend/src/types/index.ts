@@ -437,6 +437,51 @@ export interface ScheduleSlotFormData {
   notes?: string;
 }
 
+// ─────────────────────────────────────────────
+// الخطة الشهرية
+// ─────────────────────────────────────────────
+export type PlanDomain =
+  | 'social' | 'independence' | 'cognitive'
+  | 'communication' | 'perceptual' | 'motor';
+
+export const PLAN_DOMAINS: { value: PlanDomain; label: string }[] = [
+  { value: 'social',        label: 'الاجتماعي' },
+  { value: 'independence',  label: 'الاستقلالي' },
+  { value: 'cognitive',     label: 'المعرفي' },
+  { value: 'communication', label: 'التواصل' },
+  { value: 'perceptual',    label: 'الإدراكي' },
+  { value: 'motor',         label: 'الحركي' },
+];
+
+export interface PlanGoal {
+  id: number;
+  domain: PlanDomain;
+  domain_display: string;
+  goals_text: string;
+}
+
+export interface Plan {
+  id: number;
+  student: number;
+  student_name: string;
+  teacher?: number | null;
+  teacher_name?: string | null;
+  start_date: string;
+  end_date: string;
+  goals: PlanGoal[];
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlanFormData {
+  teacher?: number | string | null;
+  start_date: string;
+  end_date: string;
+  goals: { domain: PlanDomain; goals_text: string }[];
+}
+
 // حصة جماعية — تجميع سجلات الجدول الفردية حسب (اليوم، الوقت، المادة، الأخصائي)
 export interface ScheduleClassMember {
   slot_id: number;

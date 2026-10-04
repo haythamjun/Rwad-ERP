@@ -38,6 +38,8 @@ from .views import (
     DailyCheckInListCreateView,
     DailyCheckInDetailView,
     MedicalCheckInSheetView,
+    PlanListCreateView,
+    PlanDetailView,
 )
 
 urlpatterns = [
@@ -83,6 +85,9 @@ urlpatterns = [
     path('students/<int:student_pk>/medical-checkins/<int:pk>/', DailyCheckInDetailView.as_view(), name='medical-checkin-detail'),
     # القسم الطبي — كشف يومي مدمج حسب الفرع
     path('medical/sheet/', MedicalCheckInSheetView.as_view(), name='medical-checkin-sheet'),
+    # الخطة الشهرية — لكل طالب
+    path('students/<int:student_pk>/plans/', PlanListCreateView.as_view(), name='plan-list'),
+    path('students/<int:student_pk>/plans/<int:pk>/', PlanDetailView.as_view(), name='plan-detail'),
 
     # ── Guardian Portal (Flutter app) ──────────────────────────────────────────
     path('portal/login/',      GuardianLoginView.as_view(),    name='portal-login'),

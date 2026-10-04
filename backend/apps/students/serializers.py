@@ -5,6 +5,7 @@ from .models import (
     StudentSchedule, SCHEDULE_TIME_SLOTS,
     StudentMedicalProfile, MedicalVisit, Medication,
     DailyMedicalCheckIn, MedicationAdministration,
+    Plan, PlanGoal,
 )
 from datetime import date
 
@@ -414,6 +415,70 @@ class StudentScheduleSerializer(serializers.ModelSerializer):
         if value not in SCHEDULE_TIME_SLOTS:
             raise serializers.ValidationError('وقت الحصة يجب أن يكون أحد الفترات الثابتة (نصف ساعة من 7:30 حتى 11:30).')
         return value
+
+
+# ── الخطة الشهرية ─────────────────────────────────────────────────────────────
+
+class PlanGoalSerializer(serializers.ModelSerializer):
+    domain_display = serializers.CharField(source='get_domain_display', read_only=True)
+
+    class Meta:
+        model  = PlanGoal
+        fields = ['id', 'domain', 'domain_display', 'goals_text']
+        read_only_fields = ['id']
+
+
+class PlanSerializer(serializers.ModelSerializer):
+    student_name   = serializers.CharField(source='student.full_name', read_only=True)
+    teacher_name   = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    goals          = PlanGoalSerializer(many=True, required=False)
+
+    class Meta:
+        model  = Plan
+        fields = [
+            'id', 'student', 'student_name', 'teacher', 'teacher_name',
+            'start_date', 'end_date', 'goals',
+            'created_by', 'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        # الطالب يُملأ دائمًا من معامل الـ URL لا الـ body — نفس حيلة الحضور/الجدول.
+        extra_kwargs = {'student': {'required': False}}
+
+    def get_teacher_name(self, obj):
+        if obj.teacher:
+            return obj.teacher.get_full_name() or obj.teacher.username
+        return None
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def create(self, validated_data):
+        goals_data = validated_data.pop('goals', [])
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        plan = Plan.objects.create(**validated_data)
+        for rec in goals_data:
+            PlanGoal.objects.create(plan=plan, **rec)
+        return plan
+
+    def update(self, instance, validated_data):
+        goals_data = validated_data.pop('goals', None)
+        instance = super().update(instance, validated_data)
+        if goals_data is not None:
+            existing = {g.domain: g for g in instance.goals.all()}
+            for rec in goals_data:
+                domain = rec.get('domain')
+                if domain and domain in existing:
+                    row = existing[domain]
+                    row.goals_text = rec.get('goals_text', row.goals_text)
+                    row.save()
+                elif domain:
+                    PlanGoal.objects.create(plan=instance, **rec)
+        return instance
 
 
 # ── الملف الطبي ───────────────────────────────────────────────────────────────

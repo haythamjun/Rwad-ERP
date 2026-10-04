@@ -477,6 +477,65 @@ class StudentSchedule(models.Model):
         return f"{self.student.full_name} | {self.get_day_display()} {self.start_time} | {self.subject}"
 
 
+# ── الخطة الشهرية ─────────────────────────────────────────────────────────────
+
+class Plan(models.Model):
+    """خطة شهرية لطالب معيّن — معلم مسؤول + أهداف حسب المجال النمائي."""
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='plans', verbose_name='المستفيد',
+    )
+    teacher    = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='plans_as_teacher', verbose_name='المعلم/ة',
+    )
+    start_date = models.DateField(verbose_name='تاريخ بدء الخطة')
+    end_date   = models.DateField(verbose_name='تاريخ انتهاء الخطة')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_plans', verbose_name='أُنشئت بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'خطة شهرية'
+        verbose_name_plural  = 'الخطط الشهرية'
+        ordering             = ['-start_date']
+
+    def __str__(self):
+        return f'{self.student.full_name} — {self.start_date} إلى {self.end_date}'
+
+
+class PlanGoal(models.Model):
+    """أهداف خطة لمجال نمائي واحد — صف ثابت لكل مجال من الـ6 بالنموذج الورقي."""
+    class Domain(models.TextChoices):
+        SOCIAL        = 'social',        'الاجتماعي'
+        INDEPENDENCE  = 'independence',  'الاستقلالي'
+        COGNITIVE     = 'cognitive',     'المعرفي'
+        COMMUNICATION = 'communication', 'التواصل'
+        PERCEPTUAL    = 'perceptual',    'الإدراكي'
+        MOTOR         = 'motor',         'الحركي'
+
+    plan       = models.ForeignKey(
+        Plan, on_delete=models.CASCADE,
+        related_name='goals', verbose_name='الخطة',
+    )
+    domain     = models.CharField(max_length=20, choices=Domain.choices, verbose_name='المجال')
+    goals_text = models.TextField(blank=True, verbose_name='الأهداف')
+
+    class Meta:
+        verbose_name        = 'أهداف مجال'
+        verbose_name_plural  = 'أهداف المجالات'
+        unique_together      = ('plan', 'domain')
+        ordering             = ['plan']
+
+    def __str__(self):
+        return f'{self.plan} — {self.get_domain_display()}'
+
+
 # ── الملف الطبي ───────────────────────────────────────────────────────────────
 
 class StudentMedicalProfile(models.Model):

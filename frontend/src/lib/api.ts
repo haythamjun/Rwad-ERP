@@ -267,6 +267,14 @@ export const studentAssessmentsApi = {
   delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/assessments/${id}/`),
 };
 
+export const plansApi = {
+  list:   (studentId: number) => api.get(`/students/${studentId}/plans/`),
+  detail: (studentId: number, id: number) => api.get(`/students/${studentId}/plans/${id}/`),
+  create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/plans/`, data),
+  update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/plans/${id}/`, data),
+  delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/plans/${id}/`),
+};
+
 // ─────────────────────────────────────────────
 // التقارير
 // ─────────────────────────────────────────────

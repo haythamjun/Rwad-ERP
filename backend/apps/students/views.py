@@ -1256,6 +1256,57 @@ class ScheduleClassesView(APIView):
         return Response(result)
 
 
+# ── الخطة الشهرية ─────────────────────────────────────────────────────────────
+from .models import Plan
+from .serializers import PlanSerializer
+from apps.assessments.permissions import CanViewAssessments, CanEditAssessments
+
+
+class PlanListCreateView(generics.ListCreateAPIView):
+    serializer_class = PlanSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditAssessments()]
+        return [CanViewAssessments()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals')
+        if student_pk:
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
+
+    def perform_create(self, serializer):
+        student_pk = self.kwargs.get('student_pk')
+        if student_pk:
+            student = get_object_or_404(Student, pk=student_pk)
+            _assert_student_in_scope(self.request.user, student)
+            serializer.save(student=student)
+        else:
+            student = serializer.validated_data.get('student')
+            if student is not None:
+                _assert_student_in_scope(self.request.user, student)
+            serializer.save()
+
+
+class PlanDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PlanSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [CanViewAssessments()]
+        return [CanEditAssessments()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals')
+        if student_pk:
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
+
+
 class AttendanceSheetView(APIView):
     """
     GET /api/attendance/sheet/?date=YYYY-MM-DD[&branch=ID][&search=text]
