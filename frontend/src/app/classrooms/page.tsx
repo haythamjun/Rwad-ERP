@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { classroomsApi, branchesApi, studentsApi, authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -133,10 +134,14 @@ function ClassroomStudentsModal({ classroom, onClose }: { classroom: Classroom; 
           ) : (
             <div className="space-y-2">
               {students.map((s) => (
-                <div key={s.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <Link
+                  key={s.id}
+                  href={`/students/${s.id}`}
+                  className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-100 transition-colors"
+                >
                   <p className="font-medium text-gray-800 text-sm">{s.full_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{s.file_number}</p>
-                </div>
+                </Link>
               ))}
             </div>
           )}
