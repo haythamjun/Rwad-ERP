@@ -88,6 +88,8 @@ urlpatterns = [
     # الخطة الشهرية — لكل طالب
     path('students/<int:student_pk>/plans/', PlanListCreateView.as_view(), name='plan-list'),
     path('students/<int:student_pk>/plans/<int:pk>/', PlanDetailView.as_view(), name='plan-detail'),
+    # الخطط — قائمة شاملة عبر كل الطلاب (نفس الـ View، بلا student_pk)
+    path('plans/', PlanListCreateView.as_view(), name='plan-global'),
 
     # ── Guardian Portal (Flutter app) ──────────────────────────────────────────
     path('portal/login/',      GuardianLoginView.as_view(),    name='portal-login'),

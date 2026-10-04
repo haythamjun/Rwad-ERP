@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Stethoscope,
   ClipboardCheck,
+  NotebookPen,
   Menu,
   X,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/classrooms', label: 'الفصول',          icon: GraduationCap },
   { href: '/medical',    label: 'القسم الطبي',      icon: Stethoscope,   medicalOnly: true },
   { href: '/assessments', label: 'المقاييس والخطط الدراسية', icon: ClipboardCheck, assessmentsOnly: true },
+  { href: '/plans',       label: 'الخطط',             icon: NotebookPen,   assessmentsOnly: true },
   { href: '/users',      label: 'المستخدمون',      icon: UserCog,       adminOnly: true },
   { href: '/reports',    label: 'التقارير',         icon: BarChart3,     reportsOnly: true },
   { href: '/audit-logs', label: 'سجل العمليات',    icon: ClipboardList, managerOnly: true },

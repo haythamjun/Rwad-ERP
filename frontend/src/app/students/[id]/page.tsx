@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
@@ -31,9 +31,13 @@ import MedicalVisitModal from '@/components/students/MedicalVisitModal';
 import AcceptanceLetterModal from '@/components/students/AcceptanceLetterModal';
 import PlanModal from '@/components/students/PlanModal';
 
+type StudentTab = 'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans';
+const STUDENT_TABS: StudentTab[] = ['info', 'guardians', 'family', 'attachments', 'attendance', 'schedule', 'medical', 'assessments', 'plans'];
+
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
 
@@ -49,7 +53,10 @@ export default function StudentDetailPage() {
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [acceptanceLetterOpen, setAcceptanceLetterOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans'>('info');
+  const tabParam = searchParams.get('tab') as StudentTab | null;
+  const [activeTab, setActiveTab] = useState<StudentTab>(
+    tabParam && STUDENT_TABS.includes(tabParam) ? tabParam : 'info'
+  );
   const [startAssessmentId, setStartAssessmentId] = useState('');
   const [planModal, setPlanModal] = useState<{ open: boolean; plan?: Plan }>({ open: false });
 

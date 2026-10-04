@@ -273,6 +273,8 @@ export const plansApi = {
   create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/plans/`, data),
   update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/plans/${id}/`, data),
   delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/plans/${id}/`),
+  // قائمة شاملة عبر كل الطلاب — لصفحة "الخطط" بالقائمة الجانبية
+  listAll: (params?: Record<string, unknown>) => api.get('/plans/', { params }),
 };
 
 // ─────────────────────────────────────────────
