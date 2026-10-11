@@ -460,6 +460,15 @@ export interface PlanGoal {
   goals_text: string;
 }
 
+export interface PlanAttachment {
+  id: number;
+  plan: number;
+  file: string;
+  uploaded_by?: number | null;
+  uploaded_by_name?: string | null;
+  created_at: string;
+}
+
 export interface Plan {
   id: number;
   student: number;
@@ -469,6 +478,7 @@ export interface Plan {
   start_date: string;
   end_date: string;
   goals: PlanGoal[];
+  attachments: PlanAttachment[];
   created_by?: number | null;
   created_by_name?: string | null;
   created_at: string;

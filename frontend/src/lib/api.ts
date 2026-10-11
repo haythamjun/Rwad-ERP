@@ -275,6 +275,13 @@ export const plansApi = {
   delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/plans/${id}/`),
   // قائمة شاملة عبر كل الطلاب — لصفحة "الخطط" بالقائمة الجانبية
   listAll: (params?: Record<string, unknown>) => api.get('/plans/', { params }),
+  // مرفقات الخطة — ملف Excel/Word جاهز
+  uploadAttachment: (studentId: number, planId: number, data: FormData) =>
+    api.post(`/students/${studentId}/plans/${planId}/attachments/`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  deleteAttachment: (studentId: number, planId: number, attachmentId: number) =>
+    api.delete(`/students/${studentId}/plans/${planId}/attachments/${attachmentId}/`),
 };
 
 // ─────────────────────────────────────────────

@@ -536,6 +536,30 @@ class PlanGoal(models.Model):
         return f'{self.plan} — {self.get_domain_display()}'
 
 
+class PlanAttachment(models.Model):
+    """ملف Excel أو Word جاهز للخطة — بديل/إضافة لتعبئة الأهداف يدويًا بالنظام."""
+    plan        = models.ForeignKey(
+        Plan, on_delete=models.CASCADE,
+        related_name='attachments', verbose_name='الخطة',
+    )
+    file        = models.FileField(
+        upload_to='plans/attachments/%Y/%m/', verbose_name='الملف'
+    )
+    uploaded_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, verbose_name='رُفع بواسطة',
+    )
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'مرفق خطة'
+        verbose_name_plural  = 'مرفقات الخطط'
+        ordering             = ['-created_at']
+
+    def __str__(self):
+        return f'{self.plan} — {self.file.name}'
+
+
 # ── الملف الطبي ───────────────────────────────────────────────────────────────
 
 class StudentMedicalProfile(models.Model):

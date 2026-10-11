@@ -1304,9 +1304,11 @@ export default function StudentDetailPage() {
 
       {planModal.open && (
         <PlanModal
+          studentId={Number(id)}
           plan={planModal.plan}
           onClose={() => setPlanModal({ open: false })}
           onSave={(data) => planSaveMutation.mutate({ planId: planModal.plan?.id, data })}
+          onAttachmentsChanged={() => queryClient.invalidateQueries({ queryKey: ['plans', id] })}
           loading={planSaveMutation.isPending}
         />
       )}

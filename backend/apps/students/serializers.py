@@ -5,7 +5,7 @@ from .models import (
     StudentSchedule, SCHEDULE_TIME_SLOTS,
     StudentMedicalProfile, MedicalVisit, Medication,
     DailyMedicalCheckIn, MedicationAdministration,
-    Plan, PlanGoal,
+    Plan, PlanGoal, PlanAttachment,
 )
 from datetime import date
 
@@ -428,17 +428,36 @@ class PlanGoalSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+PLAN_ATTACHMENT_ALLOWED_EXTENSIONS = ('.xlsx', '.xls', '.docx', '.doc')
+
+
+class PlanAttachmentSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
+
+    class Meta:
+        model  = PlanAttachment
+        fields = ['id', 'plan', 'file', 'uploaded_by', 'uploaded_by_name', 'created_at']
+        read_only_fields = ['id', 'plan', 'uploaded_by', 'created_at']
+
+    def validate_file(self, value):
+        name = value.name.lower()
+        if not name.endswith(PLAN_ATTACHMENT_ALLOWED_EXTENSIONS):
+            raise serializers.ValidationError('الملف المسموح به فقط Excel (.xlsx/.xls) أو Word (.docx/.doc).')
+        return value
+
+
 class PlanSerializer(serializers.ModelSerializer):
     student_name   = serializers.CharField(source='student.full_name', read_only=True)
     teacher_name   = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
     goals          = PlanGoalSerializer(many=True, required=False)
+    attachments    = PlanAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model  = Plan
         fields = [
             'id', 'student', 'student_name', 'teacher', 'teacher_name',
-            'start_date', 'end_date', 'goals',
+            'start_date', 'end_date', 'goals', 'attachments',
             'created_by', 'created_by_name', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']

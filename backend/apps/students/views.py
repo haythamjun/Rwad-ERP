@@ -1257,8 +1257,8 @@ class ScheduleClassesView(APIView):
 
 
 # ── الخطة الشهرية ─────────────────────────────────────────────────────────────
-from .models import Plan
-from .serializers import PlanSerializer
+from .models import Plan, PlanAttachment
+from .serializers import PlanSerializer, PlanAttachmentSerializer
 from apps.assessments.permissions import CanViewAssessments, CanEditAssessments
 
 
@@ -1273,7 +1273,7 @@ class PlanListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals')
+        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals', 'attachments')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
@@ -1301,10 +1301,49 @@ class PlanDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals')
+        qs = Plan.objects.select_related('student', 'teacher', 'created_by').prefetch_related('goals', 'attachments')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
+
+
+class PlanAttachmentListView(generics.ListCreateAPIView):
+    serializer_class = PlanAttachmentSerializer
+    parser_classes = [MultiPartParser, FormParser]
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditAssessments()]
+        return [CanViewAssessments()]
+
+    def get_queryset(self):
+        return _scope_by_student(
+            self.request.user,
+            PlanAttachment.objects.filter(
+                plan_id=self.kwargs['plan_pk'], plan__student_id=self.kwargs['student_pk'],
+            ),
+            path='plan__student',
+        )
+
+    def perform_create(self, serializer):
+        plan = get_object_or_404(Plan, pk=self.kwargs['plan_pk'], student_id=self.kwargs['student_pk'])
+        _assert_student_in_scope(self.request.user, plan.student)
+        serializer.save(plan=plan, uploaded_by=self.request.user)
+
+
+class PlanAttachmentDeleteView(generics.DestroyAPIView):
+    serializer_class = PlanAttachmentSerializer
+    permission_classes = [CanEditAssessments]
+
+    def get_queryset(self):
+        return _scope_by_student(
+            self.request.user,
+            PlanAttachment.objects.filter(
+                plan_id=self.kwargs['plan_pk'], plan__student_id=self.kwargs['student_pk'],
+            ),
+            path='plan__student',
+        )
 
 
 class AttendanceSheetView(APIView):

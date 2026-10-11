@@ -40,6 +40,8 @@ from .views import (
     MedicalCheckInSheetView,
     PlanListCreateView,
     PlanDetailView,
+    PlanAttachmentListView,
+    PlanAttachmentDeleteView,
 )
 
 urlpatterns = [
@@ -88,6 +90,9 @@ urlpatterns = [
     # الخطة الشهرية — لكل طالب
     path('students/<int:student_pk>/plans/', PlanListCreateView.as_view(), name='plan-list'),
     path('students/<int:student_pk>/plans/<int:pk>/', PlanDetailView.as_view(), name='plan-detail'),
+    # مرفقات الخطة — ملف Excel/Word جاهز
+    path('students/<int:student_pk>/plans/<int:plan_pk>/attachments/', PlanAttachmentListView.as_view(), name='plan-attachment-list'),
+    path('students/<int:student_pk>/plans/<int:plan_pk>/attachments/<int:pk>/', PlanAttachmentDeleteView.as_view(), name='plan-attachment-delete'),
     # الخطط — قائمة شاملة عبر كل الطلاب (نفس الـ View، بلا student_pk)
     path('plans/', PlanListCreateView.as_view(), name='plan-global'),
 
