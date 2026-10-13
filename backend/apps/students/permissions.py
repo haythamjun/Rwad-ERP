@@ -86,3 +86,30 @@ class CanEditMedical(BasePermission):
         return request.user.module_permissions.filter(
             module='medical_file', can_edit=True
         ).exists()
+
+
+class CanViewIndividualPlans(BasePermission):
+    """صلاحية مستقلة تمامًا عن 'assessments' — خاصة بالخطة الفردية فقط."""
+    message = 'ليس لديك صلاحية لعرض الخطة الفردية'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='individual_plans', can_view=True
+        ).exists()
+
+
+class CanEditIndividualPlans(BasePermission):
+    message = 'ليس لديك صلاحية لتعديل الخطة الفردية'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='individual_plans', can_edit=True
+        ).exists()

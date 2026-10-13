@@ -72,6 +72,7 @@ class UserModulePermission(models.Model):
         SCHEDULE     = 'schedule',     'الجدول الدراسي'
         BUSES        = 'buses',        'الباصات'
         CLASSROOMS   = 'classrooms',   'الفصول'
+        INDIVIDUAL_PLANS = 'individual_plans', 'الخطة الفردية'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.

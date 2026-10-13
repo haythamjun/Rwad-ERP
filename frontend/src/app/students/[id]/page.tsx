@@ -8,9 +8,9 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
-  CalendarDays, Clock, XCircle, RotateCcw, CalendarClock, Stethoscope, Pill, ClipboardCheck, ListChecks, NotebookPen,
+  CalendarDays, Clock, XCircle, RotateCcw, CalendarClock, Stethoscope, Pill, ClipboardCheck, ListChecks, NotebookPen, FileHeart,
 } from 'lucide-react';
-import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi } from '@/lib/api';
+import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS, mediaUrl } from '@/lib/utils';
 import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
@@ -18,7 +18,7 @@ import type {
   Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData,
   ScheduleSlot, ScheduleSlotFormData, ScheduleDay,
   StudentMedicalProfile, Medication, MedicalVisit,
-  AssessmentListItem, StudentAssessment, Plan,
+  AssessmentListItem, StudentAssessment, Plan, IndividualPlan,
 } from '@/types';
 import Header from '@/components/layout/Header';
 import GuardianModal from '@/components/students/GuardianModal';
@@ -30,9 +30,10 @@ import MedicationModal from '@/components/students/MedicationModal';
 import MedicalVisitModal from '@/components/students/MedicalVisitModal';
 import AcceptanceLetterModal from '@/components/students/AcceptanceLetterModal';
 import PlanModal from '@/components/students/PlanModal';
+import IndividualPlanModal from '@/components/students/IndividualPlanModal';
 
-type StudentTab = 'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans';
-const STUDENT_TABS: StudentTab[] = ['info', 'guardians', 'family', 'attachments', 'attendance', 'schedule', 'medical', 'assessments', 'plans'];
+type StudentTab = 'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans' | 'individual_plans';
+const STUDENT_TABS: StudentTab[] = ['info', 'guardians', 'family', 'attachments', 'attendance', 'schedule', 'medical', 'assessments', 'plans', 'individual_plans'];
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,11 +60,14 @@ export default function StudentDetailPage() {
   );
   const [startAssessmentId, setStartAssessmentId] = useState('');
   const [planModal, setPlanModal] = useState<{ open: boolean; plan?: Plan }>({ open: false });
+  const [individualPlanModal, setIndividualPlanModal] = useState<{ open: boolean; plan?: IndividualPlan }>({ open: false });
 
   const canViewMedical = user?.is_admin || user?.permissions?.some((p) => p.module === 'medical_file' && p.can_view);
   const canEditMedical = user?.is_admin || user?.permissions?.some((p) => p.module === 'medical_file' && p.can_edit);
   const canViewAssessments = user?.is_admin || user?.permissions?.some((p) => p.module === 'assessments' && p.can_view);
   const canEditAssessments = user?.is_admin || user?.permissions?.some((p) => p.module === 'assessments' && p.can_edit);
+  const canViewIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_view);
+  const canEditIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_edit);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState('');
   const [attachName, setAttachName] = useState('');
@@ -290,6 +294,26 @@ export default function StudentDetailPage() {
     onError: () => toast.error('حدث خطأ أثناء الحفظ'),
   });
 
+  // ── الخطة الفردية ────────────────────────────────────────────────────────
+  const individualPlansEnabled = activeTab === 'individual_plans' && !!canViewIndividualPlans;
+
+  const { data: individualPlans = [] } = useQuery<IndividualPlan[]>({
+    queryKey: ['individual-plans', id],
+    queryFn: () => individualPlansApi.list(Number(id)).then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    enabled: individualPlansEnabled,
+  });
+
+  const individualPlanSaveMutation = useMutation({
+    mutationFn: ({ planId, data }: { planId?: number; data: Record<string, unknown> }) =>
+      planId ? individualPlansApi.update(Number(id), planId, data) : individualPlansApi.create(Number(id), data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['individual-plans', id] });
+      setIndividualPlanModal({ open: false });
+      toast.success('تم حفظ الخطة الفردية');
+    },
+    onError: () => toast.error('حدث خطأ أثناء الحفظ'),
+  });
+
   // ── الملف الطبي ──────────────────────────────────────────────────────────
   const medicalEnabled = activeTab === 'medical' && !!canViewMedical;
 
@@ -492,6 +516,7 @@ export default function StudentDetailPage() {
           ...(canViewMedical ? [{ key: 'medical', label: 'الملف الطبي', icon: Stethoscope }] : []),
           ...(canViewAssessments ? [{ key: 'assessments', label: 'المقاييس والخطط الدراسية', icon: ListChecks }] : []),
           ...(canViewAssessments ? [{ key: 'plans', label: 'الخطط', icon: NotebookPen }] : []),
+          ...(canViewIndividualPlans ? [{ key: 'individual_plans', label: 'الخطة الفردية', icon: FileHeart }] : []),
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -1220,6 +1245,54 @@ export default function StudentDetailPage() {
         </div>
       )}
 
+      {activeTab === 'individual_plans' && canViewIndividualPlans && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <FileHeart size={16} className="text-primary-600" />
+              <h3 className="section-title mb-0">الخطة الفردية</h3>
+            </div>
+            {canEditIndividualPlans && (
+              <button
+                className="btn-primary py-1.5 px-3 text-xs"
+                onClick={() => setIndividualPlanModal({ open: true })}
+              >
+                <Plus size={13} /> إضافة خطة فردية
+              </button>
+            )}
+          </div>
+
+          {individualPlans.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+              <FileHeart size={36} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">لا توجد خطة فردية مسجّلة لهذا الطالب بعد</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {individualPlans.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => canEditIndividualPlans && setIndividualPlanModal({ open: true, plan: p })}
+                  className="w-full flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors text-right"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-800">
+                      {formatDate(p.created_at)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {p.created_by_name ? `أُنشئت بواسطة: ${p.created_by_name}` : ''}
+                    </p>
+                  </div>
+                  <span className="badge text-xs bg-gray-100 text-gray-600 flex-shrink-0">
+                    {p.goals.length} هدف
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       {guardianModal.open && (
         <GuardianModal
@@ -1310,6 +1383,15 @@ export default function StudentDetailPage() {
           onSave={(data) => planSaveMutation.mutate({ planId: planModal.plan?.id, data })}
           onAttachmentsChanged={() => queryClient.invalidateQueries({ queryKey: ['plans', id] })}
           loading={planSaveMutation.isPending}
+        />
+      )}
+
+      {individualPlanModal.open && (
+        <IndividualPlanModal
+          plan={individualPlanModal.plan}
+          onClose={() => setIndividualPlanModal({ open: false })}
+          onSave={(data) => individualPlanSaveMutation.mutate({ planId: individualPlanModal.plan?.id, data })}
+          loading={individualPlanSaveMutation.isPending}
         />
       )}
 

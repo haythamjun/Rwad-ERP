@@ -19,6 +19,7 @@ import {
   Stethoscope,
   ClipboardCheck,
   NotebookPen,
+  FileHeart,
   Menu,
   X,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ const navItems = [
   { href: '/medical',    label: 'القسم الطبي',      icon: Stethoscope,   medicalOnly: true },
   { href: '/assessments', label: 'المقاييس والخطط الدراسية', icon: ClipboardCheck, assessmentsOnly: true },
   { href: '/plans',       label: 'الخطط',             icon: NotebookPen,   assessmentsOnly: true },
+  { href: '/individual-plans', label: 'الخطة الفردية', icon: FileHeart,    individualPlansOnly: true },
   { href: '/users',      label: 'المستخدمون',      icon: UserCog,       adminOnly: true },
   { href: '/reports',    label: 'التقارير',         icon: BarChart3,     reportsOnly: true },
   { href: '/audit-logs', label: 'سجل العمليات',    icon: ClipboardList, managerOnly: true },
@@ -76,6 +78,7 @@ export default function Sidebar() {
   const canViewMedical = user?.is_admin || user?.permissions?.some((p) => p.module === 'medical_file' && p.can_view);
   const canViewAssessments = user?.is_admin || user?.permissions?.some((p) => p.module === 'assessments' && p.can_view);
   const canViewReports = user?.is_admin || user?.permissions?.some((p) => p.module === 'reports' && p.can_view);
+  const canViewIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_view);
 
   const filtered = navItems.filter((item) => {
     if (item.adminOnly && !user?.is_admin) return false;
@@ -83,6 +86,7 @@ export default function Sidebar() {
     if (item.medicalOnly && !canViewMedical) return false;
     if (item.assessmentsOnly && !canViewAssessments) return false;
     if (item.reportsOnly && !canViewReports) return false;
+    if (item.individualPlansOnly && !canViewIndividualPlans) return false;
     return true;
   });
 

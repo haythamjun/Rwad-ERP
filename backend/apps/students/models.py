@@ -560,6 +560,70 @@ class PlanAttachment(models.Model):
         return f'{self.plan} — {self.file.name}'
 
 
+# ── الخطة الفردية ─────────────────────────────────────────────────────────────
+
+class IndividualPlan(models.Model):
+    """الخطة الفردية للفصل التأهيلي — أغنى من الخطة الشهرية: عدة أهداف لكل
+    مجال، كل هدف له تاريخ بدء/انتهاء وتقييم بعدي خاص فيه."""
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='individual_plans', verbose_name='المستفيد',
+    )
+    notes      = models.TextField(blank=True, verbose_name='ملاحظات')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='created_individual_plans', verbose_name='أُنشئت بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'خطة فردية'
+        verbose_name_plural  = 'الخطط الفردية'
+        ordering             = ['-created_at']
+
+    def __str__(self):
+        return f'{self.student.full_name} — خطة فردية — {self.created_at:%Y-%m-%d}'
+
+
+class IndividualPlanGoal(models.Model):
+    class Domain(models.TextChoices):
+        COGNITIVE     = 'cognitive',     'الإدراكي'
+        FINE_MOTOR    = 'fine_motor',    'الحركي الدقيق'
+        GROSS_MOTOR   = 'gross_motor',   'الحركي الكبير'
+        SOCIAL        = 'social',        'الاجتماعي'
+        INDEPENDENCE  = 'independence',  'الاستقلالي'
+        ATTENTION     = 'attention',     'الانتباه والتركيز'
+        COMMUNICATION = 'communication', 'التخاطب'
+
+    class Evaluation(models.TextChoices):
+        ACHIEVED       = 'achieved',       'تحقق'
+        PARTIAL        = 'partial',        'نوعًا ما'
+        NOT_ACHIEVED   = 'not_achieved',   'لم يتحقق'
+        NOT_APPLICABLE = 'not_applicable', 'لم يطبق'
+
+    plan            = models.ForeignKey(
+        IndividualPlan, on_delete=models.CASCADE,
+        related_name='goals', verbose_name='الخطة',
+    )
+    domain          = models.CharField(max_length=20, choices=Domain.choices, verbose_name='المجال')
+    goal_text       = models.TextField(verbose_name='الهدف')
+    start_date      = models.DateField(null=True, blank=True, verbose_name='تاريخ البدء')
+    end_date        = models.DateField(null=True, blank=True, verbose_name='تاريخ الانتهاء')
+    post_evaluation = models.CharField(
+        max_length=20, choices=Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
+    )
+    order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name        = 'هدف خطة فردية'
+        verbose_name_plural  = 'أهداف الخطط الفردية'
+        ordering             = ['domain', 'order']
+
+    def __str__(self):
+        return f'{self.plan} — {self.get_domain_display()} #{self.order}'
+
+
 # ── الملف الطبي ───────────────────────────────────────────────────────────────
 
 class StudentMedicalProfile(models.Model):

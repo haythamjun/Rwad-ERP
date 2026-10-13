@@ -6,6 +6,7 @@ from .models import (
     StudentMedicalProfile, MedicalVisit, Medication,
     DailyMedicalCheckIn, MedicationAdministration,
     Plan, PlanGoal, PlanAttachment,
+    IndividualPlan, IndividualPlanGoal,
 )
 from datetime import date
 
@@ -497,6 +498,63 @@ class PlanSerializer(serializers.ModelSerializer):
                     row.save()
                 elif domain:
                     PlanGoal.objects.create(plan=instance, **rec)
+        return instance
+
+
+# ── الخطة الفردية ─────────────────────────────────────────────────────────────
+
+class IndividualPlanGoalSerializer(serializers.ModelSerializer):
+    domain_display          = serializers.CharField(source='get_domain_display', read_only=True)
+    post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
+
+    class Meta:
+        model  = IndividualPlanGoal
+        fields = [
+            'id', 'domain', 'domain_display', 'goal_text',
+            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display', 'order',
+        ]
+        read_only_fields = ['id']
+
+
+class IndividualPlanSerializer(serializers.ModelSerializer):
+    student_name    = serializers.CharField(source='student.full_name', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    goals           = IndividualPlanGoalSerializer(many=True, required=False)
+
+    class Meta:
+        model  = IndividualPlan
+        fields = [
+            'id', 'student', 'student_name', 'notes', 'goals',
+            'created_by', 'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        # الطالب يُملأ دائمًا من معامل الـ URL لا الـ body — نفس حيلة الحضور/الجدول.
+        extra_kwargs = {'student': {'required': False}}
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def create(self, validated_data):
+        goals_data = validated_data.pop('goals', [])
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+        plan = IndividualPlan.objects.create(**validated_data)
+        for rec in goals_data:
+            IndividualPlanGoal.objects.create(plan=plan, **rec)
+        return plan
+
+    def update(self, instance, validated_data):
+        goals_data = validated_data.pop('goals', None)
+        instance = super().update(instance, validated_data)
+        if goals_data is not None:
+            # عدة أهداف ممكن تصير بنفس المجال، فمافيه مفتاح upsert طبيعي —
+            # نستبدل كل الأهداف بالكامل بدل محاولة مطابقتها وحدة وحدة.
+            instance.goals.all().delete()
+            for rec in goals_data:
+                IndividualPlanGoal.objects.create(plan=instance, **rec)
         return instance
 
 

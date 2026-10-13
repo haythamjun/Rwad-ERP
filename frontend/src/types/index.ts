@@ -102,7 +102,7 @@ export interface Classroom {
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans';
 
 export interface ModulePermission {
   module: ModuleKey;
@@ -490,6 +490,71 @@ export interface PlanFormData {
   start_date: string;
   end_date: string;
   goals: { domain: PlanDomain; goals_text: string }[];
+}
+
+// ─────────────────────────────────────────────
+// الخطة الفردية
+// ─────────────────────────────────────────────
+export type IndividualPlanDomain =
+  | 'cognitive' | 'fine_motor' | 'gross_motor'
+  | 'social' | 'independence' | 'attention' | 'communication';
+
+export const INDIVIDUAL_PLAN_DOMAINS: { value: IndividualPlanDomain; label: string }[] = [
+  { value: 'cognitive',     label: 'الإدراكي' },
+  { value: 'fine_motor',    label: 'الحركي الدقيق' },
+  { value: 'gross_motor',   label: 'الحركي الكبير' },
+  { value: 'social',        label: 'الاجتماعي' },
+  { value: 'independence',  label: 'الاستقلالي' },
+  { value: 'attention',     label: 'الانتباه والتركيز' },
+  { value: 'communication', label: 'التخاطب' },
+];
+
+export type IndividualPlanEvaluation = 'achieved' | 'partial' | 'not_achieved' | 'not_applicable' | '';
+
+export const INDIVIDUAL_PLAN_EVALUATIONS: { value: IndividualPlanEvaluation; label: string }[] = [
+  { value: '',               label: '-- بدون تقييم --' },
+  { value: 'achieved',       label: 'تحقق' },
+  { value: 'partial',        label: 'نوعًا ما' },
+  { value: 'not_achieved',   label: 'لم يتحقق' },
+  { value: 'not_applicable', label: 'لم يطبق' },
+];
+
+export interface IndividualPlanGoal {
+  id: number;
+  domain: IndividualPlanDomain;
+  domain_display: string;
+  goal_text: string;
+  start_date: string | null;
+  end_date: string | null;
+  post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_display?: string | null;
+  order: number;
+}
+
+export interface IndividualPlan {
+  id: number;
+  student: number;
+  student_name: string;
+  notes?: string;
+  goals: IndividualPlanGoal[];
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IndividualPlanGoalFormData {
+  domain: IndividualPlanDomain;
+  goal_text: string;
+  start_date: string | null;
+  end_date: string | null;
+  post_evaluation: IndividualPlanEvaluation;
+  order: number;
+}
+
+export interface IndividualPlanFormData {
+  notes?: string;
+  goals: IndividualPlanGoalFormData[];
 }
 
 // حصة جماعية — تجميع سجلات الجدول الفردية حسب (اليوم، الوقت، المادة، الأخصائي)

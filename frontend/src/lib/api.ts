@@ -284,6 +284,16 @@ export const plansApi = {
     api.delete(`/students/${studentId}/plans/${planId}/attachments/${attachmentId}/`),
 };
 
+export const individualPlansApi = {
+  list:   (studentId: number) => api.get(`/students/${studentId}/individual-plans/`),
+  detail: (studentId: number, id: number) => api.get(`/students/${studentId}/individual-plans/${id}/`),
+  create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/individual-plans/`, data),
+  update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/individual-plans/${id}/`, data),
+  delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/individual-plans/${id}/`),
+  // قائمة شاملة عبر كل الطلاب — لصفحة "الخطة الفردية" بالقائمة الجانبية
+  listAll: (params?: Record<string, unknown>) => api.get('/individual-plans/', { params }),
+};
+
 // ─────────────────────────────────────────────
 // التقارير
 // ─────────────────────────────────────────────
