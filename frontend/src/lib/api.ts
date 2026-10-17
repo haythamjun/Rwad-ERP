@@ -54,7 +54,7 @@ export const authApi = {
   profile: () => api.get('/auth/profile/'),
   changePassword: (old_password: string, new_password: string) =>
     api.post('/auth/change-password/', { old_password, new_password }),
-  users: () => api.get('/auth/users/'),
+  users: (page?: number) => api.get('/auth/users/', { params: page ? { page } : undefined }),
   createUser: (data: unknown) => api.post('/auth/users/', data),
   updateUser: (id: number, data: unknown) => api.patch(`/auth/users/${id}/`, data),
   deleteUser: (id: number) => api.delete(`/auth/users/${id}/`),

@@ -5,10 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate } from '@/lib/utils';
-import type { User } from '@/types';
+import type { User, PaginatedResponse } from '@/types';
 import Header from '@/components/layout/Header';
 import UserFormModal from '@/components/users/UserFormModal';
-import { ShieldAlert, UserPlus, Pencil, Trash2, Check, Shield } from 'lucide-react';
+import { ShieldAlert, UserPlus, Pencil, Trash2, Check, Shield, ChevronRight, ChevronLeft } from 'lucide-react';
 
 const ROLE_COLORS: Record<string, string> = {
   admin:          'bg-red-100 text-red-700',
@@ -28,13 +28,17 @@ export default function UsersPage() {
   const [editTarget,  setEditTarget]  = useState<User | null>(null);
   const [deleteId,    setDeleteId]    = useState<number | null>(null);
   const [apiError,    setApiError]    = useState('');
+  const [page,        setPage]        = useState(1);
 
   // ── Queries / Mutations ───────────────────────────────────────────────────
-  const { data, isLoading } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: () => authApi.users().then((r) => r.data.results || r.data),
+  const { data, isLoading } = useQuery<PaginatedResponse<User>>({
+    queryKey: ['users', page],
+    queryFn: () => authApi.users(page).then((r) => r.data),
     enabled: !!currentUser?.is_admin,
   });
+
+  const users = data?.results || [];
+  const totalPages = Math.ceil((data?.count || 0) / 20);
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => authApi.createUser(body),
@@ -142,7 +146,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {(data || []).map((u) => (
+                {users.map((u) => (
                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
 
                     {/* User */}
@@ -220,7 +224,7 @@ export default function UsersPage() {
                     </td>
                   </tr>
                 ))}
-                {(data || []).length === 0 && (
+                {users.length === 0 && (
                   <tr>
                     <td colSpan={8} className="text-center py-10 text-gray-400">
                       لا يوجد مستخدمون
@@ -229,6 +233,31 @@ export default function UsersPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+            <p className="text-xs text-gray-500">
+              صفحة {page} من {totalPages} — {data?.count} مستخدم
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                className="btn-secondary py-1 px-2 text-xs"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronRight size={14} />
+              </button>
+              <button
+                className="btn-secondary py-1 px-2 text-xs"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronLeft size={14} />
+              </button>
+            </div>
           </div>
         )}
       </div>
