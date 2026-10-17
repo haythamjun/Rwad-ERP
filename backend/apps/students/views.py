@@ -30,10 +30,22 @@ from .permissions import CanWrite, CanDelete, CanExport, CanImport, CanViewMedic
 from apps.core.utils import log_action
 
 
+def _teacher_classroom_ids(user):
+    """أرقام الفصول اللي المستخدم معلم/ة فيها، أو None لو مو معلم فصل إطلاقًا.
+    يُفحص قبل الفرع/المدينة بكل دوال النطاق أدناه — أضيق منهما ويستبدلهما بالكامل."""
+    from apps.core.models import Classroom
+    ids = list(Classroom.objects.filter(teacher=user).values_list('id', flat=True))
+    return ids or None
+
+
 def _apply_scope(user, qs):
-    """Restrict a Student queryset to the user's assigned branch or city. Admin sees all."""
+    """Restrict a Student queryset to the user's classroom (if a classroom teacher),
+    else assigned branch/city. Admin sees all."""
     if user.is_admin:
         return qs
+    classroom_ids = _teacher_classroom_ids(user)
+    if classroom_ids is not None:
+        return qs.filter(classroom_id__in=classroom_ids)
     if user.assigned_branch_id:
         return qs.filter(branch_id=user.assigned_branch_id)
     if user.assigned_city:
@@ -43,9 +55,16 @@ def _apply_scope(user, qs):
 
 def _scope_branch_ids(user):
     """أرقام الفروع المسموح بها للمستخدم: None تعني بلا تقييد (مدير، أو مستخدم بلا
-    فرع/مدينة معيَّنة). عدا ذلك قائمة أرقام فروع — فرعه المعيَّن، أو كل فروع مدينته."""
+    فصل/فرع/مدينة معيَّنة). لمعلم الفصل: فروع فصوله (بوابة خشنة لمسارات معامل
+    branch الصريح — التضييق الحقيقي لطلابه تحديدًا يصير عبر _apply_scope/_scope_by_student)."""
     if user.is_admin:
         return None
+    classroom_ids = _teacher_classroom_ids(user)
+    if classroom_ids is not None:
+        from apps.core.models import Classroom
+        return list(
+            Classroom.objects.filter(id__in=classroom_ids).values_list('branch_id', flat=True).distinct()
+        )
     if user.assigned_branch_id:
         return [user.assigned_branch_id]
     if user.assigned_city:
@@ -57,19 +76,36 @@ def _scope_branch_ids(user):
 
 
 def _scope_by_student(user, qs, path='student'):
-    """يقصر queryset لنموذج مرتبط بـ Student على فروع المستخدم عبر <path>__branch_id."""
+    """يقصر queryset لنموذج مرتبط بـ Student على فصل المستخدم (لو معلم فصل)،
+    وإلا على فروعه، عبر <path>__classroom_id أو <path>__branch_id."""
+    if user.is_admin:
+        return qs
+    classroom_ids = _teacher_classroom_ids(user)
+    if classroom_ids is not None:
+        return qs.filter(**{f'{path}__classroom_id__in': classroom_ids})
     ids = _scope_branch_ids(user)
     if ids is None:
         return qs
     return qs.filter(**{f'{path}__branch_id__in': ids})
 
 
-def _assert_student_in_scope(user, student):
-    """يرفع 403 إن كان الطالب خارج نطاق فروع المستخدم (يُستخدم عند الإنشاء/التعديل
-    حيث نجلب الطالب بـ get_object_or_404)."""
+def _student_in_scope(user, student):
+    """نفس منطق _assert_student_in_scope لكن ترجع True/False بدل رفع استثناء —
+    مناسبة لحلقات تخطي-وتكمل بدل إيقاف الطلب كامل."""
+    if user.is_admin:
+        return True
+    classroom_ids = _teacher_classroom_ids(user)
+    if classroom_ids is not None:
+        return student.classroom_id in classroom_ids
     ids = _scope_branch_ids(user)
-    if ids is not None and student.branch_id not in ids:
-        raise PermissionDenied('لا تملك صلاحية الوصول لبيانات هذا الفرع')
+    return ids is None or student.branch_id in ids
+
+
+def _assert_student_in_scope(user, student):
+    """يرفع 403 إن كان الطالب خارج نطاق المستخدم (فصله لو معلم، وإلا فروعه) —
+    يُستخدم عند الإنشاء/التعديل حيث نجلب الطالب بـ get_object_or_404."""
+    if not _student_in_scope(user, student):
+        raise PermissionDenied('لا تملك صلاحية الوصول لبيانات هذا الطالب')
 
 
 def _assert_branch_in_scope(user, branch_id):
@@ -1180,16 +1216,14 @@ class ScheduleBulkCreateView(APIView):
             return Response(time_check.errors, status=status.HTTP_400_BAD_REQUEST)
         start_time = time_check.validated_data['start_time']
 
-        allowed_ids = _scope_branch_ids(request.user)
-
         created, skipped, errors = 0, 0, []
         for sid in student_ids:
             student = Student.objects.filter(pk=sid).first()
             if not student:
                 continue
-            if allowed_ids is not None and student.branch_id not in allowed_ids:
+            if not _student_in_scope(request.user, student):
                 skipped += 1
-                errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': 'خارج نطاق فرعك'})
+                errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': 'خارج نطاقك'})
                 continue
             if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
                 skipped += 1
@@ -1225,6 +1259,7 @@ class ScheduleClassesView(APIView):
             .select_related('student', 'specialist')
             .order_by('day', 'start_time', 'student__first_name')
         )
+        slots = _scope_by_student(request.user, slots)
 
         day_order = {d: i for i, d in enumerate(StudentSchedule.Day.values)}
         day_labels = dict(StudentSchedule.Day.choices)
@@ -1639,6 +1674,7 @@ class MedicalCheckInSheetView(APIView):
         _assert_branch_in_scope(request.user, branch)
 
         students_qs = Student.objects.filter(status='active', branch_id=branch).select_related('branch')
+        students_qs = _apply_scope(request.user, students_qs)
         if search:
             students_qs = students_qs.filter(
                 Q(first_name__icontains=search)  |

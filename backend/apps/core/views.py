@@ -331,19 +331,22 @@ class DashboardStatsView(APIView):
     def get(self, request):
         from apps.students.models import Student
         from apps.accounts.models import User
+        from apps.students.views import _apply_scope
 
         user = request.user
         qs = Student.objects.all()
         branches_qs = Branch.objects.filter(is_active=True)
         buses_qs = Bus.objects.all()
 
+        # تقييد الطلاب: فصل المعلم لو معلم فصل، وإلا فرعه/مدينته — نفس منطق كل
+        # شاشات الطالب الأخرى (_apply_scope). الفروع/الباصات تبقى بمنطقها
+        # الحالي (خارج نطاق "شاشات الطالب").
+        qs = _apply_scope(user, qs)
         if not user.is_admin:
             if user.assigned_branch_id:
-                qs = qs.filter(branch_id=user.assigned_branch_id)
                 branches_qs = branches_qs.filter(id=user.assigned_branch_id)
                 buses_qs = buses_qs.filter(branch_id=user.assigned_branch_id)
             elif user.assigned_city:
-                qs = qs.filter(branch__city=user.assigned_city)
                 branches_qs = branches_qs.filter(city=user.assigned_city)
                 buses_qs = buses_qs.filter(branch__city=user.assigned_city)
 
@@ -429,6 +432,7 @@ def _build_attendance_report(request):
     فقط) — أي يوم متوقّع بلا سجل حضور إطلاقًا يُحتسب غيابًا. التفصيل حسب الطالب
     يشمل كل طالب نشط ضمن النطاق حتى لو لم يُسجَّل له أي حضور بالفترة."""
     from apps.students.models import Student, StudentAttendance
+    from apps.students.views import _apply_scope, _scope_by_student
 
     today = date.today()
     date_from = parse_date(request.query_params.get('date_from', '')) or today.replace(day=1)
@@ -451,17 +455,13 @@ def _build_attendance_report(request):
         qs = qs.exclude(attendance_date__in=excluded_dates)
     students_qs = Student.objects.filter(status='active')
 
-    # نفلتر سجلات الحضور حسب فرع الطالب لا فرع السجل نفسه — فرع السجل حقل اختياري
-    # لا تُعبّئه شاشة تسجيل الحضور إطلاقًا، فيبقى فارغًا دائمًا ويُسقِط كل النتائج
-    # لو اعتمدنا عليه (نفس الحل المطبَّق أصلًا بـ _daily_attendance_rows أعلاه).
+    # نفلتر سجلات الحضور حسب فرع/فصل الطالب لا فرع السجل نفسه — فرع السجل حقل
+    # اختياري لا تُعبّئه شاشة تسجيل الحضور إطلاقًا، فيبقى فارغًا دائمًا ويُسقِط كل
+    # النتائج لو اعتمدنا عليه (نفس الحل المطبَّق أصلًا بـ _daily_attendance_rows).
+    # _apply_scope/_scope_by_student يتكفّلان بتضييق المعلم على فصله أيضًا.
     user = request.user
-    if not user.is_admin:
-        if user.assigned_branch_id:
-            qs = qs.filter(student__branch_id=user.assigned_branch_id)
-            students_qs = students_qs.filter(branch_id=user.assigned_branch_id)
-        elif user.assigned_city:
-            qs = qs.filter(student__branch__city=user.assigned_city)
-            students_qs = students_qs.filter(branch__city=user.assigned_city)
+    students_qs = _apply_scope(user, students_qs)
+    qs = _scope_by_student(user, qs)
 
     branch_param = request.query_params.get('branch')
     if branch_param:
@@ -547,6 +547,7 @@ def _daily_attendance_rows(request):
     المستخدم (الفرع/المدينة) ومعامِلات branch/student، لكن حسب فرع الطالب لا فرع
     السجل — إذ إن فرع السجل حقل اختياري وقد يكون فارغًا فيُسقِط صفوفًا صحيحة."""
     from apps.students.models import StudentAttendance
+    from apps.students.views import _scope_by_student
 
     today = date.today()
     date_from = parse_date(request.query_params.get('date_from', '')) or today.replace(day=1)
@@ -558,12 +559,7 @@ def _daily_attendance_rows(request):
         .select_related('student', 'student__branch', 'branch')
     )
 
-    user = request.user
-    if not user.is_admin:
-        if user.assigned_branch_id:
-            qs = qs.filter(student__branch_id=user.assigned_branch_id)
-        elif user.assigned_city:
-            qs = qs.filter(student__branch__city=user.assigned_city)
+    qs = _scope_by_student(request.user, qs)
 
     branch_param = request.query_params.get('branch')
     if branch_param:
