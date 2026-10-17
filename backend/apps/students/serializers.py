@@ -504,13 +504,13 @@ class PlanSerializer(serializers.ModelSerializer):
 # ── الخطة الفردية ─────────────────────────────────────────────────────────────
 
 class IndividualPlanGoalSerializer(serializers.ModelSerializer):
-    domain_display          = serializers.CharField(source='get_domain_display', read_only=True)
+    # domain صار نص حر — القيمة المخزَّنة هي نفسها نص العرض، بلا حاجة لحقل display منفصل.
     post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
 
     class Meta:
         model  = IndividualPlanGoal
         fields = [
-            'id', 'domain', 'domain_display', 'goal_text',
+            'id', 'domain', 'goal_text',
             'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display', 'order',
         ]
         read_only_fields = ['id']

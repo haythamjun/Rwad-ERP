@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Plus, Trash2 } from 'lucide-react';
-import { INDIVIDUAL_PLAN_DOMAINS, INDIVIDUAL_PLAN_EVALUATIONS } from '@/types';
-import type { IndividualPlan, IndividualPlanDomain, IndividualPlanEvaluation } from '@/types';
+import { X, Save, Plus, Trash2, FolderPlus } from 'lucide-react';
+import { INDIVIDUAL_PLAN_DEFAULT_DOMAINS, INDIVIDUAL_PLAN_EVALUATIONS } from '@/types';
+import type { IndividualPlan, IndividualPlanEvaluation } from '@/types';
 
 interface Props {
   plan?: IndividualPlan | null;
@@ -16,7 +16,7 @@ let tempKeyCounter = 0;
 
 interface GoalRow {
   _key: string; // مفتاح React محلي فقط — ما يُرسل للخادم
-  domain: IndividualPlanDomain;
+  domain: string;
   goal_text: string;
   start_date: string | null;
   end_date: string | null;
@@ -24,7 +24,7 @@ interface GoalRow {
   order: number;
 }
 
-function makeEmptyGoal(domain: IndividualPlanDomain, order: number): GoalRow {
+function makeEmptyGoal(domain: string, order: number): GoalRow {
   tempKeyCounter += 1;
   return { _key: `new-${tempKeyCounter}`, domain, goal_text: '', start_date: null, end_date: null, post_evaluation: '', order };
 }
@@ -42,8 +42,34 @@ export default function IndividualPlanModal({ plan, onClose, onSave, loading }: 
       order: g.order,
     }))
   );
+  // قائمة أقسام المجالات المعروضة — خطة جديدة تبدأ بالمجالات الافتراضية كنقطة
+  // انطلاق، وخطة قائمة تبدأ بمجالات أهدافها الحالية. المعلم يضيف/يحذف بحرية.
+  const [domains, setDomains] = useState<string[]>(() => {
+    if (plan) {
+      const seen = new Set<string>();
+      const ordered: string[] = [];
+      for (const g of plan.goals) {
+        if (!seen.has(g.domain)) { seen.add(g.domain); ordered.push(g.domain); }
+      }
+      return ordered;
+    }
+    return [...INDIVIDUAL_PLAN_DEFAULT_DOMAINS];
+  });
+  const [newDomainName, setNewDomainName] = useState('');
 
-  const addGoal = (domain: IndividualPlanDomain) => {
+  const addDomain = () => {
+    const name = newDomainName.trim();
+    if (!name || domains.includes(name)) return;
+    setDomains(d => [...d, name]);
+    setNewDomainName('');
+  };
+
+  const removeDomain = (domain: string) => {
+    setDomains(d => d.filter(x => x !== domain));
+    setGoals(g => g.filter(x => x.domain !== domain));
+  };
+
+  const addGoal = (domain: string) => {
     const domainGoals = goals.filter(g => g.domain === domain);
     const nextOrder = domainGoals.length > 0 ? Math.max(...domainGoals.map(g => g.order)) + 1 : 1;
     setGoals(g => [...g, makeEmptyGoal(domain, nextOrder)]);
@@ -73,15 +99,38 @@ export default function IndividualPlanModal({ plan, onClose, onSave, loading }: 
         </div>
 
         <div className="p-5 space-y-4">
-          {INDIVIDUAL_PLAN_DOMAINS.map(({ value: domain, label }) => {
+          <div className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
+            <input
+              className="form-input text-sm flex-1"
+              placeholder="اسم مجال جديد..."
+              value={newDomainName}
+              onChange={e => setNewDomainName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDomain(); } }}
+            />
+            <button type="button" onClick={addDomain} className="btn-secondary py-1.5 px-3 text-xs flex-shrink-0">
+              <FolderPlus size={13} /> إضافة مجال
+            </button>
+          </div>
+
+          {domains.map((domain) => {
             const domainGoals = goals.filter(g => g.domain === domain).sort((a, b) => a.order - b.order);
             return (
               <div key={domain} className="border border-gray-100 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-semibold text-gray-700">{label}</p>
-                  <button type="button" onClick={() => addGoal(domain)} className="btn-secondary py-1 px-2 text-xs">
-                    <Plus size={12} /> إضافة هدف
-                  </button>
+                  <p className="text-sm font-semibold text-gray-700">{domain}</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => addGoal(domain)} className="btn-secondary py-1 px-2 text-xs">
+                      <Plus size={12} /> إضافة هدف
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeDomain(domain)}
+                      className="text-gray-400 hover:text-red-600"
+                      title="حذف المجال"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
                 {domainGoals.length === 0 ? (
                   <p className="text-xs text-gray-400">لا توجد أهداف بهذا المجال بعد.</p>

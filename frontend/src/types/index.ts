@@ -495,18 +495,11 @@ export interface PlanFormData {
 // ─────────────────────────────────────────────
 // الخطة الفردية
 // ─────────────────────────────────────────────
-export type IndividualPlanDomain =
-  | 'cognitive' | 'fine_motor' | 'gross_motor'
-  | 'social' | 'independence' | 'attention' | 'communication';
-
-export const INDIVIDUAL_PLAN_DOMAINS: { value: IndividualPlanDomain; label: string }[] = [
-  { value: 'cognitive',     label: 'الإدراكي' },
-  { value: 'fine_motor',    label: 'الحركي الدقيق' },
-  { value: 'gross_motor',   label: 'الحركي الكبير' },
-  { value: 'social',        label: 'الاجتماعي' },
-  { value: 'independence',  label: 'الاستقلالي' },
-  { value: 'attention',     label: 'الانتباه والتركيز' },
-  { value: 'communication', label: 'التخاطب' },
+// المجال صار نص حر يضيفه المعلم بنفسه — هذي بس مجالات افتراضية جاهزة تُقترح
+// عند إنشاء خطة جديدة (نقطة بداية)، مو قائمة مقفولة.
+export const INDIVIDUAL_PLAN_DEFAULT_DOMAINS = [
+  'الإدراكي', 'الحركي الدقيق', 'الحركي الكبير',
+  'الاجتماعي', 'الاستقلالي', 'الانتباه والتركيز', 'التخاطب',
 ];
 
 export type IndividualPlanEvaluation = 'achieved' | 'partial' | 'not_achieved' | 'not_applicable' | '';
@@ -521,8 +514,7 @@ export const INDIVIDUAL_PLAN_EVALUATIONS: { value: IndividualPlanEvaluation; lab
 
 export interface IndividualPlanGoal {
   id: number;
-  domain: IndividualPlanDomain;
-  domain_display: string;
+  domain: string;
   goal_text: string;
   start_date: string | null;
   end_date: string | null;
@@ -544,7 +536,7 @@ export interface IndividualPlan {
 }
 
 export interface IndividualPlanGoalFormData {
-  domain: IndividualPlanDomain;
+  domain: string;
   goal_text: string;
   start_date: string | null;
   end_date: string | null;

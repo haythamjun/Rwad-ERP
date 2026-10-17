@@ -587,14 +587,13 @@ class IndividualPlan(models.Model):
 
 
 class IndividualPlanGoal(models.Model):
-    class Domain(models.TextChoices):
-        COGNITIVE     = 'cognitive',     'الإدراكي'
-        FINE_MOTOR    = 'fine_motor',    'الحركي الدقيق'
-        GROSS_MOTOR   = 'gross_motor',   'الحركي الكبير'
-        SOCIAL        = 'social',        'الاجتماعي'
-        INDEPENDENCE  = 'independence',  'الاستقلالي'
-        ATTENTION     = 'attention',     'الانتباه والتركيز'
-        COMMUNICATION = 'communication', 'التخاطب'
+    # القائمة الأصلية — تُستخدم الآن بس كمجالات افتراضية جاهزة عند إنشاء خطة
+    # جديدة (وبترحيل بيانات الهجرة)، مو كقيد على الحقل. المعلم يقدر يضيف أي
+    # مجال نص حر بالإضافة لها، أو يحذفها.
+    DEFAULT_DOMAINS = [
+        'الإدراكي', 'الحركي الدقيق', 'الحركي الكبير',
+        'الاجتماعي', 'الاستقلالي', 'الانتباه والتركيز', 'التخاطب',
+    ]
 
     class Evaluation(models.TextChoices):
         ACHIEVED       = 'achieved',       'تحقق'
@@ -606,7 +605,7 @@ class IndividualPlanGoal(models.Model):
         IndividualPlan, on_delete=models.CASCADE,
         related_name='goals', verbose_name='الخطة',
     )
-    domain          = models.CharField(max_length=20, choices=Domain.choices, verbose_name='المجال')
+    domain          = models.CharField(max_length=100, verbose_name='المجال')
     goal_text       = models.TextField(verbose_name='الهدف')
     start_date      = models.DateField(null=True, blank=True, verbose_name='تاريخ البدء')
     end_date        = models.DateField(null=True, blank=True, verbose_name='تاريخ الانتهاء')
@@ -621,7 +620,7 @@ class IndividualPlanGoal(models.Model):
         ordering             = ['domain', 'order']
 
     def __str__(self):
-        return f'{self.plan} — {self.get_domain_display()} #{self.order}'
+        return f'{self.plan} — {self.domain} #{self.order}'
 
 
 # ── الملف الطبي ───────────────────────────────────────────────────────────────
