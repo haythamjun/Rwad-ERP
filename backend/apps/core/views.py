@@ -310,17 +310,29 @@ class ClassroomListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return Classroom.objects.select_related('branch', 'teacher').order_by('branch', 'name')
+        qs = Classroom.objects.select_related('branch', 'teacher').order_by('branch', 'name')
+        from apps.students.views import _teacher_classroom_ids
+        classroom_ids = _teacher_classroom_ids(self.request.user)
+        if classroom_ids is not None:
+            qs = qs.filter(id__in=classroom_ids)
+        return qs
 
 
 class ClassroomDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ClassroomSerializer
-    queryset         = Classroom.objects.select_related('branch', 'teacher')
 
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
         return [CanWriteClassrooms()]
+
+    def get_queryset(self):
+        qs = Classroom.objects.select_related('branch', 'teacher')
+        from apps.students.views import _teacher_classroom_ids
+        classroom_ids = _teacher_classroom_ids(self.request.user)
+        if classroom_ids is not None:
+            qs = qs.filter(id__in=classroom_ids)
+        return qs
 
 
 # ── Dashboard stats ────────────────────────────────────────────────────────────
