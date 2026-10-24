@@ -1,13 +1,25 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import {
   Users, UserCheck, Clock, UserX, TrendingUp, FileText, Building2, MapPin,
   Bus, UserCog, XCircle, AlertTriangle,
+  Mic, Hand, Activity, Brain, HeartHandshake,
+  type LucideIcon,
 } from 'lucide-react';
 import { dashboardApi, studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import type { PaginatedResponse, Student } from '@/types';
+import { DEPARTMENTS } from '@/types';
+import type { PaginatedResponse, Student, Department } from '@/types';
+
+const DEPARTMENT_ICONS: Record<Department, LucideIcon> = {
+  speech: Mic,
+  ot:     Hand,
+  pt:     Activity,
+  psych:  Brain,
+  social: HeartHandshake,
+};
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'مدير النظام', manager: 'مدير', specialist: 'أخصائي', reception: 'استقبال', viewer: 'مشاهد',
@@ -99,6 +111,31 @@ export default function DashboardPage() {
           bg={busesRenewal > 0 ? 'bg-red-50' : 'bg-gray-100'}
         />
         <StatCard title="مستخدمو النظام" value={userCount} icon={<UserCog size={22}/>}   color="text-indigo-600"  bg="bg-indigo-50" />
+      </div>
+
+      {/* الأقسام التخصصية */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <HeartHandshake size={18} className="text-primary-600" />
+          <h3 className="section-title mb-0">الأقسام التخصصية</h3>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {DEPARTMENTS.map((d) => {
+            const Icon = DEPARTMENT_ICONS[d.value];
+            return (
+              <Link
+                key={d.value}
+                href={`/departments/${d.value}`}
+                className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+              >
+                <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center">
+                  <Icon size={20} className="text-primary-600" />
+                </div>
+                <p className="text-sm font-semibold text-gray-700 text-center">{d.label}</p>
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       {/* Branches */}

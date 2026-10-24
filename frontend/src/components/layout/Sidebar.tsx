@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   NotebookPen,
   FileHeart,
+  CalendarRange,
   Menu,
   X,
 } from 'lucide-react';
@@ -40,6 +41,7 @@ const navItems = [
   { href: '/assessments', label: 'المقاييس والخطط الدراسية', icon: ClipboardCheck, assessmentsOnly: true },
   { href: '/plans',       label: 'الخطط',             icon: NotebookPen,   assessmentsOnly: true },
   { href: '/individual-plans', label: 'الخطة الفردية', icon: FileHeart,    individualPlansOnly: true },
+  { href: '/quarterly-plans', label: 'الخطة الفصلية', icon: CalendarRange, quarterlyPlansOnly: true },
   { href: '/users',      label: 'المستخدمون',      icon: UserCog,       adminOnly: true },
   { href: '/reports',    label: 'التقارير',         icon: BarChart3,     reportsOnly: true },
   { href: '/audit-logs', label: 'سجل العمليات',    icon: ClipboardList, managerOnly: true },
@@ -79,6 +81,7 @@ export default function Sidebar() {
   const canViewAssessments = user?.is_admin || user?.permissions?.some((p) => p.module === 'assessments' && p.can_view);
   const canViewReports = user?.is_admin || user?.permissions?.some((p) => p.module === 'reports' && p.can_view);
   const canViewIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_view);
+  const canViewQuarterlyPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'quarterly_plans' && p.can_view);
 
   const filtered = navItems.filter((item) => {
     if (item.adminOnly && !user?.is_admin) return false;
@@ -87,6 +90,7 @@ export default function Sidebar() {
     if (item.assessmentsOnly && !canViewAssessments) return false;
     if (item.reportsOnly && !canViewReports) return false;
     if (item.individualPlansOnly && !canViewIndividualPlans) return false;
+    if (item.quarterlyPlansOnly && !canViewQuarterlyPlans) return false;
     return true;
   });
 

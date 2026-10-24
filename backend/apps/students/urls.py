@@ -44,6 +44,9 @@ from .views import (
     PlanAttachmentDeleteView,
     IndividualPlanListCreateView,
     IndividualPlanDetailView,
+    QuarterlyPlanListCreateView,
+    QuarterlyPlanDetailView,
+    StudentSpecialistAssignmentsView,
 )
 
 urlpatterns = [
@@ -102,6 +105,13 @@ urlpatterns = [
     path('students/<int:student_pk>/individual-plans/<int:pk>/', IndividualPlanDetailView.as_view(), name='individual-plan-detail'),
     # الخطة الفردية — قائمة شاملة عبر كل الطلاب
     path('individual-plans/', IndividualPlanListCreateView.as_view(), name='individual-plan-global'),
+    # الخطة الفصلية — لكل طالب
+    path('students/<int:student_pk>/quarterly-plans/', QuarterlyPlanListCreateView.as_view(), name='quarterly-plan-list'),
+    path('students/<int:student_pk>/quarterly-plans/<int:pk>/', QuarterlyPlanDetailView.as_view(), name='quarterly-plan-detail'),
+    # الخطة الفصلية — قائمة شاملة عبر كل الطلاب
+    path('quarterly-plans/', QuarterlyPlanListCreateView.as_view(), name='quarterly-plan-global'),
+    # تكليفات الأخصائيين — لكل طالب
+    path('students/<int:student_pk>/specialist-assignments/', StudentSpecialistAssignmentsView.as_view(), name='student-specialist-assignments'),
 
     # ── Guardian Portal (Flutter app) ──────────────────────────────────────────
     path('portal/login/',      GuardianLoginView.as_view(),    name='portal-login'),

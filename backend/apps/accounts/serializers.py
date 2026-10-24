@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
-from .models import UserModulePermission
+from .models import UserModulePermission, SpecialistCertificate
 from apps.core.models import Branch
 
 User = get_user_model()
@@ -39,6 +39,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'is_admin':        self.user.is_admin,
             'assigned_branch': self.user.assigned_branch_id,
             'assigned_city':   self.user.assigned_city,
+            'department':      self.user.department,
             'permissions':     perms,
         }
         return data
@@ -52,7 +53,7 @@ class UserPickerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = User
-        fields = ['id', 'username', 'full_name', 'role', 'role_display']
+        fields = ['id', 'username', 'full_name', 'role', 'role_display', 'department']
 
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
@@ -63,6 +64,7 @@ class UserSerializer(serializers.ModelSerializer):
     full_name            = serializers.SerializerMethodField()
     permissions          = ModulePermissionSerializer(source='module_permissions', many=True, read_only=True)
     assigned_branch_name = serializers.SerializerMethodField()
+    department_display   = serializers.CharField(source='get_department_display', read_only=True, default=None)
 
     class Meta:
         model  = User
@@ -71,6 +73,7 @@ class UserSerializer(serializers.ModelSerializer):
             'email', 'role', 'role_display', 'phone', 'avatar',
             'is_active', 'created_at', 'permissions',
             'assigned_branch', 'assigned_branch_name', 'assigned_city',
+            'department', 'department_display',
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -92,7 +95,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model  = User
         fields = [
             'username', 'password', 'first_name', 'last_name', 'email',
-            'role', 'phone', 'permissions', 'assigned_branch', 'assigned_city',
+            'role', 'phone', 'permissions', 'assigned_branch', 'assigned_city', 'department',
         ]
 
     def create(self, validated_data):
@@ -118,7 +121,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model  = User
         fields = [
             'first_name', 'last_name', 'email', 'role', 'phone', 'is_active',
-            'permissions', 'assigned_branch', 'assigned_city', 'password',
+            'permissions', 'assigned_branch', 'assigned_city', 'department', 'password',
         ]
 
     def update(self, instance, validated_data):
@@ -139,3 +142,12 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, min_length=8)
+
+
+class SpecialistCertificateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = SpecialistCertificate
+        fields = ['id', 'specialist', 'title', 'issuing_body', 'date', 'file', 'created_at']
+        read_only_fields = ['id', 'created_at']
+        # المدير يقدر يحدد مختص مختلف عند الإضافة من لوحته؛ غيره يُفرض عليه نفسه بالـ view.
+        extra_kwargs = {'specialist': {'required': False}}

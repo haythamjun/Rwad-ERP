@@ -113,3 +113,30 @@ class CanEditIndividualPlans(BasePermission):
         return request.user.module_permissions.filter(
             module='individual_plans', can_edit=True
         ).exists()
+
+
+class CanViewQuarterlyPlans(BasePermission):
+    """صلاحية مستقلة تمامًا عن 'assessments'/'individual_plans' — خاصة بالخطط الفصلية فقط."""
+    message = 'ليس لديك صلاحية لعرض الخطط الفصلية'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='quarterly_plans', can_view=True
+        ).exists()
+
+
+class CanEditQuarterlyPlans(BasePermission):
+    message = 'ليس لديك صلاحية لتعديل الخطط الفصلية'
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_admin:
+            return True
+        return request.user.module_permissions.filter(
+            module='quarterly_plans', can_edit=True
+        ).exists()

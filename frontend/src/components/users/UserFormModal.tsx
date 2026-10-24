@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Save, Eye, EyeOff } from 'lucide-react';
 import { branchesApi } from '@/lib/api';
+import { DEPARTMENTS } from '@/types';
 import type { Branch, User, ModulePermission, ModuleKey } from '@/types';
 
 // ── Module definitions ────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
     is_active:       user?.is_active       ?? true,
     assigned_branch: user?.assigned_branch ? String(user.assigned_branch) : '',
     assigned_city:   user?.assigned_city   || '',
+    department:      user?.department      || '',
   });
   const [scopeType, setScopeType] = useState<ScopeType>(() => {
     if (user?.assigned_branch) return 'branch';
@@ -97,6 +99,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
       is_active:       user?.is_active       ?? true,
       assigned_branch: user?.assigned_branch ? String(user.assigned_branch) : '',
       assigned_city:   user?.assigned_city   || '',
+      department:      user?.department      || '',
     });
     setScopeType(user?.assigned_branch ? 'branch' : user?.assigned_city ? 'city' : 'all');
     setPerms(permsFromList(user?.permissions || []));
@@ -280,6 +283,22 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                   <option value="bus_supervisor">مشرف/ة الباص</option>
                 </select>
               </div>
+
+              {form.role === 'specialist' && (
+                <div>
+                  <label className="form-label">القسم التخصصي</label>
+                  <select
+                    className="form-input"
+                    value={form.department}
+                    onChange={(e) => set('department', e.target.value)}
+                  >
+                    <option value="">-- بدون قسم --</option>
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="flex items-center gap-3 pt-6">
                 <input

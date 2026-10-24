@@ -8,9 +8,9 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
-  CalendarDays, Clock, XCircle, RotateCcw, CalendarClock, Stethoscope, Pill, ClipboardCheck, ListChecks, NotebookPen, FileHeart,
+  CalendarDays, Clock, XCircle, RotateCcw, CalendarClock, Stethoscope, Pill, ClipboardCheck, ListChecks, NotebookPen, FileHeart, CalendarRange,
 } from 'lucide-react';
-import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi } from '@/lib/api';
+import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi, quarterlyPlansApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS, mediaUrl } from '@/lib/utils';
 import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
@@ -18,7 +18,7 @@ import type {
   Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData,
   ScheduleSlot, ScheduleSlotFormData, ScheduleDay,
   StudentMedicalProfile, Medication, MedicalVisit,
-  AssessmentListItem, StudentAssessment, Plan, IndividualPlan,
+  AssessmentListItem, StudentAssessment, Plan, IndividualPlan, QuarterlyPlan,
 } from '@/types';
 import Header from '@/components/layout/Header';
 import GuardianModal from '@/components/students/GuardianModal';
@@ -31,9 +31,11 @@ import MedicalVisitModal from '@/components/students/MedicalVisitModal';
 import AcceptanceLetterModal from '@/components/students/AcceptanceLetterModal';
 import PlanModal from '@/components/students/PlanModal';
 import IndividualPlanModal from '@/components/students/IndividualPlanModal';
+import QuarterlyPlanModal from '@/components/students/QuarterlyPlanModal';
+import SpecialistAssignmentsCard from '@/components/students/SpecialistAssignmentsCard';
 
-type StudentTab = 'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans' | 'individual_plans';
-const STUDENT_TABS: StudentTab[] = ['info', 'guardians', 'family', 'attachments', 'attendance', 'schedule', 'medical', 'assessments', 'plans', 'individual_plans'];
+type StudentTab = 'info' | 'guardians' | 'family' | 'attachments' | 'attendance' | 'schedule' | 'medical' | 'assessments' | 'plans' | 'individual_plans' | 'quarterly_plans';
+const STUDENT_TABS: StudentTab[] = ['info', 'guardians', 'family', 'attachments', 'attendance', 'schedule', 'medical', 'assessments', 'plans', 'individual_plans', 'quarterly_plans'];
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +63,7 @@ export default function StudentDetailPage() {
   const [startAssessmentId, setStartAssessmentId] = useState('');
   const [planModal, setPlanModal] = useState<{ open: boolean; plan?: Plan }>({ open: false });
   const [individualPlanModal, setIndividualPlanModal] = useState<{ open: boolean; plan?: IndividualPlan }>({ open: false });
+  const [quarterlyPlanModal, setQuarterlyPlanModal] = useState<{ open: boolean; plan?: QuarterlyPlan }>({ open: false });
 
   const canViewMedical = user?.is_admin || user?.permissions?.some((p) => p.module === 'medical_file' && p.can_view);
   const canEditMedical = user?.is_admin || user?.permissions?.some((p) => p.module === 'medical_file' && p.can_edit);
@@ -68,6 +71,8 @@ export default function StudentDetailPage() {
   const canEditAssessments = user?.is_admin || user?.permissions?.some((p) => p.module === 'assessments' && p.can_edit);
   const canViewIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_view);
   const canEditIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_edit);
+  const canViewQuarterlyPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'quarterly_plans' && p.can_view);
+  const canEditQuarterlyPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'quarterly_plans' && p.can_edit);
   const [attachFile, setAttachFile] = useState<File | null>(null);
   const [attachType, setAttachType] = useState('');
   const [attachName, setAttachName] = useState('');
@@ -314,6 +319,26 @@ export default function StudentDetailPage() {
     onError: () => toast.error('حدث خطأ أثناء الحفظ'),
   });
 
+  // ── الخطة الفصلية ────────────────────────────────────────────────────────
+  const quarterlyPlansEnabled = activeTab === 'quarterly_plans' && !!canViewQuarterlyPlans;
+
+  const { data: quarterlyPlans = [] } = useQuery<QuarterlyPlan[]>({
+    queryKey: ['quarterly-plans', id],
+    queryFn: () => quarterlyPlansApi.list(Number(id)).then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    enabled: quarterlyPlansEnabled,
+  });
+
+  const quarterlyPlanSaveMutation = useMutation({
+    mutationFn: ({ planId, data }: { planId?: number; data: Record<string, unknown> }) =>
+      planId ? quarterlyPlansApi.update(Number(id), planId, data) : quarterlyPlansApi.create(Number(id), data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['quarterly-plans', id] });
+      setQuarterlyPlanModal({ open: false });
+      toast.success('تم حفظ الخطة الفصلية');
+    },
+    onError: () => toast.error('حدث خطأ أثناء الحفظ'),
+  });
+
   // ── الملف الطبي ──────────────────────────────────────────────────────────
   const medicalEnabled = activeTab === 'medical' && !!canViewMedical;
 
@@ -517,6 +542,7 @@ export default function StudentDetailPage() {
           ...(canViewAssessments ? [{ key: 'assessments', label: 'المقاييس والخطط الدراسية', icon: ListChecks }] : []),
           ...(canViewAssessments ? [{ key: 'plans', label: 'الخطط', icon: NotebookPen }] : []),
           ...(canViewIndividualPlans ? [{ key: 'individual_plans', label: 'الخطة الفردية', icon: FileHeart }] : []),
+          ...(canViewQuarterlyPlans ? [{ key: 'quarterly_plans', label: 'الخطة الفصلية', icon: CalendarRange }] : []),
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -624,6 +650,13 @@ export default function StudentDetailPage() {
               <InfoRow label="تاريخ الإضافة" value={formatDate(student.created_at)} />
             </div>
           </div>
+
+          {/* تكليفات الأخصائيين — بوابة الأقسام التخصصية */}
+          <SpecialistAssignmentsCard
+            studentId={Number(id)}
+            assignments={student.specialist_assignments || []}
+            canEdit={!!user?.is_admin}
+          />
 
         </div>
       )}
@@ -1293,6 +1326,54 @@ export default function StudentDetailPage() {
         </div>
       )}
 
+      {activeTab === 'quarterly_plans' && canViewQuarterlyPlans && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarRange size={16} className="text-primary-600" />
+              <h3 className="section-title mb-0">الخطة الفصلية</h3>
+            </div>
+            {canEditQuarterlyPlans && (
+              <button
+                className="btn-primary py-1.5 px-3 text-xs"
+                onClick={() => setQuarterlyPlanModal({ open: true })}
+              >
+                <Plus size={13} /> إضافة خطة فصلية
+              </button>
+            )}
+          </div>
+
+          {quarterlyPlans.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+              <CalendarRange size={36} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">لا توجد خطة فصلية مسجّلة لهذا الطالب بعد</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {quarterlyPlans.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => canEditQuarterlyPlans && setQuarterlyPlanModal({ open: true, plan: p })}
+                  className="w-full flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors text-right"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-800">
+                      {formatDate(p.start_date)} إلى {formatDate(p.end_date)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {p.specialist_name ? `المختص: ${p.specialist_name}` : ''}
+                    </p>
+                  </div>
+                  <span className="badge text-xs bg-gray-100 text-gray-600 flex-shrink-0">
+                    {p.goals.length} هدف
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modals */}
       {guardianModal.open && (
         <GuardianModal
@@ -1392,6 +1473,15 @@ export default function StudentDetailPage() {
           onClose={() => setIndividualPlanModal({ open: false })}
           onSave={(data) => individualPlanSaveMutation.mutate({ planId: individualPlanModal.plan?.id, data })}
           loading={individualPlanSaveMutation.isPending}
+        />
+      )}
+
+      {quarterlyPlanModal.open && (
+        <QuarterlyPlanModal
+          plan={quarterlyPlanModal.plan}
+          onClose={() => setQuarterlyPlanModal({ open: false })}
+          onSave={(data) => quarterlyPlanSaveMutation.mutate({ planId: quarterlyPlanModal.plan?.id, data })}
+          loading={quarterlyPlanSaveMutation.isPending}
         />
       )}
 

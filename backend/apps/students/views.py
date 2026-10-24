@@ -38,14 +38,29 @@ def _teacher_classroom_ids(user):
     return ids or None
 
 
+def _specialist_caseload_ids(user):
+    """أرقام الطلاب الموكَلين لهذا الأخصائي بأي قسم تخصصي، أو None لو ماله أي
+    تكليف. يُفحص بعد فصل المعلم مباشرة (فقط لو المستخدم ليس معلم فصل) — نفس
+    أسبقية _teacher_classroom_ids تمامًا، أضيق من الفرع/المدينة ويستبدلهما بالكامل."""
+    from .models import StudentSpecialistAssignment
+    ids = list(
+        StudentSpecialistAssignment.objects.filter(specialist=user).values_list('student_id', flat=True).distinct()
+    )
+    return ids or None
+
+
 def _apply_scope(user, qs):
     """Restrict a Student queryset to the user's classroom (if a classroom teacher),
-    else assigned branch/city. Admin sees all."""
+    else specialist caseload (if a specialist with assignments), else assigned
+    branch/city. Admin sees all."""
     if user.is_admin:
         return qs
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return qs.filter(classroom_id__in=classroom_ids)
+    caseload_ids = _specialist_caseload_ids(user)
+    if caseload_ids is not None:
+        return qs.filter(id__in=caseload_ids)
     if user.assigned_branch_id:
         return qs.filter(branch_id=user.assigned_branch_id)
     if user.assigned_city:
@@ -55,8 +70,9 @@ def _apply_scope(user, qs):
 
 def _scope_branch_ids(user):
     """أرقام الفروع المسموح بها للمستخدم: None تعني بلا تقييد (مدير، أو مستخدم بلا
-    فصل/فرع/مدينة معيَّنة). لمعلم الفصل: فروع فصوله (بوابة خشنة لمسارات معامل
-    branch الصريح — التضييق الحقيقي لطلابه تحديدًا يصير عبر _apply_scope/_scope_by_student)."""
+    فصل/عهدة/فرع/مدينة معيَّنة). لمعلم الفصل أو المختص: فروع فصوله/مستفيديه
+    (بوابة خشنة لمسارات معامل branch الصريح — التضييق الحقيقي لطلابه تحديدًا
+    يصير عبر _apply_scope/_scope_by_student)."""
     if user.is_admin:
         return None
     classroom_ids = _teacher_classroom_ids(user)
@@ -64,6 +80,11 @@ def _scope_branch_ids(user):
         from apps.core.models import Classroom
         return list(
             Classroom.objects.filter(id__in=classroom_ids).values_list('branch_id', flat=True).distinct()
+        )
+    caseload_ids = _specialist_caseload_ids(user)
+    if caseload_ids is not None:
+        return list(
+            Student.objects.filter(id__in=caseload_ids).values_list('branch_id', flat=True).distinct()
         )
     if user.assigned_branch_id:
         return [user.assigned_branch_id]
@@ -77,12 +98,16 @@ def _scope_branch_ids(user):
 
 def _scope_by_student(user, qs, path='student'):
     """يقصر queryset لنموذج مرتبط بـ Student على فصل المستخدم (لو معلم فصل)،
-    وإلا على فروعه، عبر <path>__classroom_id أو <path>__branch_id."""
+    أو عهدته (لو مختص له تكليفات)، وإلا على فروعه، عبر <path>__classroom_id
+    أو <path>_id أو <path>__branch_id."""
     if user.is_admin:
         return qs
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return qs.filter(**{f'{path}__classroom_id__in': classroom_ids})
+    caseload_ids = _specialist_caseload_ids(user)
+    if caseload_ids is not None:
+        return qs.filter(**{f'{path}_id__in': caseload_ids})
     ids = _scope_branch_ids(user)
     if ids is None:
         return qs
@@ -97,6 +122,9 @@ def _student_in_scope(user, student):
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return student.classroom_id in classroom_ids
+    caseload_ids = _specialist_caseload_ids(user)
+    if caseload_ids is not None:
+        return student.id in caseload_ids
     ids = _scope_branch_ids(user)
     return ids is None or student.branch_id in ids
 
@@ -131,7 +159,20 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = Student.objects.select_related('created_by').prefetch_related('guardians', 'family_info')
-        return _apply_scope(self.request.user, qs)
+        qs = _apply_scope(self.request.user, qs)
+        # فلتر "عهدة مختص بقسم معيّن" — يدوي (لا عبر StudentFilter/django_filters)
+        # لتجنب فلترة مزدوجة على علاقة عكسية بصفين مختلفين. لازم للمدير المتصفّح
+        # عهدة مختص آخر من صفحة القسم (النطاق التلقائي أعلاه يخدم المختص نفسه فقط).
+        specialist_id = self.request.query_params.get('specialist')
+        department = self.request.query_params.get('department')
+        if specialist_id and department:
+            if not (self.request.user.is_admin or str(self.request.user.id) == str(specialist_id)):
+                raise PermissionDenied('لا تملك صلاحية عرض عهدة أخصائي آخر')
+            qs = qs.filter(
+                specialist_assignments__specialist_id=specialist_id,
+                specialist_assignments__department=department,
+            )
+        return qs
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -1430,6 +1471,93 @@ class IndividualPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
+
+
+from .models import QuarterlyPlan, StudentSpecialistAssignment
+from .serializers import QuarterlyPlanSerializer, StudentSpecialistAssignmentSerializer
+from .permissions import CanViewQuarterlyPlans, CanEditQuarterlyPlans
+from apps.accounts.permissions import IsAdmin
+from apps.core.models import Department
+
+
+class QuarterlyPlanListCreateView(generics.ListCreateAPIView):
+    serializer_class = QuarterlyPlanSerializer
+    pagination_class = None
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [CanEditQuarterlyPlans()]
+        return [CanViewQuarterlyPlans()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals')
+        if student_pk:
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
+
+    def perform_create(self, serializer):
+        student_pk = self.kwargs.get('student_pk')
+        if student_pk:
+            student = get_object_or_404(Student, pk=student_pk)
+            _assert_student_in_scope(self.request.user, student)
+            serializer.save(student=student)
+        else:
+            student = serializer.validated_data.get('student')
+            if student is not None:
+                _assert_student_in_scope(self.request.user, student)
+            serializer.save()
+
+
+class QuarterlyPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = QuarterlyPlanSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [CanViewQuarterlyPlans()]
+        return [CanEditQuarterlyPlans()]
+
+    def get_queryset(self):
+        student_pk = self.kwargs.get('student_pk')
+        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals')
+        if student_pk:
+            qs = qs.filter(student_id=student_pk)
+        return _scope_by_student(self.request.user, qs)
+
+
+class StudentSpecialistAssignmentsView(APIView):
+    """GET: تكليفات الأخصائيين الحالية لطالب (0-5 صفوف).
+    PUT: body {"assignments": {"speech": user_id|null, "ot": ..., "pt": ..., "psych": ..., "social": ...}}
+    — كتابة للمدير فقط؛ تُحدِّث/تُنشئ الصفوف غير الفارغة وتحذف صفوف الأقسام المُصفَّرة."""
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get(self, request, student_pk):
+        student = get_object_or_404(Student, pk=student_pk)
+        _assert_student_in_scope(request.user, student)
+        qs = StudentSpecialistAssignment.objects.filter(student=student).select_related('specialist')
+        return Response(StudentSpecialistAssignmentSerializer(qs, many=True).data)
+
+    def put(self, request, student_pk):
+        student = get_object_or_404(Student, pk=student_pk)
+        assignments = request.data.get('assignments') or {}
+        valid_depts = {c[0] for c in Department.choices}
+        for dept, specialist_id in assignments.items():
+            if dept not in valid_depts:
+                continue
+            if specialist_id:
+                StudentSpecialistAssignment.objects.update_or_create(
+                    student=student, department=dept,
+                    defaults={'specialist_id': specialist_id, 'assigned_by': request.user},
+                )
+            else:
+                StudentSpecialistAssignment.objects.filter(student=student, department=dept).delete()
+        log_action(request, 'update', student, f'تحديث تكليفات الأخصائيين — {student}')
+        qs = StudentSpecialistAssignment.objects.filter(student=student).select_related('specialist')
+        return Response(StudentSpecialistAssignmentSerializer(qs, many=True).data)
 
 
 class AttendanceSheetView(APIView):

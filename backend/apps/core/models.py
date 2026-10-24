@@ -3,6 +3,16 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 
 
+class Department(models.TextChoices):
+    """الأقسام التخصصية الخمسة — قائمة ثابتة، مشتركة بين apps.accounts وapps.students
+    (كلا التطبيقين يستوردانها من هنا لتجنب تكرارها أو استيراد متبادل بينهما)."""
+    SPEECH = 'speech', 'النطق واللغة'
+    OT     = 'ot',     'العلاج الوظيفي'
+    PT     = 'pt',     'العلاج الطبيعي'
+    PSYCH  = 'psych',  'النفسي وتعديل السلوك'
+    SOCIAL = 'social', 'الخدمة الاجتماعية'
+
+
 class Branch(models.Model):
     name        = models.CharField(max_length=100, unique=True, verbose_name='اسم الفرع')
     city        = models.CharField(max_length=100, blank=True, verbose_name='المدينة')

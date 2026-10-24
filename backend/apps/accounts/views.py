@@ -1,6 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -13,7 +14,9 @@ from .serializers import (
     UserCreateSerializer,
     UserUpdateSerializer,
     ChangePasswordSerializer,
+    SpecialistCertificateSerializer,
 )
+from .models import SpecialistCertificate
 from .permissions import IsAdmin
 from apps.core.utils import log_action
 
@@ -71,7 +74,15 @@ class ChangePasswordView(APIView):
 
 
 class UserListCreateView(generics.ListCreateAPIView):
-    queryset = User.objects.prefetch_related('module_permissions').order_by('-date_joined')
+    def get_queryset(self):
+        qs = User.objects.prefetch_related('module_permissions').order_by('-date_joined')
+        department = self.request.query_params.get('department')
+        if department:
+            qs = qs.filter(department=department)
+            # دليل القسم دائمًا قائمة صغيرة — لا نقصّه بصمت على الصفحة الأولى
+            # زي خلل الترقيم المُصلَّح حديثًا بشاشة المستخدمين العامة.
+            self.pagination_class = None
+        return qs
 
     def get_serializer_class(self):
         if self.request.method == 'POST':
@@ -117,3 +128,33 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         log_action(self.request, 'delete', instance, str(instance))
         instance.delete()
+
+
+class SpecialistCertificateListCreateView(generics.ListCreateAPIView):
+    """ملف الإنجاز المهني — كل مختص يدير سجلاته هو بس، المدير يشوف/يفلتر الكل."""
+    serializer_class = SpecialistCertificateSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = SpecialistCertificate.objects.select_related('specialist')
+        if self.request.user.is_admin:
+            specialist_id = self.request.query_params.get('specialist')
+            return qs.filter(specialist_id=specialist_id) if specialist_id else qs
+        return qs.filter(specialist=self.request.user)
+
+    def perform_create(self, serializer):
+        # المدير يقدر يحدد مختص مختلف (إضافة من لوحة مختص آخر)؛ غيره دائمًا نفسه.
+        if self.request.user.is_admin and serializer.validated_data.get('specialist'):
+            serializer.save()
+        else:
+            serializer.save(specialist=self.request.user)
+
+
+class SpecialistCertificateDetailView(generics.RetrieveDestroyAPIView):
+    serializer_class = SpecialistCertificateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = SpecialistCertificate.objects.select_related('specialist')
+        return qs if self.request.user.is_admin else qs.filter(specialist=self.request.user)

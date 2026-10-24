@@ -54,7 +54,7 @@ export const authApi = {
   profile: () => api.get('/auth/profile/'),
   changePassword: (old_password: string, new_password: string) =>
     api.post('/auth/change-password/', { old_password, new_password }),
-  users: (page?: number) => api.get('/auth/users/', { params: page ? { page } : undefined }),
+  users: (params?: Record<string, unknown>) => api.get('/auth/users/', { params }),
   createUser: (data: unknown) => api.post('/auth/users/', data),
   updateUser: (id: number, data: unknown) => api.patch(`/auth/users/${id}/`, data),
   deleteUser: (id: number) => api.delete(`/auth/users/${id}/`),
@@ -292,6 +292,29 @@ export const individualPlansApi = {
   delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/individual-plans/${id}/`),
   // قائمة شاملة عبر كل الطلاب — لصفحة "الخطة الفردية" بالقائمة الجانبية
   listAll: (params?: Record<string, unknown>) => api.get('/individual-plans/', { params }),
+};
+
+export const quarterlyPlansApi = {
+  list:   (studentId: number) => api.get(`/students/${studentId}/quarterly-plans/`),
+  detail: (studentId: number, id: number) => api.get(`/students/${studentId}/quarterly-plans/${id}/`),
+  create: (studentId: number, data: unknown) => api.post(`/students/${studentId}/quarterly-plans/`, data),
+  update: (studentId: number, id: number, data: unknown) => api.patch(`/students/${studentId}/quarterly-plans/${id}/`, data),
+  delete: (studentId: number, id: number) => api.delete(`/students/${studentId}/quarterly-plans/${id}/`),
+  // قائمة شاملة عبر كل الطلاب — لصفحة "الخطط الفصلية" بالقائمة الجانبية
+  listAll: (params?: Record<string, unknown>) => api.get('/quarterly-plans/', { params }),
+};
+
+export const specialistAssignmentsApi = {
+  get: (studentId: number) => api.get(`/students/${studentId}/specialist-assignments/`),
+  set: (studentId: number, assignments: Record<string, number | null>) =>
+    api.put(`/students/${studentId}/specialist-assignments/`, { assignments }),
+};
+
+export const certificatesApi = {
+  list: (params?: Record<string, unknown>) => api.get('/auth/certificates/', { params }),
+  create: (data: FormData) =>
+    api.post('/auth/certificates/', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  delete: (id: number) => api.delete(`/auth/certificates/${id}/`),
 };
 
 // ─────────────────────────────────────────────

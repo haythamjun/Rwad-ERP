@@ -7,6 +7,7 @@ from .models import (
     DailyMedicalCheckIn, MedicationAdministration,
     Plan, PlanGoal, PlanAttachment,
     IndividualPlan, IndividualPlanGoal,
+    QuarterlyPlan, QuarterlyPlanGoal, StudentSpecialistAssignment,
 )
 from datetime import date
 
@@ -110,6 +111,22 @@ class StudentAttachmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'student', 'uploaded_by', 'created_at']
 
 
+class StudentSpecialistAssignmentSerializer(serializers.ModelSerializer):
+    department_display = serializers.CharField(source='get_department_display', read_only=True)
+    specialist_name     = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = StudentSpecialistAssignment
+        fields = [
+            'id', 'student', 'department', 'department_display',
+            'specialist', 'specialist_name', 'assigned_by', 'assigned_at',
+        ]
+        read_only_fields = ['id', 'assigned_by', 'assigned_at']
+
+    def get_specialist_name(self, obj):
+        return obj.specialist.get_full_name() or obj.specialist.username
+
+
 class StudentListSerializer(serializers.ModelSerializer):
     full_name                = serializers.CharField(read_only=True)
     status_display           = serializers.CharField(source='get_status_display',            read_only=True)
@@ -153,6 +170,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     guardians                = GuardianSerializer(many=True, read_only=True)
     family_info              = FamilyInfoSerializer(read_only=True)
     attachments              = StudentAttachmentSerializer(many=True, read_only=True)
+    specialist_assignments   = StudentSpecialistAssignmentSerializer(many=True, read_only=True)
     status_display           = serializers.CharField(source='get_status_display',            read_only=True)
     gender_display           = serializers.CharField(source='get_gender_display',            read_only=True)
     disability_type_display  = serializers.CharField(source='disability_display', read_only=True)
@@ -190,7 +208,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'registration_date', 'notes',
             'rejection_reason',
             # علاقات
-            'guardians', 'family_info', 'attachments',
+            'guardians', 'family_info', 'attachments', 'specialist_assignments',
             # نظام
             'created_by', 'created_by_name', 'created_at', 'updated_at',
         ]
@@ -555,6 +573,70 @@ class IndividualPlanSerializer(serializers.ModelSerializer):
             instance.goals.all().delete()
             for rec in goals_data:
                 IndividualPlanGoal.objects.create(plan=instance, **rec)
+        return instance
+
+
+# ── الخطة الفصلية ─────────────────────────────────────────────────────────────
+
+class QuarterlyPlanGoalSerializer(serializers.ModelSerializer):
+    post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
+
+    class Meta:
+        model  = QuarterlyPlanGoal
+        fields = [
+            'id', 'domain', 'goal_text',
+            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display', 'order',
+        ]
+        read_only_fields = ['id']
+
+
+class QuarterlyPlanSerializer(serializers.ModelSerializer):
+    student_name    = serializers.CharField(source='student.full_name', read_only=True)
+    specialist_name = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
+    goals           = QuarterlyPlanGoalSerializer(many=True, required=False)
+
+    class Meta:
+        model  = QuarterlyPlan
+        fields = [
+            'id', 'student', 'student_name', 'specialist', 'specialist_name',
+            'start_date', 'end_date', 'notes', 'goals',
+            'created_by', 'created_by_name', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        # الطالب يُملأ دائمًا من معامل الـ URL لا الـ body — نفس حيلة الخطة الفردية.
+        extra_kwargs = {'student': {'required': False}}
+
+    def get_specialist_name(self, obj):
+        if obj.specialist:
+            return obj.specialist.get_full_name() or obj.specialist.username
+        return None
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def create(self, validated_data):
+        goals_data = validated_data.pop('goals', [])
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            validated_data['created_by'] = request.user
+            if not validated_data.get('specialist') and request.user.role == 'specialist':
+                validated_data['specialist'] = request.user
+        plan = QuarterlyPlan.objects.create(**validated_data)
+        for rec in goals_data:
+            QuarterlyPlanGoal.objects.create(plan=plan, **rec)
+        return plan
+
+    def update(self, instance, validated_data):
+        goals_data = validated_data.pop('goals', None)
+        instance = super().update(instance, validated_data)
+        if goals_data is not None:
+            # نفس semantics الخطة الفردية — نستبدل كل الأهداف بالكامل.
+            instance.goals.all().delete()
+            for rec in goals_data:
+                QuarterlyPlanGoal.objects.create(plan=instance, **rec)
         return instance
 
 

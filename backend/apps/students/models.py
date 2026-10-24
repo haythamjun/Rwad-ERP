@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django.utils import timezone
 
+from apps.core.models import Department
+
 
 class Student(models.Model):
     class Status(models.TextChoices):
@@ -560,6 +562,35 @@ class PlanAttachment(models.Model):
         return f'{self.plan} — {self.file.name}'
 
 
+# ── تكليفات الأخصائيين (بوابة الأقسام التخصصية) ───────────────────────────────
+
+class StudentSpecialistAssignment(models.Model):
+    """مختص واحد مسؤول عن المستفيد بكل قسم تخصصي — وجود الصف نفسه هو التكليف
+    (لا يوجد قسم بلا مختص فعلي؛ إلغاء التكليف = حذف الصف)."""
+    student     = models.ForeignKey(
+        'Student', on_delete=models.CASCADE,
+        related_name='specialist_assignments', verbose_name='المستفيد',
+    )
+    department  = models.CharField(max_length=10, choices=Department.choices, verbose_name='القسم')
+    specialist  = models.ForeignKey(
+        'accounts.User', on_delete=models.CASCADE,
+        related_name='caseload_assignments', verbose_name='الأخصائي',
+    )
+    assigned_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='made_specialist_assignments', verbose_name='عُيِّن بواسطة',
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'تكليف أخصائي'
+        verbose_name_plural  = 'تكليفات الأخصائيين'
+        unique_together      = ('student', 'department')
+
+    def __str__(self):
+        return f'{self.student.full_name} — {self.get_department_display()} — {self.specialist}'
+
+
 # ── الخطة الفردية ─────────────────────────────────────────────────────────────
 
 class IndividualPlan(models.Model):
@@ -617,6 +648,69 @@ class IndividualPlanGoal(models.Model):
     class Meta:
         verbose_name        = 'هدف خطة فردية'
         verbose_name_plural  = 'أهداف الخطط الفردية'
+        ordering             = ['domain', 'order']
+
+    def __str__(self):
+        return f'{self.plan} — {self.domain} #{self.order}'
+
+
+# ── الخطة الفصلية (بوابة الأقسام التخصصية) ────────────────────────────────────
+
+class QuarterlyPlan(models.Model):
+    """خطة فصلية لمستفيد — نفس هيكل الخطة الفردية (مجالات حرة + أهداف متعددة
+    بتقييم بعدي)، مع فترة فصلية ثابتة ومختص مسؤول."""
+    student    = models.ForeignKey(
+        Student, on_delete=models.CASCADE,
+        related_name='quarterly_plans', verbose_name='المستفيد',
+    )
+    specialist = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='quarterly_plans_as_specialist', verbose_name='الأخصائي المسؤول',
+    )
+    start_date = models.DateField(verbose_name='تاريخ بدء الفصل')
+    end_date   = models.DateField(verbose_name='تاريخ انتهاء الفصل')
+    notes      = models.TextField(blank=True, verbose_name='ملاحظات')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='created_quarterly_plans', verbose_name='أُنشئت بواسطة',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'خطة فصلية'
+        verbose_name_plural  = 'الخطط الفصلية'
+        ordering             = ['-start_date']
+
+    def __str__(self):
+        return f'{self.student.full_name} — خطة فصلية — {self.start_date} إلى {self.end_date}'
+
+
+class QuarterlyPlanGoal(models.Model):
+    DEFAULT_DOMAINS = IndividualPlanGoal.DEFAULT_DOMAINS
+
+    class Evaluation(models.TextChoices):
+        ACHIEVED       = 'achieved',       'تحقق'
+        PARTIAL        = 'partial',        'نوعًا ما'
+        NOT_ACHIEVED   = 'not_achieved',   'لم يتحقق'
+        NOT_APPLICABLE = 'not_applicable', 'لم يطبق'
+
+    plan            = models.ForeignKey(
+        QuarterlyPlan, on_delete=models.CASCADE,
+        related_name='goals', verbose_name='الخطة',
+    )
+    domain          = models.CharField(max_length=100, verbose_name='المجال')
+    goal_text       = models.TextField(verbose_name='الهدف')
+    start_date      = models.DateField(null=True, blank=True, verbose_name='تاريخ البدء')
+    end_date        = models.DateField(null=True, blank=True, verbose_name='تاريخ الانتهاء')
+    post_evaluation = models.CharField(
+        max_length=20, choices=Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
+    )
+    order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name        = 'هدف خطة فصلية'
+        verbose_name_plural  = 'أهداف الخطط الفصلية'
         ordering             = ['domain', 'order']
 
     def __str__(self):

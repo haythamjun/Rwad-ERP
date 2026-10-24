@@ -33,7 +33,7 @@ export default function UsersPage() {
   // ── Queries / Mutations ───────────────────────────────────────────────────
   const { data, isLoading } = useQuery<PaginatedResponse<User>>({
     queryKey: ['users', page],
-    queryFn: () => authApi.users(page).then((r) => r.data),
+    queryFn: () => authApi.users({ page }).then((r) => r.data),
     enabled: !!currentUser?.is_admin,
   });
 

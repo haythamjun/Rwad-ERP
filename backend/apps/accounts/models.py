@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from apps.core.models import Department
+
 
 class User(AbstractUser):
     class Role(models.TextChoices):
@@ -30,6 +32,10 @@ class User(AbstractUser):
         verbose_name='الفرع المعيّن',
     )
     assigned_city = models.CharField(max_length=100, blank=True, verbose_name='المدينة المعيّنة')
+    department = models.CharField(
+        max_length=10, choices=Department.choices, null=True, blank=True,
+        verbose_name='القسم التخصصي',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -73,6 +79,7 @@ class UserModulePermission(models.Model):
         BUSES        = 'buses',        'الباصات'
         CLASSROOMS   = 'classrooms',   'الفصول'
         INDIVIDUAL_PLANS = 'individual_plans', 'الخطة الفردية'
+        QUARTERLY_PLANS  = 'quarterly_plans',  'الخطط الفصلية'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.
@@ -94,3 +101,24 @@ class UserModulePermission(models.Model):
 
     def __str__(self):
         return f"{self.user.username} — {self.get_module_display()}"
+
+
+class SpecialistCertificate(models.Model):
+    """ملف الإنجاز المهني للمختص — شهادات ودورات تدريبية، سجل لكل واحدة."""
+    specialist   = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='certificates', verbose_name='الأخصائي',
+    )
+    title        = models.CharField(max_length=200, verbose_name='عنوان الشهادة/الدورة')
+    issuing_body = models.CharField(max_length=200, blank=True, verbose_name='الجهة المانحة')
+    date         = models.DateField(null=True, blank=True, verbose_name='التاريخ')
+    file         = models.FileField(upload_to='certificates/%Y/%m/', verbose_name='الملف')
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name        = 'شهادة/إنجاز مهني'
+        verbose_name_plural  = 'الملف المهني'
+        ordering             = ['-date', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} — {self.specialist}'

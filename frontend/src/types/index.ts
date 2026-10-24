@@ -102,7 +102,18 @@ export interface Classroom {
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans' | 'quarterly_plans';
+
+// الأقسام التخصصية الخمسة — قائمة ثابتة، تطابق Department.choices بالباك إند
+export type Department = 'speech' | 'ot' | 'pt' | 'psych' | 'social';
+
+export const DEPARTMENTS: { value: Department; label: string }[] = [
+  { value: 'speech', label: 'النطق واللغة' },
+  { value: 'ot',     label: 'العلاج الوظيفي' },
+  { value: 'pt',     label: 'العلاج الطبيعي' },
+  { value: 'psych',  label: 'النفسي وتعديل السلوك' },
+  { value: 'social', label: 'الخدمة الاجتماعية' },
+];
 
 export interface ModulePermission {
   module: ModuleKey;
@@ -132,6 +143,8 @@ export interface User {
   assigned_branch?: number | null;
   assigned_branch_name?: string | null;
   assigned_city?: string;
+  department?: Department | null;
+  department_display?: string | null;
 }
 
 export interface AuthTokens { access: string; refresh: string; }
@@ -220,6 +233,7 @@ export interface Student {
   guardians?: Guardian[];
   family_info?: FamilyInfo | null;
   attachments?: StudentAttachment[];
+  specialist_assignments?: StudentSpecialistAssignment[];
 }
 
 export interface StudentFormData {
@@ -547,6 +561,77 @@ export interface IndividualPlanGoalFormData {
 export interface IndividualPlanFormData {
   notes?: string;
   goals: IndividualPlanGoalFormData[];
+}
+
+// ─────────────────────────────────────────────
+// الخطة الفصلية — نفس هيكل الخطة الفردية + فترة فصلية ومختص مسؤول
+// ─────────────────────────────────────────────
+export interface QuarterlyPlanGoal {
+  id: number;
+  domain: string;
+  goal_text: string;
+  start_date: string | null;
+  end_date: string | null;
+  post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_display?: string | null;
+  order: number;
+}
+
+export interface QuarterlyPlan {
+  id: number;
+  student: number;
+  student_name: string;
+  specialist?: number | null;
+  specialist_name?: string | null;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+  goals: QuarterlyPlanGoal[];
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuarterlyPlanGoalFormData {
+  domain: string;
+  goal_text: string;
+  start_date: string | null;
+  end_date: string | null;
+  post_evaluation: IndividualPlanEvaluation;
+  order: number;
+}
+
+export interface QuarterlyPlanFormData {
+  specialist?: number | string | null;
+  start_date: string;
+  end_date: string;
+  notes?: string;
+  goals: QuarterlyPlanGoalFormData[];
+}
+
+// ─────────────────────────────────────────────
+// تكليفات الأخصائيين وملف الإنجاز المهني
+// ─────────────────────────────────────────────
+export interface StudentSpecialistAssignment {
+  id: number;
+  student: number;
+  department: Department;
+  department_display?: string;
+  specialist: number;
+  specialist_name?: string;
+  assigned_by?: number | null;
+  assigned_at: string;
+}
+
+export interface SpecialistCertificate {
+  id: number;
+  specialist: number;
+  title: string;
+  issuing_body?: string;
+  date?: string | null;
+  file: string;
+  created_at: string;
 }
 
 // حصة جماعية — تجميع سجلات الجدول الفردية حسب (اليوم، الوقت، المادة، الأخصائي)
