@@ -137,6 +137,7 @@ class StudentListSerializer(serializers.ModelSerializer):
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
     classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
+    payment_type_display       = serializers.CharField(source='get_payment_type_display', read_only=True)
 
     class Meta:
         model  = Student
@@ -146,6 +147,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'national_id',
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'status', 'status_display',
+            'payment_type', 'payment_type_display',
             'disability_type', 'disability_type_display',
             'registration_date', 'photo',
             'branch', 'branch_name',
@@ -182,6 +184,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     bus_display               = serializers.SerializerMethodField()
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
     classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
+    payment_type_display       = serializers.CharField(source='get_payment_type_display', read_only=True)
 
     class Meta:
         model  = Student
@@ -191,6 +194,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'national_id',
             'date_of_birth', 'age', 'gender', 'gender_display',
             'nationality', 'photo',
+            'payment_type', 'payment_type_display',
             'branch', 'branch_name',
             'bus', 'bus_display', 'bus_shift', 'bus_shift_display', 'residence_address',
             'classroom', 'classroom_name',
@@ -246,6 +250,7 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'classroom',
             # حالة
             'status', 'registration_date', 'notes',
+            'payment_type',
             'branch',
         ]
 

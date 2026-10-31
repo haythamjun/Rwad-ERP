@@ -79,6 +79,7 @@ export default function EditStudentPage() {
             gender:           student.gender,
             nationality:      student.nationality,
             status:           student.status === 'rejected' ? 'pending' : student.status,
+            payment_type:     student.payment_type || 'paid',
             registration_date: student.registration_date,
             diagnosis:        student.diagnosis || '',
             iq_score:         student.iq_score != null ? String(student.iq_score) : '',

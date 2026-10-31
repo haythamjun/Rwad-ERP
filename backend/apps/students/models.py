@@ -55,6 +55,10 @@ class Student(models.Model):
         SPECIALIST = 'specialist', 'طبيب / معالج'
         OTHER      = 'other',      'أخرى'
 
+    class PaymentType(models.TextChoices):
+        PAID = 'paid', 'مدفوع'
+        FREE = 'free', 'مجاني'
+
     # ── بيانات التعريف ─────────────────────────────────────────────────
     file_number = models.CharField(
         max_length=30, unique=True, blank=True, verbose_name='رقم الملف'
@@ -154,6 +158,12 @@ class Student(models.Model):
     )
     rejection_reason = models.TextField(blank=True, verbose_name='سبب الرفض')
     notes = models.TextField(blank=True, verbose_name='ملاحظات')
+
+    # بعض الطلاب يُستقبلون مجانًا بدون مقابل
+    payment_type = models.CharField(
+        max_length=10, choices=PaymentType.choices,
+        default=PaymentType.PAID, verbose_name='نوع التسجيل',
+    )
 
     # ── بيانات النظام ─────────────────────────────────────────────────
     created_by = models.ForeignKey(

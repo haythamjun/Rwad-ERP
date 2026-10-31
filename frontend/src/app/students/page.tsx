@@ -44,6 +44,12 @@ const GENDER_OPTIONS = [
   { value: 'female', label: 'أنثى' },
 ];
 
+const PAYMENT_OPTIONS = [
+  { value: '', label: 'نوع التسجيل' },
+  { value: 'paid', label: 'مدفوع' },
+  { value: 'free', label: 'مجاني' },
+];
+
 export default function StudentsPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
@@ -71,6 +77,7 @@ export default function StudentsPage() {
           search: filters.search || undefined,
           status:          filters.status          || undefined,
           gender:          filters.gender          || undefined,
+          payment_type:    filters.payment_type    || undefined,
           disability_type: filters.disability_type || undefined,
           branch:          filters.branch          || undefined,
           page: filters.page,
@@ -230,7 +237,18 @@ export default function StudentsPage() {
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          {(filters.search || filters.status || filters.gender || filters.disability_type || filters.branch) && (
+          <select
+            className="form-input w-36"
+            value={filters.payment_type || ''}
+            onChange={(e) =>
+              setFilters({ ...filters, payment_type: e.target.value as StudentFilters['payment_type'], page: 1 })
+            }
+          >
+            {PAYMENT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          {(filters.search || filters.status || filters.gender || filters.payment_type || filters.disability_type || filters.branch) && (
             <button
               className="btn-secondary"
               onClick={() => setFilters({ page: 1 })}
@@ -294,6 +312,9 @@ export default function StudentsPage() {
                       <span className={`badge ${STATUS_COLORS[student.status] || 'bg-gray-100 text-gray-600'}`}>
                         {student.status_display}
                       </span>
+                      {student.payment_type === 'free' && (
+                        <span className="badge bg-teal-100 text-teal-700 mr-1">مجاني</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{student.registration_date}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">

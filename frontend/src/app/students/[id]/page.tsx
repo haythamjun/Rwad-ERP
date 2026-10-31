@@ -525,6 +525,9 @@ export default function StudentDetailPage() {
           <span className={`badge text-sm px-3 py-1 ${STATUS_COLORS[student.status] || 'bg-gray-100 text-gray-600'}`}>
             {student.status_display}
           </span>
+          {student.payment_type === 'free' && (
+            <span className="badge text-sm px-3 py-1 bg-teal-100 text-teal-700 mr-2">مجاني</span>
+          )}
           <p className="text-xs text-gray-400 mt-1">تسجيل: {formatDate(student.registration_date)}</p>
         </div>
       </div>
@@ -582,6 +585,7 @@ export default function StudentDetailPage() {
               <InfoRow label="فترة الباص"              value={student.bus_shift_display || '—'} />
               <InfoRow label="عنوان السكن"             value={student.residence_address || '—'} />
               <InfoRow label="الحالة"                  value={student.status_display} />
+              <InfoRow label="نوع التسجيل"             value={student.payment_type_display || '—'} />
               <InfoRow label="تاريخ التسجيل"          value={formatDate(student.registration_date)} />
             </div>
           </div>

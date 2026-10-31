@@ -180,6 +180,8 @@ export type ReferralSource =
   | 'hospital' | 'school' | 'family' | 'ngo'
   | 'ministry' | 'specialist' | 'other' | '';
 
+export type PaymentType = 'paid' | 'free';
+
 export interface Student {
   id: number;
   file_number: string;
@@ -221,6 +223,8 @@ export interface Student {
   // حالة
   status: StudentStatus;
   status_display: string;
+  payment_type: PaymentType;
+  payment_type_display: string;
   registration_date: string;
   notes?: string;
   rejection_reason?: string;
@@ -264,6 +268,7 @@ export interface StudentFormData {
   classroom?: number | string;
   // حالة
   status: StudentStatus;
+  payment_type?: PaymentType;
   registration_date: string;
   notes?: string;
 }
@@ -906,6 +911,7 @@ export interface StudentFilters {
   search?: string;
   status?: StudentStatus | '';
   gender?: Gender | '';
+  payment_type?: PaymentType | '';
   disability_type?: DisabilityType;
   branch?: number | string;
   nationality?: string;

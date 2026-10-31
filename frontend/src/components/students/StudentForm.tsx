@@ -51,6 +51,7 @@ const schema = z.object({
   referral_source_detail: z.string().optional(),
   // حالة
   status:            z.enum(['pending','active','inactive','graduated','suspended','transferred']),
+  payment_type:      z.enum(['paid','free']),
   registration_date: z
     .string()
     .min(1, 'تاريخ التسجيل مطلوب')
@@ -173,6 +174,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
     resolver: zodResolver(schema),
     defaultValues: {
       status:            'pending',
+      payment_type:      'paid',
       registration_date: new Date().toISOString().split('T')[0],
       nationality:       'سعودي',
       ...defaultValues,
@@ -345,6 +347,14 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
                 قبول الطالب يتطلب صلاحية مدير فأعلى — استخدم زر "قبول الطالب" في صفحة الملف.
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="form-label">نوع التسجيل</label>
+            <select {...register('payment_type')} className="form-input">
+              <option value="paid">مدفوع</option>
+              <option value="free">مجاني</option>
+            </select>
           </div>
 
           {branches.length > 0 && (
