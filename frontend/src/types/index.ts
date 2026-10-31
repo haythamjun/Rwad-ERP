@@ -540,6 +540,7 @@ export interface IndividualPlanGoal {
   post_evaluation: IndividualPlanEvaluation;
   post_evaluation_display?: string | null;
   order: number;
+  achieved_date?: string | null;
 }
 
 export interface IndividualPlan {
@@ -548,6 +549,7 @@ export interface IndividualPlan {
   student_name: string;
   notes?: string;
   goals: IndividualPlanGoal[];
+  teacher_name?: string | null;
   created_by?: number | null;
   created_by_name?: string | null;
   created_at: string;
@@ -555,12 +557,35 @@ export interface IndividualPlan {
 }
 
 export interface IndividualPlanGoalFormData {
+  id?: number;
   domain: string;
   goal_text: string;
   start_date: string | null;
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
   order: number;
+}
+
+// نموذج تحليل الأهداف — شهر متابعة يومية (20 يوم دراسي) لأهداف مجال واحد
+export type GoalAnalysisLevel = 0 | 1 | 2 | 3 | 4;
+
+export const GOAL_ANALYSIS_LEVELS: { value: Exclude<GoalAnalysisLevel, 0>; label: string }[] = [
+  { value: 1, label: 'مستقل (أنجز)' },
+  { value: 2, label: 'إيمائية' },
+  { value: 3, label: 'مساعدة لفظية' },
+  { value: 4, label: 'مساعدة جزئية' },
+];
+
+export interface GoalAnalysisSheet {
+  id: number;
+  plan: number;
+  domain: string;
+  start_date: string;
+  ratings: Record<string, GoalAnalysisLevel[]>;
+  teaching_aids: string;
+  teacher_note: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IndividualPlanFormData {

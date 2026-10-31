@@ -24,9 +24,13 @@ export default function SpecialistAssignmentsCard({ studentId, assignments, canE
     setSelected(map);
   }, [assignments]);
 
+  // فلترة القسم في الخادم تُرجع القائمة كاملة بلا ترقيم — بدونها نأخذ أول 20 مستخدم فقط
   const { data: users = [] } = useQuery<User[]>({
-    queryKey: ['users', 'all'],
-    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryKey: ['users', 'by-department'],
+    queryFn: () => Promise.all(
+      DEPARTMENTS.map(d => authApi.users({ department: d.value })
+        .then(r => { const data = r.data; return (Array.isArray(data) ? data : (data.results ?? [])) as User[]; })),
+    ).then(lists => lists.flat()),
     enabled: canEdit,
   });
 

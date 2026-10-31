@@ -9,6 +9,7 @@ import {
   ArrowLeft, Edit, Trash2, Plus, Phone, Mail, MapPin,
   User, Users, Home, Paperclip, AlertCircle, Upload, FileText, X, CheckCircle,
   CalendarDays, Clock, XCircle, RotateCcw, CalendarClock, Stethoscope, Pill, ClipboardCheck, ListChecks, NotebookPen, FileHeart, CalendarRange,
+  Grid3x3,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi, quarterlyPlansApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -1307,23 +1308,30 @@ export default function StudentDetailPage() {
           ) : (
             <div className="divide-y divide-gray-100">
               {individualPlans.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => canEditIndividualPlans && setIndividualPlanModal({ open: true, plan: p })}
-                  className="w-full flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors text-right"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-800">
-                      {formatDate(p.created_at)}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {p.created_by_name ? `أُنشئت بواسطة: ${p.created_by_name}` : ''}
-                    </p>
-                  </div>
-                  <span className="badge text-xs bg-gray-100 text-gray-600 flex-shrink-0">
-                    {p.goals.length} هدف
-                  </span>
-                </button>
+                <div key={p.id} className="flex items-center gap-3 py-4 first:pt-0 last:pb-0">
+                  <button
+                    onClick={() => canEditIndividualPlans && setIndividualPlanModal({ open: true, plan: p })}
+                    className="flex-1 min-w-0 flex items-center justify-between gap-4 hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors text-right"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-800">
+                        {formatDate(p.created_at)}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {p.created_by_name ? `أُنشئت بواسطة: ${p.created_by_name}` : ''}
+                      </p>
+                    </div>
+                    <span className="badge text-xs bg-gray-100 text-gray-600 flex-shrink-0">
+                      {p.goals.length} هدف
+                    </span>
+                  </button>
+                  <Link
+                    href={`/students/${id}/individual-plans/${p.id}/analysis`}
+                    className="btn-secondary py-1.5 px-3 text-xs flex-shrink-0"
+                  >
+                    <Grid3x3 size={13} /> تحليل الأهداف
+                  </Link>
+                </div>
               ))}
             </div>
           )}

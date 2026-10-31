@@ -294,6 +294,15 @@ export const individualPlansApi = {
   listAll: (params?: Record<string, unknown>) => api.get('/individual-plans/', { params }),
 };
 
+export const goalAnalysisApi = {
+  list:   (studentId: number, planId: number) =>
+    api.get(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/`),
+  create: (studentId: number, planId: number, data: unknown) =>
+    api.post(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/`, data),
+  update: (studentId: number, planId: number, id: number, data: unknown) =>
+    api.patch(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/${id}/`, data),
+};
+
 export const quarterlyPlansApi = {
   list:   (studentId: number) => api.get(`/students/${studentId}/quarterly-plans/`),
   detail: (studentId: number, id: number) => api.get(`/students/${studentId}/quarterly-plans/${id}/`),

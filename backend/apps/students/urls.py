@@ -44,6 +44,8 @@ from .views import (
     PlanAttachmentDeleteView,
     IndividualPlanListCreateView,
     IndividualPlanDetailView,
+    GoalAnalysisSheetListCreateView,
+    GoalAnalysisSheetDetailView,
     QuarterlyPlanListCreateView,
     QuarterlyPlanDetailView,
     StudentSpecialistAssignmentsView,
@@ -105,6 +107,9 @@ urlpatterns = [
     path('students/<int:student_pk>/individual-plans/<int:pk>/', IndividualPlanDetailView.as_view(), name='individual-plan-detail'),
     # الخطة الفردية — قائمة شاملة عبر كل الطلاب
     path('individual-plans/', IndividualPlanListCreateView.as_view(), name='individual-plan-global'),
+    # نموذج تحليل الأهداف — شهر متابعة يومية لكل مجال في الخطة الفردية
+    path('students/<int:student_pk>/individual-plans/<int:plan_pk>/analysis-sheets/', GoalAnalysisSheetListCreateView.as_view(), name='analysis-sheet-list'),
+    path('students/<int:student_pk>/individual-plans/<int:plan_pk>/analysis-sheets/<int:pk>/', GoalAnalysisSheetDetailView.as_view(), name='analysis-sheet-detail'),
     # الخطة الفصلية — لكل طالب
     path('students/<int:student_pk>/quarterly-plans/', QuarterlyPlanListCreateView.as_view(), name='quarterly-plan-list'),
     path('students/<int:student_pk>/quarterly-plans/<int:pk>/', QuarterlyPlanDetailView.as_view(), name='quarterly-plan-detail'),

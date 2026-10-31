@@ -16,6 +16,7 @@ let tempKeyCounter = 0;
 
 interface GoalRow {
   _key: string; // مفتاح React محلي فقط — ما يُرسل للخادم
+  id?: number;  // للأهداف القائمة — يحفظ تقييمات تحليل الأهداف المربوطة بها
   domain: string;
   goal_text: string;
   start_date: string | null;
@@ -34,6 +35,7 @@ export default function IndividualPlanModal({ plan, onClose, onSave, loading }: 
   const [goals, setGoals] = useState<GoalRow[]>(() =>
     (plan?.goals || []).map(g => ({
       _key: `existing-${g.id}`,
+      id: g.id,
       domain: g.domain,
       goal_text: g.goal_text,
       start_date: g.start_date,

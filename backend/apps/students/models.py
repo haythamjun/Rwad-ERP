@@ -654,6 +654,8 @@ class IndividualPlanGoal(models.Model):
         max_length=20, choices=Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
     )
     order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
+    # يُسجَّل من نموذج تحليل الأهداف — ثابت للهدف عبر كل الأشهر
+    achieved_date   = models.DateField(null=True, blank=True, verbose_name='تاريخ إنجاز الهدف')
 
     class Meta:
         verbose_name        = 'هدف خطة فردية'
@@ -662,6 +664,39 @@ class IndividualPlanGoal(models.Model):
 
     def __str__(self):
         return f'{self.plan} — {self.domain} #{self.order}'
+
+
+class GoalAnalysisSheet(models.Model):
+    """نموذج تحليل الأهداف — متابعة يومية لأهداف مجال واحد من الخطة الفردية لمدة
+    شهر (20 يوم دراسي، الأحد–الخميس، تبدأ من start_date). كل شهر جديد = صف جديد."""
+    DAYS = 20
+    LEVELS = {1: 'مستقل (أنجز)', 2: 'إيمائية', 3: 'مساعدة لفظية', 4: 'مساعدة جزئية'}
+
+    plan          = models.ForeignKey(
+        IndividualPlan, on_delete=models.CASCADE,
+        related_name='analysis_sheets', verbose_name='الخطة الفردية',
+    )
+    domain        = models.CharField(max_length=100, verbose_name='المجال')
+    start_date    = models.DateField(verbose_name='بداية الشهر')
+    # {"<goal_id>": [0..4] × 20} — 0 = لم يُقيَّم بعد
+    ratings       = models.JSONField(default=dict, blank=True, verbose_name='التقييمات اليومية')
+    teaching_aids = models.TextField(blank=True, verbose_name='الوسائل التعليمية المقترحة')
+    teacher_note  = models.TextField(blank=True, verbose_name='ملاحظة المعلمة')
+    created_by    = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='created_analysis_sheets', verbose_name='أُنشئ بواسطة',
+    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name        = 'نموذج تحليل أهداف'
+        verbose_name_plural  = 'نماذج تحليل الأهداف'
+        unique_together      = ('plan', 'domain', 'start_date')
+        ordering             = ['domain', 'start_date']
+
+    def __str__(self):
+        return f'{self.plan} — {self.domain} — {self.start_date}'
 
 
 # ── الخطة الفصلية (بوابة الأقسام التخصصية) ────────────────────────────────────
