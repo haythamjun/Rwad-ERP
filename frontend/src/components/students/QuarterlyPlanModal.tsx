@@ -62,7 +62,7 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users', 'all'],
-    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn: () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const addDomain = () => {

@@ -55,6 +55,8 @@ export const authApi = {
   changePassword: (old_password: string, new_password: string) =>
     api.post('/auth/change-password/', { old_password, new_password }),
   users: (params?: Record<string, unknown>) => api.get('/auth/users/', { params }),
+  // قوائم الاختيار — كل المستخدمين بلا ترقيم
+  allUsers: () => api.get('/auth/users/', { params: { all: 1 } }),
   createUser: (data: unknown) => api.post('/auth/users/', data),
   updateUser: (id: number, data: unknown) => api.patch(`/auth/users/${id}/`, data),
   deleteUser: (id: number) => api.delete(`/auth/users/${id}/`),

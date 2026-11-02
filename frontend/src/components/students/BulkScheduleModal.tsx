@@ -38,7 +38,7 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
-    queryFn:  () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn:  () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
   const sortedUsers = [...users].sort((a, b) => {
     if (a.role === 'specialist' && b.role !== 'specialist') return -1;

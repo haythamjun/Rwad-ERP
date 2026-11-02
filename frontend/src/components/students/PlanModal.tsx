@@ -49,7 +49,7 @@ export default function PlanModal({ studentId, plan, onClose, onSave, onAttachme
 
   const { data: teachers = [] } = useQuery<User[]>({
     queryKey: ['users-for-plans'],
-    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn: () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const validate = () => {

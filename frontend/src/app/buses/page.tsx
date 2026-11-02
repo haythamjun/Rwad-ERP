@@ -59,7 +59,7 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ['users-for-bus-shifts'],
-    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn: () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
   const drivers = allUsers.filter(u => u.role === 'driver');
   const supervisors = allUsers.filter(u => u.role === 'bus_supervisor');

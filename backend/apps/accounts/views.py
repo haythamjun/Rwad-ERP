@@ -82,6 +82,10 @@ class UserListCreateView(generics.ListCreateAPIView):
             # دليل القسم دائمًا قائمة صغيرة — لا نقصّه بصمت على الصفحة الأولى
             # زي خلل الترقيم المُصلَّح حديثًا بشاشة المستخدمين العامة.
             self.pagination_class = None
+        # ?all=1 — قوائم الاختيار (الأخصائي المسؤول، المعلم، السائق…) تحتاج كل المستخدمين
+        # لا أول 20 فقط؛ بدونها يختفي أي حساب أقدم من آخر 20 مستخدمًا.
+        if self.request.query_params.get('all') == '1':
+            self.pagination_class = None
         return qs
 
     def get_serializer_class(self):

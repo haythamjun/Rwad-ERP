@@ -173,7 +173,7 @@ export default function ClassroomsPage() {
 
   const { data: teachers = [] } = useQuery<User[]>({
     queryKey: ['users-for-classrooms'],
-    queryFn: () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn: () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   const createMutation = useMutation({

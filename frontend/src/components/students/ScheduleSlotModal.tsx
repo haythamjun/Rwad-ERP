@@ -39,7 +39,7 @@ export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSav
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
-    queryFn:  () => authApi.users().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+    queryFn:  () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
   });
 
   // الأخصائيون أولًا، ثم بقية المستخدمين
