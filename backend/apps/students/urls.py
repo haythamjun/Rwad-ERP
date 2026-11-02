@@ -30,6 +30,7 @@ from .views import (
     ScheduleDetailView,
     ScheduleBulkCreateView,
     ScheduleClassesView,
+    SpecialistScheduleView,
     MedicalProfileView,
     MedicalVisitListCreateView,
     MedicalVisitDetailView,
@@ -84,6 +85,7 @@ urlpatterns = [
     # Schedule — bulk creation across many students + grouped "classes" view
     path('schedule/bulk/', ScheduleBulkCreateView.as_view(), name='schedule-bulk-create'),
     path('schedule/classes/', ScheduleClassesView.as_view(), name='schedule-classes'),
+    path('schedule/specialist/<int:specialist_pk>/', SpecialistScheduleView.as_view(), name='schedule-specialist'),
     # الملف الطبي — لكل طالب
     path('students/<int:student_pk>/medical-profile/', MedicalProfileView.as_view(), name='medical-profile'),
     path('students/<int:student_pk>/medical-visits/', MedicalVisitListCreateView.as_view(), name='medical-visit-list'),

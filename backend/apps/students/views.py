@@ -1332,6 +1332,23 @@ class ScheduleClassesView(APIView):
         return Response(result)
 
 
+class SpecialistScheduleView(APIView):
+    """GET /api/schedule/specialist/<id>/ — «جدولي»: كل حصص الطلاب المسندة لهذا المختص.
+    يُبنى من خانة «الأخصائي المسؤول» بجداول الطلاب — لا إدخال منفصل.
+    للمختص نفسه وللمدير فقط."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, specialist_pk):
+        if not (request.user.is_admin or request.user.id == specialist_pk):
+            raise PermissionDenied('لا تملك صلاحية عرض جدول مختص آخر')
+        slots = (
+            StudentSchedule.objects
+            .filter(specialist_id=specialist_pk)
+            .select_related('student', 'specialist')
+            .order_by('day', 'start_time', 'student__first_name')
+        )
+        return Response(StudentScheduleSerializer(slots, many=True).data)
+
 # ── الخطة الشهرية ─────────────────────────────────────────────────────────────
 from .models import Plan, PlanAttachment
 from .serializers import PlanSerializer, PlanAttachmentSerializer

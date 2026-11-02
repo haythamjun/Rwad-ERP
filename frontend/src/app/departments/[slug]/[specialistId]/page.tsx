@@ -13,6 +13,7 @@ import { DEPARTMENTS } from '@/types';
 import type { User, SpecialistCertificate, Student, PaginatedResponse } from '@/types';
 import Header from '@/components/layout/Header';
 import CertificateModal from '@/components/users/CertificateModal';
+import SpecialistScheduleCard from '@/components/users/SpecialistScheduleCard';
 
 export default function SpecialistDashboardPage() {
   const { slug, specialistId } = useParams<{ slug: string; specialistId: string }>();
@@ -127,6 +128,14 @@ export default function SpecialistDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* جدولي — للمختص نفسه وللمدير فقط */}
+      {canEdit && (
+        <SpecialistScheduleCard
+          specialistId={Number(specialistId)}
+          isOwn={currentUser?.id === Number(specialistId)}
+        />
+      )}
 
       {/* قائمة المستفيدين */}
       <div className="card">

@@ -218,6 +218,8 @@ export const scheduleApi = {
   // حصص جماعية — عدة طلاب دفعة واحدة
   bulkCreate: (data: unknown) => api.post('/schedule/bulk/', data),
   classes:    (branchId: number) => api.get('/schedule/classes/', { params: { branch: branchId } }),
+  // «جدولي» — كل الحصص المسندة لمختص واحد
+  specialist: (specialistId: number) => api.get(`/schedule/specialist/${specialistId}/`),
 };
 
 // ─────────────────────────────────────────────
