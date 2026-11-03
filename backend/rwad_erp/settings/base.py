@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'apps.students',
     'apps.core',
     'apps.assessments',
+    'apps.virtual_classes',
 ]
 
 MIDDLEWARE = [
@@ -133,3 +134,22 @@ SIMPLE_JWT = {
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+# ── الفصول الافتراضية (Zoho Meeting — مركز البيانات السعودي) ─────────────────────
+ZOHO_CLIENT_ID      = config('ZOHO_CLIENT_ID', default='')
+ZOHO_CLIENT_SECRET  = config('ZOHO_CLIENT_SECRET', default='')
+ZOHO_REFRESH_TOKEN  = config('ZOHO_REFRESH_TOKEN', default='')
+ZOHO_ORG_ID         = config('ZOHO_ORG_ID', default='')        # zsoid
+ZOHO_PRESENTER_ID   = config('ZOHO_PRESENTER_ID', default='')  # zuid حساب المركز المضيف
+ZOHO_ACCOUNTS_URL   = config('ZOHO_ACCOUNTS_URL', default='https://accounts.zoho.sa')
+ZOHO_MEETING_URL    = config('ZOHO_MEETING_URL', default='https://meeting.zoho.sa')
+
+# تخزين التسجيلات — انظر apps/virtual_classes/storage.py
+RECORDINGS_BUCKET_NAME        = config('RECORDINGS_BUCKET_NAME', default='')
+RECORDINGS_ENDPOINT_URL       = config('RECORDINGS_ENDPOINT_URL', default='')
+RECORDINGS_REGION_NAME        = config('RECORDINGS_REGION_NAME', default='')
+RECORDINGS_ACCESS_KEY_ID      = config('RECORDINGS_ACCESS_KEY_ID', default='')
+RECORDINGS_SECRET_ACCESS_KEY  = config('RECORDINGS_SECRET_ACCESS_KEY', default='')
+RECORDINGS_URL_EXPIRE_SECONDS = config('RECORDINGS_URL_EXPIRE_SECONDS', default=3 * 60 * 60, cast=int)
+RECORDINGS_LOCAL_ROOT         = BASE_DIR / 'private_recordings'

@@ -21,6 +21,7 @@ const MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'classrooms', label: 'الفصول' },
   { key: 'individual_plans', label: 'الخطة الفردية' },
   { key: 'quarterly_plans',  label: 'الخطط الفصلية' },
+  { key: 'virtual_classes',  label: 'الفصول الافتراضية' },
 ];
 
 type PermMap = Record<ModuleKey, { can_view: boolean; can_edit: boolean; can_export: boolean; can_import: boolean }>;

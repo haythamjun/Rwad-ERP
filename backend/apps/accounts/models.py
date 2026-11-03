@@ -80,6 +80,7 @@ class UserModulePermission(models.Model):
         CLASSROOMS   = 'classrooms',   'الفصول'
         INDIVIDUAL_PLANS = 'individual_plans', 'الخطة الفردية'
         QUARTERLY_PLANS  = 'quarterly_plans',  'الخطط الفصلية'
+        VIRTUAL_CLASSES  = 'virtual_classes',  'الفصول الافتراضية'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.

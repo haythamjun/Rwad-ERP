@@ -21,6 +21,7 @@ import {
   NotebookPen,
   FileHeart,
   CalendarRange,
+  Video,
   Menu,
   X,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ const navItems = [
   { href: '/attendance', label: 'الحضور والغياب',  icon: CalendarDays },
   { href: '/schedules',  label: 'الجداول الدراسية', icon: CalendarClock },
   { href: '/classrooms', label: 'الفصول',          icon: GraduationCap },
+  { href: '/virtual-classes', label: 'الفصول الافتراضية', icon: Video },
   { href: '/medical',    label: 'القسم الطبي',      icon: Stethoscope,   medicalOnly: true },
   { href: '/assessments', label: 'المقاييس والخطط الدراسية', icon: ClipboardCheck, assessmentsOnly: true },
   { href: '/plans',       label: 'الخطط',             icon: NotebookPen,   assessmentsOnly: true },

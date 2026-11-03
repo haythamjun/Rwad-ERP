@@ -182,6 +182,23 @@ export const classroomsApi = {
 };
 
 // ─────────────────────────────────────────────
+// Virtual classes (Zoho Meeting)
+// ─────────────────────────────────────────────
+export const virtualClassesApi = {
+  list:       (params?: Record<string, unknown>) => api.get('/virtual-classes/sessions/', { params }),
+  create:     (data: Record<string, unknown>) => api.post('/virtual-classes/sessions/', data),
+  update:     (id: number, data: Record<string, unknown>) => api.patch(`/virtual-classes/sessions/${id}/`, data),
+  cancel:     (id: number) => api.delete(`/virtual-classes/sessions/${id}/`),
+  start:      (id: number) => api.post(`/virtual-classes/sessions/${id}/start/`),
+  sync:       (id: number) => api.post(`/virtual-classes/sessions/${id}/sync/`),
+  attendance: (id: number) => api.get(`/virtual-classes/sessions/${id}/attendance/`),
+  play:       (recordingId: number) => api.get(`/virtual-classes/recordings/${recordingId}/play/`),
+  zohoRecordings: () => api.get('/virtual-classes/zoho-recordings/'),
+  importRecording: (recording_id: string, classroom: number) =>
+    api.post('/virtual-classes/zoho-recordings/', { recording_id, classroom }),
+};
+
+// ─────────────────────────────────────────────
 // Dashboard
 // ─────────────────────────────────────────────
 export const dashboardApi = {

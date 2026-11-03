@@ -151,3 +151,46 @@ class AttendanceRecord {
         notes:            j['notes']?.toString(),
       );
 }
+
+// ── Virtual session (live class) ───────────────────────────────────────────────
+
+class VirtualSessionModel {
+  final int      id;
+  final String   title;
+  final String   classroomName;
+  final String?  teacherName;
+  final DateTime startsAt;
+  final DateTime endsAt;
+  final int      durationMinutes;
+  final String   state;          // live / upcoming
+  final DateTime joinableFrom;
+  final bool     attended;
+
+  const VirtualSessionModel({
+    required this.id,
+    required this.title,
+    required this.classroomName,
+    this.teacherName,
+    required this.startsAt,
+    required this.endsAt,
+    required this.durationMinutes,
+    required this.state,
+    required this.joinableFrom,
+    required this.attended,
+  });
+
+  bool get isLive => state == 'live';
+
+  factory VirtualSessionModel.fromJson(Map<String, dynamic> j) => VirtualSessionModel(
+        id:              j['id'] as int? ?? 0,
+        title:           j['title']?.toString()          ?? '',
+        classroomName:   j['classroom_name']?.toString() ?? '',
+        teacherName:     j['teacher_name']?.toString(),
+        startsAt:        DateTime.parse(j['starts_at'] as String).toLocal(),
+        endsAt:          DateTime.parse(j['ends_at'] as String).toLocal(),
+        durationMinutes: (j['duration_minutes'] as num? ?? 0).toInt(),
+        state:           j['state']?.toString()          ?? '',
+        joinableFrom:    DateTime.parse(j['joinable_from'] as String).toLocal(),
+        attended:        j['attended'] as bool?          ?? false,
+      );
+}

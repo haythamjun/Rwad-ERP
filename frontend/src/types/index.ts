@@ -100,9 +100,71 @@ export interface Classroom {
 }
 
 // ─────────────────────────────────────────────
+// Virtual classes (Zoho Meeting)
+// ─────────────────────────────────────────────
+export type VirtualLiveState = 'upcoming' | 'live' | 'ended' | 'cancelled';
+
+export interface SessionRecording {
+  id: number;
+  status: 'pending' | 'archived' | 'failed';
+  status_display: string;
+  size_bytes: number | null;
+  recorded_at: string | null;
+  archived_at: string | null;
+  error: string;
+  attempts: number;
+}
+
+export interface VirtualSession {
+  id: number;
+  classroom: number;
+  classroom_name: string;
+  branch_name: string;
+  teacher_name: string | null;
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  duration_minutes: number;
+  status: 'scheduled' | 'cancelled';
+  status_display: string;
+  live_state: VirtualLiveState;
+  zoho_meeting_key: string;
+  zoho_join_url: string;
+  zoho_password: string;
+  recordings: SessionRecording[];
+  recordings_checked_at: string | null;
+  attendance_count: number;
+  student_count: number;
+  created_by_name: string | null;
+  created_at: string;
+}
+
+export interface SessionAttendanceRow {
+  student: number;
+  student_name: string;
+  file_number: string;
+  attended: boolean;
+  guardian_name?: string | null;
+  first_joined_at?: string;
+  last_joined_at?: string;
+  join_count?: number;
+}
+
+export interface ZohoRecordingItem {
+  recording_id: string;
+  meeting_key: string;
+  topic: string;
+  recorded_at: string | null;
+  date_label: string;
+  file_size: string;
+  imported: boolean;
+  classroom_name: string | null;
+}
+
+// ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans' | 'quarterly_plans';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans' | 'quarterly_plans' | 'virtual_classes';
 
 // الأقسام التخصصية الخمسة — قائمة ثابتة، تطابق Department.choices بالباك إند
 export type Department = 'speech' | 'ot' | 'pt' | 'psych' | 'social';

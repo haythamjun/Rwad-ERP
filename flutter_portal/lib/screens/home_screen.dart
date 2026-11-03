@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'dashboard_screen.dart';
 import 'attendance_screen.dart';
+import 'live_classes_screen.dart';
 import 'profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const _screens = [
     DashboardScreen(),
+    LiveClassesScreen(),
     AttendanceScreen(),
     ProfileScreen(),
   ];
@@ -36,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home, color: kColorPrimary),
               label: 'الرئيسية',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.videocam_outlined),
+              selectedIcon: Icon(Icons.videocam, color: kColorPrimary),
+              label: 'الحصص',
             ),
             NavigationDestination(
               icon: Icon(Icons.calendar_today_outlined),
