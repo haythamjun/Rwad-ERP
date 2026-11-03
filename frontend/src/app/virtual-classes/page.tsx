@@ -292,7 +292,7 @@ function ImportPanel({ classrooms }: { classrooms: Classroom[] }) {
             <div key={it.recording_id} className="flex items-center gap-3 py-3 flex-wrap">
               <div className="flex-1 min-w-[200px]">
                 <p className="font-medium text-gray-800 text-sm">{it.topic || 'بدون عنوان'}</p>
-                <p className="text-xs text-gray-400">{formatDateTime(it.recorded_at)} • {it.file_size}</p>
+                <p className="text-xs text-gray-400">{it.recorded_at ? formatDateTime(it.recorded_at) : it.date_label} • {it.file_size}</p>
               </div>
               {it.imported ? (
                 <span className="badge bg-green-50 text-green-700 text-xs">مستورد — {it.classroom_name}</span>
@@ -325,8 +325,9 @@ function ImportPanel({ classrooms }: { classrooms: Classroom[] }) {
 
 // ── Recording status chip ──────────────────────────────────────────────────────
 function RecordingChips({ session, onPlay }: { session: VirtualSession; onPlay: (r: SessionRecording) => void }) {
-  if (session.live_state !== 'ended') return null;
+  // المعلم قد يبدأ قبل الموعد أو بعده، فالتسجيل يظهر متى ما وُجد بغض النظر عن الجدولة
   if (!session.recordings.length) {
+    if (session.live_state !== 'ended') return null;
     return (
       <span className="flex items-center gap-1 text-xs text-amber-600" title="لم يُعثر على تسجيل لهذه الحصة في Zoho بعد">
         <AlertTriangle size={12}/> لا يوجد تسجيل
@@ -509,7 +510,7 @@ export default function VirtualClassesPage() {
                         <button onClick={() => setAttendanceFor(s)} title="الحضور"
                           className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50"><Users size={14}/></button>
                       )}
-                      {manage && s.live_state === 'ended' && s.status !== 'cancelled' && (
+                      {manage && s.status !== 'cancelled' && (
                         <button onClick={() => syncMutation.mutate(s.id)} title="فحص التسجيلات الآن" disabled={syncMutation.isPending}
                           className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50">
                           <RefreshCw size={14} className={cn(syncMutation.isPending && syncMutation.variables === s.id && 'animate-spin')}/>
