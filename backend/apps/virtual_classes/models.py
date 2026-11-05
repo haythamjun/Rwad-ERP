@@ -83,6 +83,8 @@ class SessionRecording(models.Model):
         blank=True, verbose_name='الملف',
     )
     size_bytes  = models.BigIntegerField(null=True, blank=True, verbose_name='الحجم')
+    # remote = R2/S3 (دائم)، local = قرص الخادم (يُمسح مع النشر على Railway) — repair_missing_files
+    storage_backend = models.CharField(max_length=10, blank=True, verbose_name='مكان الحفظ')
     recorded_at = models.DateTimeField(null=True, blank=True, verbose_name='وقت التسجيل')
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING, verbose_name='الحالة',

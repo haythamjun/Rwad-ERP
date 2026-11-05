@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from . import zoho
 from .models import SessionRecording, VirtualSession
+from .storage import is_remote
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ def archive_recording(recording):
             name = f'classroom{recording.session.classroom_id}_session{recording.session_id}_{stamp}.mp4'
             recording.file.save(name, File(tmp), save=False)
             recording.size_bytes = recording.file.size
+            recording.storage_backend = 'remote' if is_remote() else 'local'
         finally:
             tmp.close()
         recording.status = SessionRecording.Status.ARCHIVED
@@ -87,6 +89,33 @@ def sync_session(session):
         else:
             pending += 1
     return archived, pending
+
+
+def repair_missing_files():
+    """تسجيلات «مؤرشفة» ملفها اختفى من التخزين (مثلًا قرص Railway يُمسح مع كل نشر
+    قبل تفعيل R2/S3) ← ترجع «معلّقة» لتُحمَّل من Zoho من جديد. يرجع الحصص المتأثرة."""
+    sessions = {}
+    qs = SessionRecording.objects.filter(status=SessionRecording.Status.ARCHIVED).select_related('session')
+    if is_remote():
+        # ما حُفظ على R2/S3 دائم — نفحص فقط ما حُفظ قبل التفعيل (قرص الخادم أو غير معروف)
+        qs = qs.exclude(storage_backend='remote')
+    for rec in qs:
+        try:
+            present = bool(rec.file) and rec.file.storage.exists(rec.file.name)
+        except Exception:  # خطأ اتصال بالتخزين — ما نحكم بغياب الملف
+            logger.exception('storage check failed for recording %s', rec.pk)
+            continue
+        if present:
+            continue
+        rec.status = SessionRecording.Status.PENDING
+        rec.file = None
+        rec.size_bytes = None
+        rec.archived_at = None
+        rec.attempts = 0
+        rec.error = 'الملف مفقود من التخزين — أُعيد للأرشفة'
+        rec.save()
+        sessions[rec.session_id] = rec.session
+    return list(sessions.values())
 
 
 def sessions_due_for_sync(days=7):
