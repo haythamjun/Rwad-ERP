@@ -52,8 +52,11 @@ interface SessionModalProps {
 
 function SessionModal({ session, classrooms, onClose }: SessionModalProps) {
   const queryClient = useQueryClient();
+  // الجدولة فقط لفصل معلمه رابط حساب Zoho (الخادم يرفض غيره أيضًا)
+  const linkedClassrooms = classrooms.filter(c => c.teacher_zoho_linked);
   const [form, setForm] = useState({
-    classroom:        session ? String(session.classroom) : (classrooms.length === 1 ? String(classrooms[0].id) : ''),
+    classroom:        session ? String(session.classroom)
+      : (linkedClassrooms.length === 1 ? String(linkedClassrooms[0].id) : ''),
     title:            session?.title || '',
     starts_at:        toLocalInput(session?.starts_at),
     duration_minutes: String(session?.duration_minutes ?? 45),
@@ -104,9 +107,22 @@ function SessionModal({ session, classrooms, onClose }: SessionModalProps) {
               onChange={e => setForm(f => ({ ...f, classroom: e.target.value }))}
             >
               <option value="">-- اختر --</option>
-              {classrooms.map(c => <option key={c.id} value={c.id}>{c.name} — {c.branch_name}</option>)}
+              {classrooms.map(c => {
+                const blocked = !session && !c.teacher_zoho_linked;
+                return (
+                  <option key={c.id} value={c.id} disabled={blocked}>
+                    {c.name} — {c.branch_name}
+                    {blocked ? (c.teacher ? ' (المعلم/ة لم يربط Zoho)' : ' (بلا معلم/ة)') : ''}
+                  </option>
+                );
+              })}
             </select>
             {errors.classroom && <p className="text-red-500 text-xs mt-1">{errors.classroom}</p>}
+            {!session && linkedClassrooms.length < classrooms.length && (
+              <p className="text-xs text-amber-700 mt-1">
+                الجدولة متاحة فقط للفصول التي ربط معلمها حساب Zoho — يربطه المعلم من بطاقة «ربط حساب Zoho» بهذه الصفحة.
+              </p>
+            )}
           </div>
 
           <div>
@@ -372,6 +388,7 @@ function ZohoAccountCard({ teachesClasses }: { teachesClasses: boolean }) {
     else toast.error(msg || 'تعذّر ربط حساب Zoho', { duration: 8000 });
     window.history.replaceState(null, '', window.location.pathname);
     queryClient.invalidateQueries({ queryKey: ['zoho-connect'] });
+    queryClient.invalidateQueries({ queryKey: ['classrooms'] });
   }, [queryClient]);
 
   const connectMutation = useMutation({
@@ -382,7 +399,11 @@ function ZohoAccountCard({ teachesClasses }: { teachesClasses: boolean }) {
 
   const disconnectMutation = useMutation({
     mutationFn: () => virtualClassesApi.zohoDisconnect(),
-    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['zoho-connect'] }); toast.success('تم إلغاء ربط حساب Zoho'); },
+    onSuccess:  () => {
+      queryClient.invalidateQueries({ queryKey: ['zoho-connect'] });
+      queryClient.invalidateQueries({ queryKey: ['classrooms'] });
+      toast.success('تم إلغاء ربط حساب Zoho');
+    },
     onError:    (e) => toast.error(errMsg(e, 'تعذّر إلغاء الربط')),
   });
 
@@ -405,8 +426,8 @@ function ZohoAccountCard({ teachesClasses }: { teachesClasses: boolean }) {
           <>
             <p className="text-sm font-semibold text-gray-800">اربط حساب Zoho الخاص بك</p>
             <p className="text-xs text-gray-600 mt-0.5">
-              حتى تُنشأ حصص فصولك بحسابك وتبدأها كمضيف. سجّل الدخول بنفس إيميلك في المنصة.
-              قبل الربط تُنشأ بحساب المركز.
+              لا يمكن جدولة حصص لفصولك قبل الربط — تُنشأ الحصص بحسابك وتبدأها كمضيف.
+              سجّل الدخول في Zoho بنفس إيميلك في المنصة.
             </p>
           </>
         )}

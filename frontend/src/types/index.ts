@@ -121,6 +121,8 @@ export interface Classroom {
   teacher: number | null;
   teacher_name: string | null;
   student_count: number;
+  /** معلم الفصل ربط حساب Zoho — شرط لجدولة حصة افتراضية */
+  teacher_zoho_linked?: boolean;
   created_at: string;
   updated_at: string;
 }

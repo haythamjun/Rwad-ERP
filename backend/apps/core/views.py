@@ -330,12 +330,14 @@ class ClassroomSerializer(serializers.ModelSerializer):
     branch_name   = serializers.CharField(source='branch.name', read_only=True)
     teacher_name  = serializers.SerializerMethodField()
     student_count = serializers.SerializerMethodField()
+    # الفصول الافتراضية تُجدول فقط لفصل معلمه رابط حساب Zoho
+    teacher_zoho_linked = serializers.SerializerMethodField()
 
     class Meta:
         model  = Classroom
         fields = [
             'id', 'name', 'branch', 'branch_name',
-            'teacher', 'teacher_name', 'student_count',
+            'teacher', 'teacher_name', 'student_count', 'teacher_zoho_linked',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -347,6 +349,10 @@ class ClassroomSerializer(serializers.ModelSerializer):
 
     def get_student_count(self, obj):
         return obj.students.count()
+
+    def get_teacher_zoho_linked(self, obj):
+        from apps.virtual_classes.models import ZohoAccount
+        return bool(obj.teacher_id) and ZohoAccount.objects.filter(user_id=obj.teacher_id).exists()
 
 
 class ClassroomListCreateView(generics.ListCreateAPIView):

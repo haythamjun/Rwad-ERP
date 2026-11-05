@@ -77,10 +77,18 @@ def _zoho_error_response(e):
 
 
 def _host_account(classroom):
-    """حساب Zoho اللي تُنشأ به حصة الفصل: حساب معلم الفصل لو ربطه، وإلا حساب المركز."""
-    if classroom.teacher_id:
-        return ZohoAccount.objects.filter(user_id=classroom.teacher_id).first()
-    return None
+    """حساب Zoho اللي تُنشأ به حصة الفصل: حساب معلم الفصل، وهو شرط للجدولة —
+    لا رجوع لحساب المركز (كل معلم مضيف حصصه بحسابه)."""
+    if not classroom.teacher_id:
+        raise PermissionDenied('هذا الفصل ليس له معلم/ة — عيّن معلمًا للفصل أولًا')
+    account = ZohoAccount.objects.filter(user_id=classroom.teacher_id).first()
+    if account is None:
+        teacher = classroom.teacher
+        raise PermissionDenied(
+            f'معلم/ة الفصل ({teacher.get_full_name() or teacher.username}) لم يربط حساب Zoho بعد — '
+            'يربطه من صفحة الفصول الافتراضية ثم تُجدول الحصة'
+        )
+    return account
 
 
 def _archive_in_background(session_ids):
