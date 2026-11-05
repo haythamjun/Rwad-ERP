@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X, Save, Trash2, Search } from 'lucide-react';
 import { authApi, studentsApi } from '@/lib/api';
-import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
-import type { ScheduleClassGroup, ScheduleDay, User, Student, PaginatedResponse } from '@/types';
+import { SCHEDULE_DAYS, SCHEDULE_SHIFTS, shiftSessions } from '@/types';
+import type { BusShiftType, ScheduleClassGroup, ScheduleDay, User, Student, PaginatedResponse } from '@/types';
 
 interface Props {
   branchId: number;
@@ -25,8 +25,11 @@ interface Props {
 export default function BulkScheduleModal({ branchId, classGroup, onClose, onCreate, onUpdateMembers, onDeleteAll, loading }: Props) {
   const isEdit = !!classGroup;
 
+  const initialShift: BusShiftType =
+    classGroup && shiftSessions('evening').some(r => r.start === classGroup.start_time) ? 'evening' : 'morning';
+  const [shift, setShift]       = useState<BusShiftType>(initialShift);
   const [day, setDay]           = useState<ScheduleDay>(classGroup?.day || 'sunday');
-  const [startTime, setStart]   = useState(classGroup?.start_time || SCHEDULE_TIME_SLOTS[0].start);
+  const [startTime, setStart]   = useState(classGroup?.start_time || shiftSessions(initialShift)[0].start);
   const [subject, setSubject]   = useState(classGroup?.subject || '');
   const [specialist, setSpec]   = useState(classGroup?.specialist ? String(classGroup.specialist) : '');
   const [notes, setNotes]       = useState('');
@@ -50,9 +53,17 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
     queryKey: ['students', 'branch', branchId],
     queryFn:  () => studentsApi.list({ branch: branchId, status: 'active', page_size: 500 }).then(r => r.data),
   });
+  // الحصة الجماعية لطلاب فترة واحدة — طلاب الفترة الثانية ما يظهرون (إلا المسجّلين فيها سابقًا)
   const students = (studentsData?.results || []).filter(s =>
-    !search.trim() || s.full_name.includes(search.trim())
+    ((s.study_shift || 'morning') === shift || selected.has(s.id)) &&
+    (!search.trim() || s.full_name.includes(search.trim()))
   );
+
+  const changeShift = (value: BusShiftType) => {
+    setShift(value);
+    setStart(shiftSessions(value)[0].start);
+    setSelected(new Set());
+  };
 
   const toggle = (id: number) => {
     setSelected(prev => {
@@ -97,7 +108,18 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="form-label">الفترة <span className="text-red-500">*</span></label>
+              <select
+                className="form-input disabled:bg-gray-50 disabled:text-gray-400"
+                value={shift}
+                disabled={isEdit}
+                onChange={e => changeShift(e.target.value as BusShiftType)}
+              >
+                {SCHEDULE_SHIFTS.map(sh => <option key={sh.value} value={sh.value}>{sh.label}</option>)}
+              </select>
+            </div>
             <div>
               <label className="form-label">اليوم <span className="text-red-500">*</span></label>
               <select
@@ -117,7 +139,10 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
                 disabled={isEdit}
                 onChange={e => setStart(e.target.value)}
               >
-                {SCHEDULE_TIME_SLOTS.map(t => <option key={t.start} value={t.start}>{t.label}</option>)}
+                {isEdit && !shiftSessions(shift).some(t => t.start === startTime) && (
+                  <option value={startTime}>{startTime.slice(0, 5)}</option>
+                )}
+                {shiftSessions(shift).map(t => <option key={t.start} value={t.start}>{t.label}</option>)}
               </select>
             </div>
           </div>
@@ -166,7 +191,7 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
             </div>
             <div className="border border-gray-200 rounded-xl max-h-56 overflow-y-auto divide-y divide-gray-50">
               {students.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-6">لا يوجد طلاب نشطون في هذا الفرع</p>
+                <p className="text-center text-gray-400 text-sm py-6">لا يوجد طلاب نشطون بهذه الفترة في هذا الفرع</p>
               ) : (
                 students.map(s => (
                   <label key={s.id} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors">

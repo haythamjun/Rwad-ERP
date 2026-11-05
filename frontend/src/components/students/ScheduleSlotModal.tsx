@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { X, Save, Trash2 } from 'lucide-react';
 import { authApi } from '@/lib/api';
-import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
+import { SCHEDULE_DAYS, scheduleTimeLabel } from '@/types';
 import type { ScheduleSlot, ScheduleSlotFormData, ScheduleDay, User } from '@/types';
 
 const schema = z.object({
@@ -50,7 +50,7 @@ export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSav
   });
 
   const dayLabel  = SCHEDULE_DAYS.find(d => d.value === day)?.label || day;
-  const timeLabel = SCHEDULE_TIME_SLOTS.find(t => t.start === startTime)?.label || startTime;
+  const timeLabel = scheduleTimeLabel(startTime);
 
   const submit = (values: FormValues) => {
     onSave({

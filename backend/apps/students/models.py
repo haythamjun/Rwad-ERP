@@ -93,6 +93,11 @@ class Student(models.Model):
         max_length=10, choices=BusShiftChoice.choices, blank=True,
         verbose_name='فترة الباص',
     )
+    # فترة الدراسة تحدد أوقات جدول الطالب (SCHEDULE_SHIFTS) — منفصلة عن فترة الباص
+    study_shift = models.CharField(
+        max_length=10, choices=BusShiftChoice.choices, default=BusShiftChoice.MORNING,
+        verbose_name='الفترة الدراسية',
+    )
     # منفصل تمامًا عن عنوان ولي الأمر — قد يسكن الطالب عند أقارب أو غير ولي أمره
     residence_address = models.TextField(blank=True, verbose_name='عنوان السكن')
 
@@ -445,12 +450,24 @@ class StudentAttendance(models.Model):
 
 # ── الجدول الدراسي الأسبوعي ──────────────────────────────────────────────────────
 
-# فترات الجدول الثابتة: 8 حصص نصف ساعة، من 7:30 حتى 11:30
+# أوقات الجدول الثابتة لكل فترة — نفس النموذج الورقي: 8 حصص نصف ساعة، بريك
+# بالمنتصف وأعمال مكتبية بالنهاية. يجب أن تطابق SCHEDULE_SHIFTS في types/index.ts
 from datetime import time as _time  # noqa: E402
-SCHEDULE_TIME_SLOTS = [
-    _time(7, 30), _time(8, 0), _time(8, 30), _time(9, 0),
-    _time(9, 30), _time(10, 0), _time(10, 30), _time(11, 0),
-]
+SCHEDULE_SHIFTS = {
+    'morning': {
+        'sessions': [_time(6, 30), _time(7, 0), _time(7, 30), _time(8, 0),
+                     _time(9, 0), _time(9, 30), _time(10, 0), _time(10, 30)],
+        'break': _time(8, 30),
+        'office': _time(11, 0),
+    },
+    'evening': {
+        'sessions': [_time(12, 30), _time(13, 0), _time(13, 30), _time(14, 0),
+                     _time(15, 0), _time(15, 30), _time(16, 0), _time(16, 30)],
+        'break': _time(14, 30),
+        'office': _time(17, 0),
+    },
+}
+SCHEDULE_TIME_SLOTS = [t for s in SCHEDULE_SHIFTS.values() for t in s['sessions']]
 
 
 class StudentSchedule(models.Model):

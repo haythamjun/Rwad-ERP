@@ -14,7 +14,8 @@ import {
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi, quarterlyPlansApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS, mediaUrl } from '@/lib/utils';
-import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
+import { SCHEDULE_DAYS, shiftSessions, scheduleTimeLabel } from '@/types';
+import ScheduleGrid from '@/components/students/ScheduleGrid';
 import type {
   Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData,
   ScheduleSlot, ScheduleSlotFormData, ScheduleDay,
@@ -225,9 +226,9 @@ export default function StudentDetailPage() {
       toast.success('تمت إضافة الحصة');
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { non_field_errors?: string[] } } })
-        ?.response?.data?.non_field_errors?.[0];
-      toast.error(msg || 'حدث خطأ في الحفظ');
+      const data = (err as { response?: { data?: { non_field_errors?: string[]; start_time?: string[] } } })
+        ?.response?.data;
+      toast.error(data?.non_field_errors?.[0] || data?.start_time?.[0] || 'حدث خطأ في الحفظ');
     },
   });
 
@@ -239,7 +240,11 @@ export default function StudentDetailPage() {
       setScheduleModal(s => ({ ...s, open: false }));
       toast.success('تم تحديث الحصة');
     },
-    onError: () => toast.error('حدث خطأ في التحديث'),
+    onError: (err: unknown) => {
+      const data = (err as { response?: { data?: { non_field_errors?: string[]; start_time?: string[] } } })
+        ?.response?.data;
+      toast.error(data?.non_field_errors?.[0] || data?.start_time?.[0] || 'حدث خطأ في التحديث');
+    },
   });
 
   const scheduleDeleteMutation = useMutation({
@@ -584,6 +589,7 @@ export default function StudentDetailPage() {
               <InfoRow label="الفصل"                   value={student.classroom_name || '—'} />
               <InfoRow label="الباص"                   value={student.bus_display || '—'} />
               <InfoRow label="فترة الباص"              value={student.bus_shift_display || '—'} />
+              <InfoRow label="الفترة الدراسية"         value={student.study_shift_display || '—'} />
               <InfoRow label="عنوان السكن"             value={student.residence_address || '—'} />
               <InfoRow label="الحالة"                  value={student.status_display} />
               <InfoRow label="نوع التسجيل"             value={student.payment_type_display || '—'} />
@@ -989,56 +995,68 @@ export default function StudentDetailPage() {
         </div>
       )}
 
-      {activeTab === 'schedule' && (
-        <div className="card p-0 overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs w-28">الوقت</th>
-                {SCHEDULE_DAYS.map((d) => (
-                  <th key={d.value} className="text-center py-3 px-3 font-medium text-gray-600 min-w-[140px]">
-                    {d.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {SCHEDULE_TIME_SLOTS.map((slot) => (
-                <tr key={slot.start}>
-                  <td className="text-center py-2 px-3 text-xs text-gray-400 font-mono whitespace-nowrap border-l border-gray-50" dir="ltr">
-                    {slot.label}
-                  </td>
-                  {SCHEDULE_DAYS.map((d) => {
-                    const cell = scheduleSlots.find((s) => s.day === d.value && s.start_time === slot.start);
-                    return (
-                      <td key={d.value} className="p-1.5 border-l border-gray-50 last:border-l-0">
-                        {cell ? (
-                          <button
-                            onClick={() => setScheduleModal({ open: true, day: d.value, startTime: slot.start, slot: cell })}
-                            className="w-full text-right bg-primary-50 hover:bg-primary-100 border border-primary-100 rounded-lg px-2.5 py-1.5 transition-colors"
-                          >
-                            <p className="text-xs font-semibold text-primary-800 truncate">{cell.subject}</p>
-                            {cell.specialist_name && (
-                              <p className="text-[11px] text-primary-500 truncate mt-0.5">{cell.specialist_name}</p>
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setScheduleModal({ open: true, day: d.value, startTime: slot.start })}
-                            className="w-full h-10 flex items-center justify-center rounded-lg border border-dashed border-gray-200 text-gray-300 hover:border-primary-300 hover:text-primary-400 transition-colors"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {activeTab === 'schedule' && (() => {
+        const shift = student.study_shift || 'morning';
+        const sessionStarts = new Set(shiftSessions(shift).map((r) => r.start));
+        // حصص قديمة خارج أوقات حصص فترة الطالب (بريك/أعمال مكتبية/الفترة الثانية) — ما تنحذف، تُعرض لإعادة جدولتها
+        const outside = scheduleSlots.filter((s) => !sessionStarts.has(s.start_time));
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <CalendarClock size={15} className="text-primary-600" />
+              الفترة الدراسية: <b>{student.study_shift_display || 'صباحي'}</b>
+              <span className="text-xs text-gray-400">(تُغيَّر من تعديل بيانات الطالب)</span>
+            </div>
+            <div className="card p-0 overflow-x-auto">
+              <ScheduleGrid
+                shift={shift}
+                renderCell={(day, start) => {
+                  const cell = scheduleSlots.find((s) => s.day === day && s.start_time === start);
+                  return cell ? (
+                    <button
+                      onClick={() => setScheduleModal({ open: true, day, startTime: start, slot: cell })}
+                      className="w-full text-right bg-primary-50 hover:bg-primary-100 border border-primary-100 rounded-lg px-2.5 py-1.5 transition-colors"
+                    >
+                      <p className="text-xs font-semibold text-primary-800 truncate">{cell.subject}</p>
+                      {cell.specialist_name && (
+                        <p className="text-[11px] text-primary-500 truncate mt-0.5">{cell.specialist_name}</p>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setScheduleModal({ open: true, day, startTime: start })}
+                      className="w-full h-10 flex items-center justify-center rounded-lg border border-dashed border-gray-200 text-gray-300 hover:border-primary-300 hover:text-primary-400 transition-colors"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  );
+                }}
+              />
+            </div>
+            {outside.length > 0 && (
+              <div className="card border border-amber-200 bg-amber-50/50">
+                <p className="text-sm font-semibold text-amber-800 mb-1">حصص خارج أوقات الحصص المعتمدة ({outside.length})</p>
+                <p className="text-xs text-amber-700 mb-3">
+                  مسجّلة سابقًا في وقت صار بريك أو أعمال مكتبية أو من الفترة الأخرى. احذفها وأعد إضافتها في وقت متاح.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {outside.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setScheduleModal({ open: true, day: s.day, startTime: s.start_time, slot: s })}
+                      className="text-right bg-white border border-amber-200 hover:border-amber-400 rounded-lg px-3 py-1.5 text-xs"
+                    >
+                      <span className="font-semibold text-gray-800">{s.subject}</span>
+                      <span className="text-gray-500"> — {SCHEDULE_DAYS.find((d) => d.value === s.day)?.label} </span>
+                      <span className="font-mono text-gray-500" dir="ltr">{scheduleTimeLabel(s.start_time)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {activeTab === 'medical' && canViewMedical && (
         <div className="space-y-5">

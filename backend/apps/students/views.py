@@ -1166,7 +1166,14 @@ class AttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 # ── الجدول الدراسي ─────────────────────────────────────────────────────────────
-from .models import StudentSchedule
+from .models import StudentSchedule, SCHEDULE_SHIFTS
+
+
+def _slot_shift_error(student, start_time):
+    """رسالة خطأ لو الوقت مو من حصص فترة الطالب الدراسية، وإلا None."""
+    if start_time in SCHEDULE_SHIFTS[student.study_shift]['sessions']:
+        return None
+    return f'هذا الوقت ليس من أوقات حصص الفترة ال{student.get_study_shift_display()}ة للطالب.'
 from .serializers import StudentScheduleSerializer
 
 
@@ -1196,6 +1203,9 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
                 _assert_student_in_scope(self.request.user, student)
                 day = serializer.validated_data.get('day')
                 start_time = serializer.validated_data.get('start_time')
+                shift_error = _slot_shift_error(student, start_time)
+                if shift_error:
+                    raise drf_serializers.ValidationError({'start_time': [shift_error]})
                 if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
                     raise drf_serializers.ValidationError(
                         {'non_field_errors': ['هذه الحصة محجوزة مسبقاً لهذا الطالب']}
@@ -1205,6 +1215,9 @@ class ScheduleListCreateView(generics.ListCreateAPIView):
                 student = serializer.validated_data.get('student')
                 if student is not None:
                     _assert_student_in_scope(self.request.user, student)
+                    shift_error = _slot_shift_error(student, serializer.validated_data.get('start_time'))
+                    if shift_error:
+                        raise drf_serializers.ValidationError({'start_time': [shift_error]})
                 serializer.save()
         except IntegrityError:
             raise drf_serializers.ValidationError(
@@ -1229,6 +1242,16 @@ class ScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
+
+    def perform_update(self, serializer):
+        # الحصص القديمة خارج أوقات الفترة تبقى قابلة للتعديل (المادة/الأخصائي)، لكن
+        # تغيير الوقت لازم يكون لوقت من فترة الطالب.
+        start_time = serializer.validated_data.get('start_time')
+        if start_time is not None and start_time != serializer.instance.start_time:
+            shift_error = _slot_shift_error(serializer.instance.student, start_time)
+            if shift_error:
+                raise drf_serializers.ValidationError({'start_time': [shift_error]})
+        serializer.save()
 
 
 class ScheduleBulkCreateView(APIView):
@@ -1265,6 +1288,11 @@ class ScheduleBulkCreateView(APIView):
             if not _student_in_scope(request.user, student):
                 skipped += 1
                 errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': 'خارج نطاقك'})
+                continue
+            shift_error = _slot_shift_error(student, start_time)
+            if shift_error:
+                skipped += 1
+                errors.append({'student_id': sid, 'student_name': student.full_name, 'reason': shift_error})
                 continue
             if StudentSchedule.objects.filter(student=student, day=day, start_time=start_time).exists():
                 skipped += 1

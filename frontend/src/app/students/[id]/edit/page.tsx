@@ -87,6 +87,7 @@ export default function EditStudentPage() {
             branch:           student.branch ? String(student.branch) : '',
             bus:              student.bus ? String(student.bus) : '',
             bus_shift:        student.bus_shift || '',
+            study_shift:      student.study_shift || 'morning',
             residence_address: student.residence_address || '',
             classroom:        student.classroom ? String(student.classroom) : '',
           }}

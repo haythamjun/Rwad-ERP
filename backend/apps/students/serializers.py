@@ -136,6 +136,7 @@ class StudentListSerializer(serializers.ModelSerializer):
     primary_guardian         = serializers.SerializerMethodField()
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
+    study_shift_display       = serializers.CharField(source='get_study_shift_display', read_only=True)
     classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
     payment_type_display       = serializers.CharField(source='get_payment_type_display', read_only=True)
 
@@ -152,6 +153,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             'registration_date', 'photo',
             'branch', 'branch_name',
             'bus', 'bus_shift', 'bus_shift_display', 'residence_address',
+            'study_shift', 'study_shift_display',
             'classroom', 'classroom_name',
             'primary_guardian', 'created_at', 'updated_at',
             'rejection_reason',
@@ -183,6 +185,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
     branch_name              = serializers.CharField(source='branch.name', read_only=True, default=None)
     bus_display               = serializers.SerializerMethodField()
     bus_shift_display         = serializers.CharField(source='get_bus_shift_display', read_only=True, default=None)
+    study_shift_display       = serializers.CharField(source='get_study_shift_display', read_only=True)
     classroom_name             = serializers.CharField(source='classroom.name', read_only=True, default=None)
     payment_type_display       = serializers.CharField(source='get_payment_type_display', read_only=True)
 
@@ -197,6 +200,7 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'payment_type', 'payment_type_display',
             'branch', 'branch_name',
             'bus', 'bus_display', 'bus_shift', 'bus_shift_display', 'residence_address',
+            'study_shift', 'study_shift_display',
             'classroom', 'classroom_name',
             # إعاقة
             'disability_type', 'disability_type_display',
@@ -246,6 +250,7 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
             'referral_source', 'referral_source_detail',
             # نقل
             'bus', 'bus_shift', 'residence_address',
+            'study_shift',
             # فصل
             'classroom',
             # حالة
@@ -436,8 +441,10 @@ class StudentScheduleSerializer(serializers.ModelSerializer):
         return None
 
     def validate_start_time(self, value):
-        if value not in SCHEDULE_TIME_SLOTS:
-            raise serializers.ValidationError('وقت الحصة يجب أن يكون أحد الفترات الثابتة (نصف ساعة من 7:30 حتى 11:30).')
+        # الحصة القديمة خارج الأوقات الحالية تبقى قابلة للتعديل ما دام وقتها ما تغيّر
+        unchanged = self.instance is not None and value == self.instance.start_time
+        if value not in SCHEDULE_TIME_SLOTS and not unchanged:
+            raise serializers.ValidationError('وقت الحصة يجب أن يكون أحد أوقات الحصص في الجدول الصباحي أو المسائي.')
         return value
 
 

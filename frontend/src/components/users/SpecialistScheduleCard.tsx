@@ -1,11 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock } from 'lucide-react';
 import { scheduleApi } from '@/lib/api';
-import { SCHEDULE_DAYS, SCHEDULE_TIME_SLOTS } from '@/types';
-import type { ScheduleSlot } from '@/types';
+import { SCHEDULE_DAYS, SCHEDULE_SHIFTS, shiftSessions, scheduleTimeLabel } from '@/types';
+import type { BusShiftType, ScheduleSlot } from '@/types';
+import ScheduleGrid from '@/components/students/ScheduleGrid';
 
 interface Props {
   specialistId: number;
@@ -28,6 +30,19 @@ export default function SpecialistScheduleCard({ specialistId, isOwn }: Props) {
     }
     return Array.from(groups.entries());
   };
+
+  // المختص قد يشتغل الفترتين — كل حصة تظهر بفترة وقتها
+  const shiftOf = (start: string): BusShiftType | null =>
+    SCHEDULE_SHIFTS.find(sh => shiftSessions(sh.value).some(r => r.start === start))?.value ?? null;
+  const countIn = (shift: BusShiftType) => slots.filter(s => shiftOf(s.start_time) === shift).length;
+  const outside = slots.filter(s => shiftOf(s.start_time) === null);
+
+  const [shift, setShift] = useState<BusShiftType>('morning');
+  useEffect(() => {
+    // افتح الفترة اللي فيها حصص، لو الصباحية فاضية
+    if (slots.length && countIn('morning') === 0 && countIn('evening') > 0) setShift('evening');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slots]);
 
   const sessionCount = new Set(slots.map(s => `${s.day}|${s.start_time}|${s.subject}`)).size;
   const studentCount = new Set(slots.map(s => s.student)).size;
@@ -60,48 +75,64 @@ export default function SpecialistScheduleCard({ specialistId, isOwn }: Props) {
           <p className="text-xs mt-1">تظهر هنا الحصص المحدد فيها هذا المختص كـ«الأخصائي المسؤول» بجداول الطلاب</p>
         </div>
       ) : (
-        <div className="overflow-x-auto -mx-2">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-center py-3 px-3 font-medium text-gray-500 text-xs w-28">الوقت</th>
-                {SCHEDULE_DAYS.map((d) => (
-                  <th key={d.value} className="text-center py-3 px-3 font-medium text-gray-600 min-w-[140px]">
-                    {d.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {SCHEDULE_TIME_SLOTS.map((t) => (
-                <tr key={t.start}>
-                  <td className="text-center py-2 px-3 text-xs text-gray-400 font-mono whitespace-nowrap border-l border-gray-50" dir="ltr">
-                    {t.label}
-                  </td>
-                  {SCHEDULE_DAYS.map((d) => (
-                    <td key={d.value} className="p-1.5 border-l border-gray-50 last:border-l-0 align-top">
-                      <div className="space-y-1">
-                        {cellGroups(d.value, t.start).map(([subject, group]) => (
-                          <div key={subject} className="bg-primary-50 border border-primary-100 rounded-lg px-2.5 py-1.5">
-                            <p className="text-xs font-semibold text-primary-800 truncate">{subject}</p>
-                            {group.map(s => (
-                              <Link
-                                key={s.id}
-                                href={`/students/${s.student}?tab=schedule`}
-                                className="block text-[11px] text-primary-600 hover:underline truncate mt-0.5"
-                              >
-                                {s.student_name}
-                              </Link>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            {SCHEDULE_SHIFTS.map(sh => {
+              const active = sh.value === shift;
+              return (
+                <button
+                  key={sh.value}
+                  onClick={() => setShift(sh.value)}
+                  className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
+                    active ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-primary-400'
+                  }`}
+                >
+                  {sh.label} <span className={`text-xs ${active ? 'text-white/80' : 'text-gray-400'}`}>({countIn(sh.value)})</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="overflow-x-auto -mx-2">
+            <ScheduleGrid
+              shift={shift}
+              renderCell={(day, start) => (
+                <div className="space-y-1">
+                  {cellGroups(day, start).map(([subject, group]) => (
+                    <div key={subject} className="bg-primary-50 border border-primary-100 rounded-lg px-2.5 py-1.5">
+                      <p className="text-xs font-semibold text-primary-800 truncate">{subject}</p>
+                      {group.map(s => (
+                        <Link
+                          key={s.id}
+                          href={`/students/${s.student}?tab=schedule`}
+                          className="block text-[11px] text-primary-600 hover:underline truncate mt-0.5"
+                        >
+                          {s.student_name}
+                        </Link>
+                      ))}
+                    </div>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </div>
+              )}
+            />
+          </div>
+          {outside.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+              <p className="text-sm font-semibold text-amber-800 mb-2">حصص خارج أوقات الحصص المعتمدة ({outside.length})</p>
+              <div className="flex flex-wrap gap-2">
+                {outside.map(s => (
+                  <Link
+                    key={s.id}
+                    href={`/students/${s.student}?tab=schedule`}
+                    className="bg-white border border-amber-200 hover:border-amber-400 rounded-lg px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-semibold text-gray-800">{s.subject}</span>
+                    <span className="text-gray-500"> — {s.student_name} — {SCHEDULE_DAYS.find(d => d.value === s.day)?.label} </span>
+                    <span className="font-mono text-gray-500" dir="ltr">{scheduleTimeLabel(s.start_time)}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

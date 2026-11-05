@@ -65,6 +65,7 @@ const schema = z.object({
   branch:            z.string().optional(),
   bus:               z.string().optional(),
   bus_shift:         z.string().optional(),
+  study_shift:       z.enum(['morning', 'evening']).optional(),
   residence_address: z.string().optional(),
   classroom:         z.string().optional(),
 });
@@ -175,6 +176,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
     defaultValues: {
       status:            'pending',
       payment_type:      'paid',
+      study_shift:       'morning',
       registration_date: new Date().toISOString().split('T')[0],
       nationality:       'سعودي',
       ...defaultValues,
@@ -398,6 +400,15 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
               </select>
             </div>
           )}
+
+          <div>
+            <label className="form-label">الفترة الدراسية</label>
+            <select {...register('study_shift')} className="form-input">
+              <option value="morning">صباحي</option>
+              <option value="evening">مسائي</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">تحدد أوقات الجدول الدراسي للطالب</p>
+          </div>
 
           {currentBranch && (
             <div>

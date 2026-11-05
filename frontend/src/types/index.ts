@@ -253,6 +253,8 @@ export interface Student {
   bus_display?: string | null;
   bus_shift?: BusShiftType | '';
   bus_shift_display?: string | null;
+  study_shift?: BusShiftType;
+  study_shift_display?: string;
   residence_address?: string;
   classroom?: number | null;
   classroom_name?: string | null;
@@ -327,6 +329,7 @@ export interface StudentFormData {
   bus?: number | string;
   bus_shift?: BusShiftType | '';
   residence_address?: string;
+  study_shift?: BusShiftType;
   classroom?: number | string;
   // حالة
   status: StudentStatus;
@@ -483,17 +486,63 @@ export const SCHEDULE_DAYS: { value: ScheduleDay; label: string }[] = [
   { value: 'thursday',  label: 'الخميس' },
 ];
 
-// 8 فترات نصف ساعة ثابتة، من 7:30 حتى 11:30 — يجب أن تطابق SCHEDULE_TIME_SLOTS في models.py
-export const SCHEDULE_TIME_SLOTS: { start: string; label: string }[] = [
-  { start: '07:30:00', label: '7:30 – 8:00' },
-  { start: '08:00:00', label: '8:00 – 8:30' },
-  { start: '08:30:00', label: '8:30 – 9:00' },
-  { start: '09:00:00', label: '9:00 – 9:30' },
-  { start: '09:30:00', label: '9:30 – 10:00' },
-  { start: '10:00:00', label: '10:00 – 10:30' },
-  { start: '10:30:00', label: '10:30 – 11:00' },
-  { start: '11:00:00', label: '11:00 – 11:30' },
+// صفوف الجدول لكل فترة — نفس النموذج الورقي: 8 حصص نصف ساعة، بريك بالمنتصف
+// وأعمال مكتبية بالنهاية. يجب أن تطابق SCHEDULE_SHIFTS في models.py
+export type ScheduleRowKind = 'session' | 'break' | 'office';
+
+export interface ScheduleRow {
+  start: string;
+  label: string;
+  kind: ScheduleRowKind;
+}
+
+export const SCHEDULE_ROW_KIND_LABELS: Record<Exclude<ScheduleRowKind, 'session'>, string> = {
+  break: 'بريك',
+  office: 'أعمال مكتبية',
+};
+
+export const SCHEDULE_SHIFTS: { value: BusShiftType; label: string; rows: ScheduleRow[] }[] = [
+  {
+    value: 'morning', label: 'صباحي',
+    rows: [
+      { start: '06:30:00', label: '6:30 – 7:00',   kind: 'session' },
+      { start: '07:00:00', label: '7:00 – 7:30',   kind: 'session' },
+      { start: '07:30:00', label: '7:30 – 8:00',   kind: 'session' },
+      { start: '08:00:00', label: '8:00 – 8:30',   kind: 'session' },
+      { start: '08:30:00', label: '8:30 – 9:00',   kind: 'break' },
+      { start: '09:00:00', label: '9:00 – 9:30',   kind: 'session' },
+      { start: '09:30:00', label: '9:30 – 10:00',  kind: 'session' },
+      { start: '10:00:00', label: '10:00 – 10:30', kind: 'session' },
+      { start: '10:30:00', label: '10:30 – 11:00', kind: 'session' },
+      { start: '11:00:00', label: '11:00 – 11:30', kind: 'office' },
+    ],
+  },
+  {
+    value: 'evening', label: 'مسائي',
+    rows: [
+      { start: '12:30:00', label: '12:30 – 1:00', kind: 'session' },
+      { start: '13:00:00', label: '1:00 – 1:30',  kind: 'session' },
+      { start: '13:30:00', label: '1:30 – 2:00',  kind: 'session' },
+      { start: '14:00:00', label: '2:00 – 2:30',  kind: 'session' },
+      { start: '14:30:00', label: '2:30 – 3:00',  kind: 'break' },
+      { start: '15:00:00', label: '3:00 – 3:30',  kind: 'session' },
+      { start: '15:30:00', label: '3:30 – 4:00',  kind: 'session' },
+      { start: '16:00:00', label: '4:00 – 4:30',  kind: 'session' },
+      { start: '16:30:00', label: '4:30 – 5:00',  kind: 'session' },
+      { start: '17:00:00', label: '5:00 – 5:30',  kind: 'office' },
+    ],
+  },
 ];
+
+export const shiftRows = (shift: BusShiftType | '' | undefined | null): ScheduleRow[] =>
+  (SCHEDULE_SHIFTS.find(s => s.value === shift) || SCHEDULE_SHIFTS[0]).rows;
+
+export const shiftSessions = (shift: BusShiftType | '' | undefined | null): ScheduleRow[] =>
+  shiftRows(shift).filter(r => r.kind === 'session');
+
+/** كل صفوف الفترتين — لعرض وقت أي حصة (حتى القديمة خارج أوقات الحصص) */
+export const scheduleTimeLabel = (start: string): string =>
+  SCHEDULE_SHIFTS.flatMap(s => s.rows).find(r => r.start === start)?.label || start.slice(0, 5);
 
 export interface ScheduleSlot {
   id: number;
