@@ -22,6 +22,7 @@ const MODULES: { key: ModuleKey; label: string }[] = [
   { key: 'individual_plans', label: 'الخطة الفردية' },
   { key: 'quarterly_plans',  label: 'الخطط الفصلية' },
   { key: 'virtual_classes',  label: 'الفصول الافتراضية' },
+  { key: 'confidential',     label: 'البيانات السرية (الهويات، جوالات أولياء الأمر، دراسة الحالة)' },
 ];
 
 type PermMap = Record<ModuleKey, { can_view: boolean; can_edit: boolean; can_export: boolean; can_import: boolean }>;
@@ -283,6 +284,7 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                   <option value="viewer">مشاهد</option>
                   <option value="driver">سائق</option>
                   <option value="bus_supervisor">مشرف/ة الباص</option>
+                  <option value="transport_officer">مسؤول الحركة</option>
                 </select>
               </div>
 
@@ -338,6 +340,12 @@ export default function UserFormModal({ user, onClose, onSave, loading }: Props)
                 </label>
               ))}
             </div>
+            {scopeType === 'all' && !['admin', 'manager'].includes(form.role) && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                «بدون تقييد» متاح لمدير النظام والمدير فقط. هذا الدور لن يرى أي طالب حتى تحدد له فرعًا أو مدينة
+                (إلا معلم الفصل والمختص فيرون طلاب فصولهم وعهدتهم).
+              </p>
+            )}
 
             {scopeType === 'city' && (
               <div>

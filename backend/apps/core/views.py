@@ -198,9 +198,17 @@ class BusSerializer(serializers.ModelSerializer):
             'id', 'chassis_number', 'plate_number', 'brand', 'manufacture_year',
             'serial_number', 'branch', 'branch_name', 'shifts',
             'registration_expiry', 'inspection_expiry',
+            'insurance_start', 'insurance_expiry',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        start = attrs.get('insurance_start', getattr(self.instance, 'insurance_start', None))
+        end = attrs.get('insurance_expiry', getattr(self.instance, 'insurance_expiry', None))
+        if start and end and end < start:
+            raise serializers.ValidationError({'insurance_expiry': 'تاريخ انتهاء التأمين يجب أن يكون بعد تاريخ بدايته.'})
+        return attrs
 
     def validate_manufacture_year(self, value):
         current_year = date.today().year
@@ -231,6 +239,48 @@ class BusDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method == 'GET':
             return [IsAuthenticated()]
         return [CanWriteBuses()]
+
+
+class MyBusView(APIView):
+    """GET /api/buses/mine/ — «باصي» للسائق/مشرف الباص: الفترات اللي هو طاقمها،
+    وأسماء طلاب كل فترة وعناوين سكنهم فقط (بلا ملفات ولا جوالات ولا هويات)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from apps.students.models import Student
+        shifts = (
+            BusShift.objects
+            .filter(Q(driver=request.user) | Q(supervisor=request.user))
+            .select_related('bus', 'bus__branch', 'driver', 'supervisor')
+            .order_by('bus__plate_number', 'shift')
+        )
+        result = []
+        for s in shifts:
+            # طالب الباص بلا فترة باص محددة يظهر بالفترتين حتى لا يسقط من القائمة
+            students = (
+                Student.objects
+                .filter(bus=s.bus, status='active')
+                .filter(Q(bus_shift=s.shift) | Q(bus_shift=''))
+                .order_by('first_name', 'family_name')
+            )
+            result.append({
+                'id': s.id,
+                'shift': s.shift,
+                'shift_display': s.get_shift_display(),
+                'my_role': 'سائق' if s.driver_id == request.user.id else 'مشرف/ة',
+                'bus': {
+                    'plate_number': s.bus.plate_number,
+                    'brand': s.bus.brand,
+                    'branch_name': s.bus.branch.name,
+                },
+                'driver_name': (s.driver.get_full_name() or s.driver.username) if s.driver else None,
+                'supervisor_name': (s.supervisor.get_full_name() or s.supervisor.username) if s.supervisor else None,
+                'students': [
+                    {'id': st.id, 'full_name': st.full_name, 'residence_address': st.residence_address}
+                    for st in students
+                ],
+            })
+        return Response(result)
 
 
 class BusShiftListCreateView(generics.ListCreateAPIView):

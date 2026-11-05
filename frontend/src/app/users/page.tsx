@@ -18,6 +18,7 @@ const ROLE_COLORS: Record<string, string> = {
   viewer:         'bg-gray-100 text-gray-600',
   driver:         'bg-teal-100 text-teal-700',
   bus_supervisor: 'bg-purple-100 text-purple-700',
+  transport_officer: 'bg-cyan-100 text-cyan-700',
 };
 
 export default function UsersPage() {

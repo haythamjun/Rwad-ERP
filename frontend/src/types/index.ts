@@ -83,9 +83,35 @@ export interface Bus {
   shifts: BusShift[];
   registration_expiry: string;
   inspection_expiry: string;
+  insurance_start: string | null;
+  insurance_expiry: string | null;
   created_at: string;
   updated_at: string;
 }
+
+// «باصي» — السائق/مشرف الباص: أسماء طلاب فترته وعناوينهم فقط
+export interface MyBusShift {
+  id: number;
+  shift: BusShiftType;
+  shift_display: string;
+  my_role: string;
+  bus: { plate_number: string; brand: string; branch_name: string };
+  driver_name: string | null;
+  supervisor_name: string | null;
+  students: { id: number; full_name: string; residence_address: string }[];
+}
+
+/** البيانات السرية (الهوية، تواصل وهويات أولياء الأمر، دراسة الحالة) — نفس قاعدة
+ *  User.can_view_confidential بالخادم؛ الخادم يخفيها أصلًا، وهذا فقط لإخفاء الأزرار.
+ *  (الدور مفحوص هنا أيضًا لأن جلسات الدخول القديمة ما فيها can_view_confidential) */
+export const canSeeConfidential = (user?: { role?: string; is_admin?: boolean; can_view_confidential?: boolean; permissions?: { module: string; can_view: boolean }[] } | null) =>
+  !!user && (user.is_admin || user.can_view_confidential || ['admin', 'manager', 'reception'].includes(user.role || '')
+    || !!user.permissions?.some(p => p.module === 'confidential' && p.can_view));
+
+/** السائق ومشرف الباص — يرون «باصي» فقط */
+export const isBusCrew = (role?: string) => role === 'driver' || role === 'bus_supervisor';
+/** طاقم النقل كله — ممنوع من بيانات المستفيدين */
+export const isTransportStaff = (role?: string) => isBusCrew(role) || role === 'transport_officer';
 
 export interface Classroom {
   id: number;
@@ -164,7 +190,7 @@ export interface ZohoRecordingItem {
 // ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
-export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans' | 'quarterly_plans' | 'virtual_classes';
+export type ModuleKey = 'students' | 'medical_file' | 'assessments' | 'reports' | 'attendance' | 'schedule' | 'buses' | 'classrooms' | 'individual_plans' | 'quarterly_plans' | 'virtual_classes' | 'confidential';
 
 // الأقسام التخصصية الخمسة — قائمة ثابتة، تطابق Department.choices بالباك إند
 export type Department = 'speech' | 'ot' | 'pt' | 'psych' | 'social';
@@ -192,11 +218,12 @@ export interface User {
   last_name: string;
   full_name: string;
   email: string;
-  role: 'admin' | 'manager' | 'specialist' | 'reception' | 'viewer' | 'driver' | 'bus_supervisor';
+  role: 'admin' | 'manager' | 'specialist' | 'reception' | 'viewer' | 'driver' | 'bus_supervisor' | 'transport_officer';
   role_display: string;
   can_write: boolean;
   can_delete: boolean;
   is_admin: boolean;
+  can_view_confidential?: boolean;
   phone?: string;
   avatar?: string;
   is_active: boolean;

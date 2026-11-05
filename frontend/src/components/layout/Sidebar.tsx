@@ -22,12 +22,14 @@ import {
   FileHeart,
   CalendarRange,
   Video,
+  Route,
   Menu,
   X,
 } from 'lucide-react';
 import { cn, mediaUrl } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { authApi, siteSettingsApi } from '@/lib/api';
+import { isBusCrew } from '@/types';
 import type { SiteSettings } from '@/types';
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie';
@@ -47,7 +49,7 @@ const navItems = [
   { href: '/users',      label: 'المستخدمون',      icon: UserCog,       adminOnly: true },
   { href: '/reports',    label: 'التقارير',         icon: BarChart3,     reportsOnly: true },
   { href: '/audit-logs', label: 'سجل العمليات',    icon: ClipboardList, managerOnly: true },
-  { href: '/buses',      label: 'الباصات',          icon: Bus,           adminOnly: true },
+  { href: '/buses',      label: 'الباصات',          icon: Bus,           busesOnly: true },
   { href: '/settings',   label: 'الإعدادات',        icon: Settings,      adminOnly: true },
 ];
 
@@ -85,7 +87,16 @@ export default function Sidebar() {
   const canViewIndividualPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'individual_plans' && p.can_view);
   const canViewQuarterlyPlans = user?.is_admin || user?.permissions?.some((p) => p.module === 'quarterly_plans' && p.can_view);
 
-  const filtered = navItems.filter((item) => {
+  const canViewBuses = user?.is_admin || user?.role === 'transport_officer'
+    || user?.permissions?.some((p) => p.module === 'buses' && p.can_view);
+
+  // طاقم النقل: السائق/المشرف يرى «باصي» فقط، ومسؤول الحركة الباصات فقط
+  const filtered = isBusCrew(user?.role)
+    ? [{ href: '/my-bus', label: 'باصي', icon: Route }]
+    : user?.role === 'transport_officer'
+    ? navItems.filter((item) => item.href === '/buses')
+    : navItems.filter((item) => {
+    if (item.busesOnly && !canViewBuses) return false;
     if (item.adminOnly && !user?.is_admin) return false;
     if (item.managerOnly && !user?.is_admin && user?.role !== 'manager') return false;
     if (item.medicalOnly && !canViewMedical) return false;

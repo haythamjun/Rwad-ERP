@@ -32,6 +32,28 @@ class DisabilityTypeListField(serializers.Field):
         return []
 
 
+# ── البيانات السرية ────────────────────────────────────────────────────────────
+# تُخفى (null) لمن ليس له User.can_view_confidential — المعلم/المختص افتراضيًا.
+GUARDIAN_CONFIDENTIAL_FIELDS = ('national_id', 'phone', 'phone_alt', 'email', 'address')
+CONFIDENTIAL_ATTACHMENT_TYPES = (
+    StudentAttachment.AttachmentType.NATIONAL_ID,
+    StudentAttachment.AttachmentType.FAMILY_CARD,
+)
+
+
+def can_view_confidential(context_or_request):
+    """يقبل context الـ serializer أو الـ request؛ النتيجة تُخزَّن على الطلب
+    (صلاحية الوحدة استعلام — ما نكرّره لكل صف بالقائمة)."""
+    request = context_or_request.get('request') if isinstance(context_or_request, dict) else context_or_request
+    if request is None or not request.user.is_authenticated:
+        return False
+    cached = getattr(request, '_can_view_confidential', None)
+    if cached is None:
+        cached = request.user.can_view_confidential
+        request._can_view_confidential = cached
+    return cached
+
+
 class GuardianSerializer(serializers.ModelSerializer):
     relationship_display = serializers.CharField(
         source='get_relationship_display', read_only=True
@@ -45,6 +67,13 @@ class GuardianSerializer(serializers.ModelSerializer):
             'is_primary_contact', 'notes', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'student', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_confidential(self.context):
+            for field in GUARDIAN_CONFIDENTIAL_FIELDS:
+                data[field] = None
+        return data
 
     def validate_phone(self, value):
         if not value.isdigit() or len(value) != 10:
@@ -165,8 +194,15 @@ class StudentListSerializer(serializers.ModelSerializer):
             or obj.guardians.first()
         )
         if guardian:
-            return {'name': guardian.full_name, 'phone': guardian.phone}
+            phone = guardian.phone if can_view_confidential(self.context) else None
+            return {'name': guardian.full_name, 'phone': phone}
         return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_confidential(self.context):
+            data['national_id'] = None
+        return data
 
 
 class StudentDetailSerializer(serializers.ModelSerializer):
@@ -221,6 +257,16 @@ class StudentDetailSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_name', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'file_number', 'created_by', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_confidential(self.context):
+            data['national_id'] = None
+            data['family_info'] = None  # دراسة الحالة
+            data['attachments'] = [
+                a for a in data['attachments'] if a['attachment_type'] not in CONFIDENTIAL_ATTACHMENT_TYPES
+            ]
+        return data
 
     def get_created_by_name(self, obj):
         if obj.created_by:
@@ -338,6 +384,24 @@ class StudentCreateUpdateSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # من لا يرى الهوية ما يقدر يغيّرها (نموذج التعديل يرسلها فاضية له)
+        if not can_view_confidential(self.context):
+            validated_data.pop('national_id', None)
+        return super().update(instance, validated_data)
+
+    def to_internal_value(self, data):
+        if self.instance is not None and not can_view_confidential(self.context) and 'national_id' in data:
+            data = data.copy()
+            data.pop('national_id')
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not can_view_confidential(self.context):
+            data['national_id'] = None
+        return data
 
 
 # ── Attendance ─────────────────────────────────────────────────────────────────

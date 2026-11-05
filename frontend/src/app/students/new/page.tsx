@@ -12,7 +12,9 @@ import {
   ArrowLeft, ArrowRight, Save, Upload, X, Plus, Trash2, UserPlus, FileText, Check,
 } from 'lucide-react';
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, branchesApi } from '@/lib/api';
+import { canSeeConfidential } from '@/types';
 import type { Branch } from '@/types';
+import { useAuthStore } from '@/store/authStore';
 import Header from '@/components/layout/Header';
 
 // ─── Zod schema for basic student data ───────────────────────────────────────
@@ -207,6 +209,7 @@ const nextKey = () => String(++_keyCounter);
 // ─────────────────────────────────────────────────────────────────────────────
 export default function NewStudentPage() {
   const router = useRouter();
+  const canConf = canSeeConfidential(useAuthStore((s) => s.user));
 
   // ── Basic form ──────────────────────────────────────────────────────────
   const { register, handleSubmit, watch, trigger, formState: { errors } } = useForm<FormValues>({
@@ -474,6 +477,16 @@ export default function NewStudentPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  if (!canConf) {
+    return (
+      <div className="card text-center py-12 text-gray-500 max-w-xl">
+        <p className="text-sm">تسجيل الطلاب يتضمن بيانات سرية (الهوية وتواصل أولياء الأمر ودراسة الحالة).</p>
+        <p className="text-xs text-gray-400 mt-1">يتطلب صلاحية «البيانات السرية» — تواصل مع مدير النظام.</p>
+        <Link href="/students" className="btn-secondary mt-4 inline-flex">العودة لملفات الطلاب</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 max-w-4xl">
       <Header

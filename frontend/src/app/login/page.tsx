@@ -9,6 +9,11 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { isBusCrew } from '@/types';
+
+// صفحة البداية بعد الدخول — طاقم النقل ما عنده لوحة رئيسية (بيانات مستفيدين)
+const landingPath = (role: string) =>
+  isBusCrew(role) ? '/my-bus' : role === 'transport_officer' ? '/buses' : '/dashboard';
 
 const schema = z.object({
   username: z.string().min(1, 'اسم المستخدم مطلوب'),
@@ -36,7 +41,7 @@ export default function LoginPage() {
       const { access, refresh, user } = res.data;
       setAuth(user, access, refresh);
       toast.success(`مرحباً ${user.full_name}`);
-      router.replace('/dashboard');
+      router.replace(landingPath(user.role));
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||

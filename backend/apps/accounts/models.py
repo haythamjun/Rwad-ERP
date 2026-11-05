@@ -13,6 +13,7 @@ class User(AbstractUser):
         VIEWER = 'viewer', 'مشاهد'
         DRIVER = 'driver', 'سائق'
         BUS_SUPERVISOR = 'bus_supervisor', 'مشرف/ة الباص'
+        TRANSPORT_OFFICER = 'transport_officer', 'مسؤول الحركة'
 
     role = models.CharField(
         max_length=20,
@@ -64,6 +65,21 @@ class User(AbstractUser):
         ]
 
     @property
+    def is_transport_staff(self):
+        """السائق ومشرف الباص ومسؤول الحركة — ممنوعون من بيانات المستفيدين وملفاتهم
+        مهما كانت صلاحيات وحداتهم؛ السائق/المشرف يرى أسماء طلاب باصه فقط عبر «باصي»."""
+        return self.role in [self.Role.DRIVER, self.Role.BUS_SUPERVISOR, self.Role.TRANSPORT_OFFICER]
+
+    @property
+    def can_view_confidential(self):
+        """هوية الطالب، وبيانات تواصل أولياء الأمر وهوياتهم، ودراسة الحالة، وصور
+        الهوية وكرت العائلة. مسموحة افتراضيًا للمدير والاستقبال (يسجّلون الطلاب)،
+        ولغيرهم (المعلم/المختص...) فقط بصلاحية «البيانات السرية» صريحة."""
+        if self.role in [self.Role.ADMIN, self.Role.MANAGER, self.Role.RECEPTION]:
+            return True
+        return self.module_permissions.filter(module='confidential', can_view=True).exists()
+
+    @property
     def can_delete(self):
         return self.role in [self.Role.ADMIN, self.Role.MANAGER]
 
@@ -81,6 +97,7 @@ class UserModulePermission(models.Model):
         INDIVIDUAL_PLANS = 'individual_plans', 'الخطة الفردية'
         QUARTERLY_PLANS  = 'quarterly_plans',  'الخطط الفصلية'
         VIRTUAL_CLASSES  = 'virtual_classes',  'الفصول الافتراضية'
+        CONFIDENTIAL     = 'confidential',     'البيانات السرية'
         # ملاحظة: سجل العمليات/المستخدمون/الإعدادات أُزيلت من الخيارات — هذه صلاحيات
         # حساسة تبقى مقفولة على المدير/المشرف دائمًا (IsAdmin/IsManagerOrAbove على
         # مستوى الـ views مباشرة)، وليست قابلة للتفويض الفردي لكل مستخدم.

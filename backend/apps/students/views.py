@@ -26,7 +26,20 @@ from .serializers import (
     StudentAttachmentSerializer,
 )
 from .filters import StudentFilter
-from .permissions import CanWrite, CanDelete, CanExport, CanImport, CanViewMedical, CanEditMedical
+from .permissions import (
+    CanWrite, CanDelete, CanExport, CanImport, CanViewMedical, CanEditMedical, CanViewConfidential,
+)
+from .serializers import can_view_confidential, CONFIDENTIAL_ATTACHMENT_TYPES
+from rest_framework.filters import SearchFilter
+
+
+class _StudentSearchFilter(SearchFilter):
+    """البحث برقم الهوية فقط لمن يرى البيانات السرية — وإلا يقدر يتحقق من هوية."""
+    def get_search_fields(self, view, request):
+        fields = super().get_search_fields(view, request) or []
+        if can_view_confidential(request):
+            return fields
+        return [f for f in fields if f != 'national_id']
 from apps.core.utils import log_action
 
 
@@ -55,6 +68,8 @@ def _apply_scope(user, qs):
     branch/city. Admin sees all."""
     if user.is_admin:
         return qs
+    if user.is_transport_staff:
+        return qs.none()
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return qs.filter(classroom_id__in=classroom_ids)
@@ -65,16 +80,20 @@ def _apply_scope(user, qs):
         return qs.filter(branch_id=user.assigned_branch_id)
     if user.assigned_city:
         return qs.filter(branch__city=user.assigned_city)
-    return qs
+    # بلا فرع/مدينة: المدير العام يرى الكل، وغيره لا يرى شيئًا حتى يُعيَّن له فرع
+    # (كان يرى كل الطلاب — ثغرة: استقبال/مشاهد بلا فرع يطّلع على كل المستفيدين)
+    return qs if user.is_manager_or_above else qs.none()
 
 
 def _scope_branch_ids(user):
-    """أرقام الفروع المسموح بها للمستخدم: None تعني بلا تقييد (مدير، أو مستخدم بلا
-    فصل/عهدة/فرع/مدينة معيَّنة). لمعلم الفصل أو المختص: فروع فصوله/مستفيديه
+    """أرقام الفروع المسموح بها للمستخدم: None تعني بلا تقييد (مدير النظام، أو
+    مدير بلا فرع/مدينة معيَّنة)؛ [] = ولا فرع (غير المدير بلا فرع يُعيَّن له). لمعلم الفصل أو المختص: فروع فصوله/مستفيديه
     (بوابة خشنة لمسارات معامل branch الصريح — التضييق الحقيقي لطلابه تحديدًا
     يصير عبر _apply_scope/_scope_by_student)."""
     if user.is_admin:
         return None
+    if user.is_transport_staff:
+        return []  # ولا فرع — يُسقط كل بيانات الطلاب
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         from apps.core.models import Classroom
@@ -93,7 +112,7 @@ def _scope_branch_ids(user):
         return list(
             Branch.objects.filter(city=user.assigned_city).values_list('id', flat=True)
         )
-    return None
+    return None if user.is_manager_or_above else []
 
 
 def _scope_by_student(user, qs, path='student'):
@@ -102,6 +121,8 @@ def _scope_by_student(user, qs, path='student'):
     أو <path>_id أو <path>__branch_id."""
     if user.is_admin:
         return qs
+    if user.is_transport_staff:
+        return qs.none()
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return qs.filter(**{f'{path}__classroom_id__in': classroom_ids})
@@ -119,6 +140,8 @@ def _student_in_scope(user, student):
     مناسبة لحلقات تخطي-وتكمل بدل إيقاف الطلب كامل."""
     if user.is_admin:
         return True
+    if user.is_transport_staff:
+        return False
     classroom_ids = _teacher_classroom_ids(user)
     if classroom_ids is not None:
         return student.classroom_id in classroom_ids
@@ -151,7 +174,7 @@ def _assert_branch_in_scope(user, branch_id):
 
 class StudentListCreateView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, _StudentSearchFilter, filters.OrderingFilter]
     filterset_class = StudentFilter
     search_fields = ['first_name', 'middle_name', 'grandfather_name', 'family_name', 'national_id', 'file_number']
     ordering_fields = ['first_name', 'family_name', 'registration_date', 'created_at', 'file_number']
@@ -181,7 +204,8 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [CanWrite()]
+            # التسجيل يُدخل الهوية وتواصل أولياء الأمر ودراسة الحالة
+            return [CanWrite(), CanViewConfidential()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -285,7 +309,7 @@ class GuardianListCreateView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [CanWrite()]
+            return [CanWrite(), CanViewConfidential()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -306,9 +330,9 @@ class GuardianDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_permissions(self):
         if self.request.method in ['PUT', 'PATCH']:
-            return [CanWrite()]
+            return [CanWrite(), CanViewConfidential()]
         if self.request.method == 'DELETE':
-            return [CanDelete()]
+            return [CanDelete(), CanViewConfidential()]
         return [IsAuthenticated()]
 
     def perform_update(self, serializer):
@@ -325,10 +349,11 @@ class GuardianDetailView(generics.RetrieveUpdateDestroyAPIView):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class FamilyInfoView(APIView):
+    """دراسة الحالة — بيانات سرية كاملة (قراءة وكتابة)."""
     def get_permissions(self):
         if self.request.method in ['POST', 'PUT', 'PATCH']:
-            return [CanWrite()]
-        return [IsAuthenticated()]
+            return [CanWrite(), CanViewConfidential()]
+        return [IsAuthenticated(), CanViewConfidential()]
 
     def get(self, request, student_pk):
         student = get_object_or_404(Student, pk=student_pk)
@@ -385,10 +410,13 @@ class StudentAttachmentListView(generics.ListCreateAPIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return _scope_by_student(
+        qs = _scope_by_student(
             self.request.user,
             StudentAttachment.objects.filter(student_id=self.kwargs['student_pk']),
         )
+        if not can_view_confidential(self.request):
+            qs = qs.exclude(attachment_type__in=CONFIDENTIAL_ATTACHMENT_TYPES)
+        return qs
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -423,7 +451,8 @@ class StudentAttachmentDeleteView(generics.DestroyAPIView):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class StudentExportView(APIView):
-    permission_classes = [CanExport]
+    # التصدير يشمل الهويات والجوالات ودراسة الحالة كاملة
+    permission_classes = [CanExport, CanViewConfidential]
 
     def get(self, request):
         students = _apply_scope(
@@ -844,7 +873,7 @@ class StudentImportTemplateView(APIView):
 # ──────────────────────────────────────────────────────────────────────────────
 
 class StudentExportCsvView(APIView):
-    permission_classes = [CanExport]
+    permission_classes = [CanExport, CanViewConfidential]
 
     def get(self, request):
         students = _apply_scope(

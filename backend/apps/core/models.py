@@ -105,6 +105,9 @@ class Bus(models.Model):
     )
     registration_expiry = models.DateField(verbose_name='تاريخ انتهاء الاستمارة')
     inspection_expiry   = models.DateField(verbose_name='تاريخ انتهاء الفحص الدوري')
+    # اختياري — الباصات القديمة سُجّلت قبل إضافة التأمين
+    insurance_start     = models.DateField(null=True, blank=True, verbose_name='تاريخ بداية التأمين')
+    insurance_expiry    = models.DateField(null=True, blank=True, verbose_name='تاريخ انتهاء التأمين')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

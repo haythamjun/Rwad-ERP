@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     AuditLogListView, BranchListCreateView, BranchDetailView,
-    BusListCreateView, BusDetailView, DashboardStatsView,
+    BusListCreateView, BusDetailView, MyBusView, DashboardStatsView,
     BusShiftListCreateView, BusShiftDetailView,
     ClassroomListCreateView, ClassroomDetailView,
     SiteSettingsView, AttendanceReportView, AttendanceReportExportView,
@@ -14,6 +14,7 @@ urlpatterns = [
     path('branches/',           BranchListCreateView.as_view(), name='branch-list'),
     path('branches/<int:pk>/',  BranchDetailView.as_view(),    name='branch-detail'),
     path('buses/',              BusListCreateView.as_view(),   name='bus-list'),
+    path('buses/mine/',         MyBusView.as_view(),           name='bus-mine'),
     path('buses/<int:pk>/',     BusDetailView.as_view(),       name='bus-detail'),
     path('buses/<int:bus_pk>/shifts/',         BusShiftListCreateView.as_view(), name='bus-shift-list'),
     path('buses/<int:bus_pk>/shifts/<int:pk>/', BusShiftDetailView.as_view(),    name='bus-shift-detail'),

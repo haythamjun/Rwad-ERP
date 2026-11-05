@@ -36,6 +36,15 @@ class CanDelete(BasePermission):
         return request.user.module_permissions.filter(module=module, can_edit=True).exists()
 
 
+class CanViewConfidential(BasePermission):
+    """البيانات السرية: هوية الطالب، وتواصل وهويات أولياء الأمر، ودراسة الحالة —
+    انظر User.can_view_confidential."""
+    message = 'هذه البيانات سرية ولا تملك صلاحية الاطلاع عليها'
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.can_view_confidential
+
+
 class CanExport(BasePermission):
     message = 'ليس لديك صلاحية لتصدير البيانات'
 

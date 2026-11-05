@@ -7,13 +7,16 @@ import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
 import { studentsApi } from '@/lib/api';
 import StudentForm from '@/components/students/StudentForm';
+import { canSeeConfidential } from '@/types';
 import type { Student, StudentFormData } from '@/types';
+import { useAuthStore } from '@/store/authStore';
 import Header from '@/components/layout/Header';
 
 export default function EditStudentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const canConf = canSeeConfidential(useAuthStore((s) => s.user));
 
   const { data: student, isLoading } = useQuery<Student>({
     queryKey: ['student', id],
@@ -66,6 +69,7 @@ export default function EditStudentPage() {
       />
       {student && (
         <StudentForm
+          showNationalId={canConf}
           onSubmit={handleSubmit}
           loading={isPending}
           initialDisabilityTypes={Array.isArray(student.disability_type) ? student.disability_type : []}
@@ -74,7 +78,7 @@ export default function EditStudentPage() {
             middle_name:      student.middle_name,
             grandfather_name: student.grandfather_name,
             family_name:      student.family_name,
-            national_id:      student.national_id,
+            national_id:      student.national_id || '',
             date_of_birth:    student.date_of_birth,
             gender:           student.gender,
             nationality:      student.nationality,

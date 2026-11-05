@@ -17,10 +17,11 @@ const schema = z.object({
   middle_name:      z.string().min(2, 'اسم الأب مطلوب').max(50),
   grandfather_name: z.string().min(2, 'اسم الجد مطلوب').max(50),
   family_name:      z.string().min(2, 'اسم العائلة مطلوب').max(50),
+  // اختياري بالنموذج: مخفي عمّن لا يرى البيانات السرية (والخادم يتجاهله منه)
   national_id: z
     .string()
-    .min(1, 'رقم الهوية مطلوب')
-    .regex(/^\d{10}$/, 'رقم الهوية يجب أن يكون 10 أرقام'),
+    .optional()
+    .refine((v) => !v || /^\d{10}$/.test(v), 'رقم الهوية يجب أن يكون 10 أرقام'),
   date_of_birth: z
     .string()
     .min(1, 'تاريخ الميلاد مطلوب')
@@ -77,6 +78,8 @@ interface Props {
   loading?: boolean;
   defaultValues?: Partial<FormValues>;
   initialDisabilityTypes?: DisabilityEntry[];
+  /** يعرض خانة رقم الهوية — لمن يرى البيانات السرية فقط */
+  showNationalId?: boolean;
 }
 
 // ── Options ──────────────────────────────────────────────────────────────────
@@ -159,7 +162,7 @@ function SectionTitle({ num, title }: { num: string; title: string }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function StudentForm({ onSubmit, loading, defaultValues, initialDisabilityTypes }: Props) {
+export default function StudentForm({ onSubmit, loading, defaultValues, initialDisabilityTypes, showNationalId = true }: Props) {
   const [photo, setPhoto]                 = useState<File | null>(null);
   const [photoPreview, setPreview]        = useState<string | null>(null);
   const fileRef                           = useRef<HTMLInputElement>(null);
@@ -220,7 +223,13 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
     }
     const disability_type: DisabilityEntry[] = Object.entries(disabilityDegrees)
       .map(([type, degree]) => ({ type, degree }));
-    onSubmit({ ...values, disability_type, photo } as StudentFormData);
+    if (showNationalId && !values.national_id) {
+      toast.error('رقم الهوية مطلوب');
+      return;
+    }
+    const payload: Partial<FormValues> = { ...values };
+    if (!showNationalId) delete payload.national_id;
+    onSubmit({ ...payload, disability_type, photo } as StudentFormData);
   };
 
   return (
@@ -282,11 +291,13 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
             {errors.family_name && <p className="text-red-500 text-xs mt-1">{errors.family_name.message}</p>}
           </div>
 
-          <div>
-            <label className="form-label">رقم الهوية / الإقامة <span className="text-red-500">*</span></label>
-            <input {...register('national_id')} className="form-input font-mono" placeholder="1XXXXXXXXX" dir="ltr" maxLength={10} inputMode="numeric" />
-            {errors.national_id && <p className="text-red-500 text-xs mt-1">{errors.national_id.message}</p>}
-          </div>
+          {showNationalId && (
+            <div>
+              <label className="form-label">رقم الهوية / الإقامة <span className="text-red-500">*</span></label>
+              <input {...register('national_id')} className="form-input font-mono" placeholder="1XXXXXXXXX" dir="ltr" maxLength={10} inputMode="numeric" />
+              {errors.national_id && <p className="text-red-500 text-xs mt-1">{errors.national_id.message}</p>}
+            </div>
+          )}
 
           <div>
             <label className="form-label">تاريخ الميلاد <span className="text-red-500">*</span></label>

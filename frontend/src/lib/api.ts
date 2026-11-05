@@ -164,6 +164,7 @@ export const siteSettingsApi = {
 
 export const busesApi = {
   list:   (params?: Record<string, unknown>) => api.get('/buses/', { params }),
+  mine:   ()                                 => api.get('/buses/mine/'),
   create: (data: Record<string, unknown>)    => api.post('/buses/', data),
   update: (id: number, data: Record<string, unknown>) => api.patch(`/buses/${id}/`, data),
   delete: (id: number)                       => api.delete(`/buses/${id}/`),

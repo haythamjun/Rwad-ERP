@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
@@ -10,7 +12,7 @@ import {
 } from 'lucide-react';
 import { dashboardApi, studentsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { DEPARTMENTS } from '@/types';
+import { DEPARTMENTS, isBusCrew } from '@/types';
 import type { PaginatedResponse, Student, Department } from '@/types';
 
 const DEPARTMENT_ICONS: Record<Department, LucideIcon> = {
@@ -59,6 +61,13 @@ function StatCard({ title, value, icon, color, bg }: StatCardProps) {
 
 export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
+  const router = useRouter();
+
+  // طاقم النقل ما له لوحة رئيسية — يتحوّل لصفحته
+  useEffect(() => {
+    if (isBusCrew(user?.role)) router.replace('/my-bus');
+    else if (user?.role === 'transport_officer') router.replace('/buses');
+  }, [user?.role, router]);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],

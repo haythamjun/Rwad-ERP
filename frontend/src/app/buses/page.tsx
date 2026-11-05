@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { busesApi, busShiftsApi, branchesApi, studentsApi, authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { isTransportStaff } from '@/types';
 import type { Bus as BusType, Branch, Student, BusShiftType, User } from '@/types';
 import Header from '@/components/layout/Header';
 import {
@@ -20,7 +21,7 @@ const SHIFT_LABELS: { value: BusShiftType; label: string }[] = [
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR + 1 - 1980 + 1 }, (_, i) => CURRENT_YEAR + 1 - i);
 
-function isExpired(dateStr: string) {
+function isExpired(dateStr: string | null) {
   if (!dateStr) return false;
   return new Date(dateStr) < new Date(new Date().toDateString());
 }
@@ -44,6 +45,8 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
     branch:               bus?.branch ? String(bus.branch) : '',
     registration_expiry:  bus?.registration_expiry  || '',
     inspection_expiry:    bus?.inspection_expiry    || '',
+    insurance_start:      bus?.insurance_start      || '',
+    insurance_expiry:     bus?.insurance_expiry     || '',
   });
   const [shifts, setShifts] = useState<Record<BusShiftType, { driver: string; supervisor: string }>>({
     morning: {
@@ -73,6 +76,8 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
     if (!form.branch)                     e.branch = 'الفرع مطلوب';
     if (!form.registration_expiry)        e.registration_expiry = 'تاريخ انتهاء الاستمارة مطلوب';
     if (!form.inspection_expiry)          e.inspection_expiry = 'تاريخ انتهاء الفحص الدوري مطلوب';
+    if (form.insurance_start && form.insurance_expiry && form.insurance_expiry < form.insurance_start)
+      e.insurance_expiry = 'تاريخ انتهاء التأمين يجب أن يكون بعد تاريخ بدايته';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -185,6 +190,28 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">تاريخ بداية التأمين</label>
+              <input
+                type="date" dir="ltr"
+                className="form-input"
+                value={form.insurance_start}
+                onChange={e => { setForm(f => ({ ...f, insurance_start: e.target.value })); setErrors({}); }}
+              />
+            </div>
+            <div>
+              <label className="form-label">تاريخ انتهاء التأمين</label>
+              <input
+                type="date" dir="ltr"
+                className={`form-input ${errors.insurance_expiry ? 'border-red-400' : ''}`}
+                value={form.insurance_expiry}
+                onChange={e => { setForm(f => ({ ...f, insurance_expiry: e.target.value })); setErrors({}); }}
+              />
+              {errors.insurance_expiry && <p className="text-red-500 text-xs mt-1">{errors.insurance_expiry}</p>}
+            </div>
+          </div>
+
           <div className="pt-2 border-t border-gray-100">
             <p className="form-label flex items-center gap-1 mb-3"><UserCog size={12}/> طاقم الفترات (سائق ومشرف/ة كل فترة على حدة)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -222,7 +249,12 @@ function BusModal({ bus, branches, onClose, onSave, loading }: ModalProps) {
           <button onClick={onClose} className="btn-secondary">إلغاء</button>
           <button
             disabled={loading}
-            onClick={() => { if (validate()) onSave({ ...form, shifts }); }}
+            onClick={() => { if (validate()) onSave({
+              ...form,
+              insurance_start: form.insurance_start || null,
+              insurance_expiry: form.insurance_expiry || null,
+              shifts,
+            }); }}
             className="btn-primary px-6"
           >
             {loading
@@ -277,7 +309,7 @@ function BusStudentsModal({ bus, onClose }: { bus: BusType; onClose: () => void 
                     </p>
                   )}
                   {s.primary_guardian && (
-                    <p className="text-xs text-gray-400 mt-1">ولي الأمر: {s.primary_guardian.name} — {s.primary_guardian.phone}</p>
+                    <p className="text-xs text-gray-400 mt-1">ولي الأمر: {s.primary_guardian.name}{s.primary_guardian.phone ? ` — ${s.primary_guardian.phone}` : ''}</p>
                   )}
                 </div>
               ))}
@@ -400,8 +432,11 @@ export default function BusesPage() {
         ) : (
           <div className="divide-y divide-gray-100">
             {buses.map((b) => {
-              const regExpired  = isExpired(b.registration_expiry);
-              const inspExpired = isExpired(b.inspection_expiry);
+              const expired = [
+                isExpired(b.registration_expiry) && 'الاستمارة',
+                isExpired(b.inspection_expiry) && 'الفحص الدوري',
+                isExpired(b.insurance_expiry) && 'التأمين',
+              ].filter(Boolean) as string[];
               return (
                 <div key={b.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
                   <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center flex-shrink-0">
@@ -412,9 +447,9 @@ export default function BusesPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-gray-800">{b.brand} — {b.plate_number}</p>
                       <span className="badge text-xs bg-gray-100 text-gray-600">{b.manufacture_year}</span>
-                      {(regExpired || inspExpired) && (
+                      {expired.length > 0 && (
                         <span className="flex items-center gap-1 badge text-xs bg-red-100 text-red-700">
-                          <AlertTriangle size={11}/> {regExpired && inspExpired ? 'الاستمارة والفحص منتهيان' : regExpired ? 'الاستمارة منتهية' : 'الفحص الدوري منتهٍ'}
+                          <AlertTriangle size={11}/> منتهي: {expired.join('، ')}
                         </span>
                       )}
                     </div>
@@ -426,6 +461,9 @@ export default function BusesPage() {
                       {b.serial_number && (
                         <span className="text-xs text-gray-400 font-mono" dir="ltr">تسلسلي: {b.serial_number}</span>
                       )}
+                      <span className={`text-xs ${b.insurance_expiry ? 'text-gray-400' : 'text-amber-600'}`}>
+                        التأمين: {b.insurance_expiry ? <span dir="ltr">{b.insurance_expiry}</span> : 'غير مسجّل'}
+                      </span>
                     </div>
                     {b.shifts.length > 0 && (
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -439,13 +477,15 @@ export default function BusesPage() {
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => setRosterBus(b)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                      title="عرض الطلاب"
-                    >
-                      <Users size={14}/>
-                    </button>
+                    {!isTransportStaff(user?.role) && (
+                      <button
+                        onClick={() => setRosterBus(b)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
+                        title="عرض الطلاب"
+                      >
+                        <Users size={14}/>
+                      </button>
+                    )}
                     {canWrite && (
                       <button
                         onClick={() => { setEditTarget(b); setModalOpen(true); }}

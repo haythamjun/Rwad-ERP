@@ -36,6 +36,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'email':        self.user.email,
             'can_write':       self.user.can_write,
             'can_delete':      self.user.can_delete,
+            'can_view_confidential': self.user.can_view_confidential,
             'is_admin':        self.user.is_admin,
             'assigned_branch': self.user.assigned_branch_id,
             'assigned_city':   self.user.assigned_city,

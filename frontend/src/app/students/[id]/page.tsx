@@ -14,7 +14,7 @@ import {
 import { studentsApi, guardiansApi, familyApi, attachmentsApi, attendanceApi, scheduleApi, medicalApi, assessmentsApi, studentAssessmentsApi, plansApi, individualPlansApi, quarterlyPlansApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatDate, STATUS_COLORS, mediaUrl } from '@/lib/utils';
-import { SCHEDULE_DAYS, shiftSessions, scheduleTimeLabel } from '@/types';
+import { SCHEDULE_DAYS, shiftSessions, scheduleTimeLabel, canSeeConfidential } from '@/types';
 import ScheduleGrid from '@/components/students/ScheduleGrid';
 import type {
   Student, Guardian, FamilyInfo, GuardianFormData, FamilyFormData, Attendance, AttendanceFormData,
@@ -44,6 +44,7 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
+  const canConf = canSeeConfidential(user);
   const queryClient = useQueryClient();
 
   const [guardianModal, setGuardianModal] = useState<{ open: boolean; guardian?: Guardian }>({ open: false });
@@ -524,7 +525,7 @@ export default function StudentDetailPage() {
         </div>
         <div className="flex-1">
           <h2 className="text-xl font-bold text-gray-900">{student.full_name}</h2>
-          <p className="text-gray-500 text-sm">{student.national_id} — {student.nationality}</p>
+          <p className="text-gray-500 text-sm">{student.national_id ? `${student.national_id} — ` : ''}{student.nationality}</p>
           <p className="text-gray-500 text-sm mt-0.5">{student.gender_display} — {student.age} سنة</p>
         </div>
         <div className="text-left">
@@ -543,7 +544,7 @@ export default function StudentDetailPage() {
         {[
           { key: 'info', label: 'البيانات الأساسية', icon: User },
           { key: 'guardians', label: `أولياء الأمور (${student.guardians?.length || 0})`, icon: Users },
-          { key: 'family', label: 'الأسرة', icon: Home },
+          ...(canConf ? [{ key: 'family', label: 'الأسرة', icon: Home }] : []),
           { key: 'attachments', label: `المرفقات (${student.attachments?.length || 0})`, icon: Paperclip },
           { key: 'attendance', label: 'الحضور والغياب', icon: CalendarDays },
           { key: 'schedule', label: 'الجدول الدراسي', icon: CalendarClock },
@@ -581,7 +582,7 @@ export default function StudentDetailPage() {
               <InfoRow label="اسم الجد"                value={student.grandfather_name || '—'} />
               <InfoRow label="اسم العائلة"             value={student.family_name} />
               <InfoRow label="رقم الملف"               value={student.file_number} />
-              <InfoRow label="رقم الهوية / الإقامة"   value={student.national_id} />
+              <InfoRow label="رقم الهوية / الإقامة"   value={student.national_id || 'مخفي (بيانات سرية)'} />
               <InfoRow label="تاريخ الميلاد"           value={`${formatDate(student.date_of_birth)} (${student.age} سنة)`} />
               <InfoRow label="الجنس"                   value={student.gender_display} />
               <InfoRow label="الجنسية"                 value={student.nationality} />
@@ -674,7 +675,12 @@ export default function StudentDetailPage() {
 
       {activeTab === 'guardians' && (
         <div className="space-y-3">
-          {user?.can_write && (
+          {!canConf && (
+            <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              أرقام التواصل والهويات والعناوين مخفية — بيانات سرية لا يطّلع عليها إلا المخوّلون.
+            </p>
+          )}
+          {user?.can_write && canConf && (
             <button
               onClick={() => setGuardianModal({ open: true })}
               className="btn-primary"
@@ -697,7 +703,7 @@ export default function StudentDetailPage() {
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-gray-600">
-                      <p className="flex items-center gap-2"><Phone size={14} /> {g.phone}</p>
+                      {g.phone && <p className="flex items-center gap-2"><Phone size={14} /> {g.phone}</p>}
                       {g.phone_alt && <p className="flex items-center gap-2"><Phone size={14} /> {g.phone_alt} (إضافي)</p>}
                       {g.email && <p className="flex items-center gap-2"><Mail size={14} /> {g.email}</p>}
                       {g.address && <p className="flex items-center gap-2"><MapPin size={14} /> {g.address}</p>}
@@ -705,7 +711,7 @@ export default function StudentDetailPage() {
                     </div>
                     {g.notes && <p className="text-xs text-gray-400 mt-2">{g.notes}</p>}
                   </div>
-                  {user?.can_write && (
+                  {user?.can_write && canConf && (
                     <div className="flex gap-2">
                       <button
                         onClick={() => setGuardianModal({ open: true, guardian: g })}
@@ -732,7 +738,7 @@ export default function StudentDetailPage() {
         </div>
       )}
 
-      {activeTab === 'family' && (
+      {activeTab === 'family' && canConf && (
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="section-title mb-0">بيانات الأسرة</h3>

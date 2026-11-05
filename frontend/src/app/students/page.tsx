@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { studentsApi, branchesApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { downloadBlob, STATUS_COLORS } from '@/lib/utils';
+import { canSeeConfidential } from '@/types';
 import type { PaginatedResponse, Student, StudentFilters, Branch } from '@/types';
 import Header from '@/components/layout/Header';
 import ImportModal from '@/components/students/ImportModal';
@@ -60,7 +61,8 @@ export default function StudentsPage() {
   const [importFormat, setImportFormat] = useState<'excel' | 'csv'>('excel');
 
   const studentsPerm = user?.permissions?.find((p) => p.module === 'students');
-  const canExport = user?.is_admin || studentsPerm?.can_export === true;
+  // التصدير يشمل الهويات والجوالات — يحتاج صلاحية البيانات السرية أيضًا
+  const canExport = (user?.is_admin || studentsPerm?.can_export === true) && canSeeConfidential(user);
   const canImport = user?.is_admin || studentsPerm?.can_import === true;
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -165,7 +167,7 @@ export default function StudentsPage() {
                 المرفوضون
               </Link>
             )}
-            {user?.can_write && (
+            {user?.can_write && canSeeConfidential(user) && (
               <Link href="/students/new" className="btn-primary">
                 <Plus size={16} />
                 إضافة طالب
@@ -269,7 +271,7 @@ export default function StudentsPage() {
         ) : students.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-gray-400 text-sm">لا توجد نتائج مطابقة</p>
-            {user?.can_write && (
+            {user?.can_write && canSeeConfidential(user) && (
               <Link href="/students/new" className="btn-primary mt-4 inline-flex">
                 <Plus size={16} /> إضافة أول طالب
               </Link>
@@ -306,7 +308,7 @@ export default function StudentsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{student.national_id}</td>
+                    <td className="px-4 py-3 text-gray-600">{student.national_id || <span className="text-gray-300">مخفي</span>}</td>
                     <td className="px-4 py-3 text-gray-600">{student.nationality}</td>
                     <td className="px-4 py-3">
                       <span className={`badge ${STATUS_COLORS[student.status] || 'bg-gray-100 text-gray-600'}`}>
@@ -321,7 +323,7 @@ export default function StudentsPage() {
                       {student.primary_guardian ? (
                         <div>
                           <p>{student.primary_guardian.name}</p>
-                          <p className="text-gray-400">{student.primary_guardian.phone}</p>
+                          {student.primary_guardian.phone && <p className="text-gray-400">{student.primary_guardian.phone}</p>}
                         </div>
                       ) : (
                         <span className="text-gray-300">—</span>
