@@ -38,7 +38,7 @@ export default function SpecialistDashboardPage() {
 
   const { data: beneficiaries, isError: beneficiariesForbidden, isLoading: beneficiariesLoading } = useQuery<PaginatedResponse<Student>>({
     queryKey: ['students', 'caseload', specialistId, slug],
-    queryFn: () => studentsApi.list({ specialist: specialistId, department: slug }).then(r => r.data),
+    queryFn: () => studentsApi.list({ specialist: specialistId, department: slug, page_size: 1000 }).then(r => r.data),
     retry: false,
   });
 
@@ -142,6 +142,9 @@ export default function SpecialistDashboardPage() {
         <div className="flex items-center gap-2 mb-4">
           <Users2 size={18} className="text-primary-600" />
           <h3 className="section-title mb-0">المستفيدون المسندون</h3>
+          {!!beneficiaries?.count && (
+            <span className="badge bg-primary-50 text-primary-700 text-xs">{beneficiaries.count}</span>
+          )}
         </div>
 
         {beneficiariesForbidden ? (
