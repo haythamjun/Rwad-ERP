@@ -322,6 +322,8 @@ export const goalAnalysisApi = {
     api.post(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/`, data),
   update: (studentId: number, planId: number, id: number, data: unknown) =>
     api.patch(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/${id}/`, data),
+  remove: (studentId: number, planId: number, id: number) =>
+    api.delete(`/students/${studentId}/individual-plans/${planId}/analysis-sheets/${id}/`),
 };
 
 export const quarterlyPlansApi = {

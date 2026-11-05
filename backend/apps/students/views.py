@@ -1549,6 +1549,10 @@ class GoalAnalysisSheetDetailView(generics.RetrieveUpdateDestroyAPIView):
         sheet = serializer.save()
         log_action(self.request, 'update', sheet, f'تحليل الأهداف — {sheet.plan.student} — {sheet.goal.domain}')
 
+    def perform_destroy(self, instance):
+        log_action(self.request, 'delete', instance, f'تحليل الأهداف — {instance.plan.student} — {instance.goal.domain} — {instance.start_date}')
+        instance.delete()
+
 
 from .models import QuarterlyPlan, StudentSpecialistAssignment
 from .serializers import QuarterlyPlanSerializer, StudentSpecialistAssignmentSerializer

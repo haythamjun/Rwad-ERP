@@ -5,19 +5,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { ArrowRight, Save, Printer, Plus, Grid3x3 } from 'lucide-react';
-import { individualPlansApi, goalAnalysisApi, studentsApi, siteSettingsApi } from '@/lib/api';
+import { ArrowRight, Save, Printer, Plus, Grid3x3, Trash2 } from 'lucide-react';
+import { individualPlansApi, goalAnalysisApi, studentsApi, siteSettingsApi, holidaysApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { mediaUrl } from '@/lib/utils';
 import Header from '@/components/layout/Header';
 import { GOAL_ANALYSIS_LEVELS, GOAL_ANALYSIS_GOAL_ROW } from '@/types';
 import type {
   IndividualPlan, IndividualPlanGoal, GoalAnalysisSheet, GoalAnalysisLevel, Student, SiteSettings,
+  Holiday, WeekDay,
 } from '@/types';
 
 const DAYS = 20;              // 4 أسابيع × (الأحد–الخميس)
 const MIN_ROWS = 10;          // النموذج الورقي فيه 10 صفوف ثابتة
-const DAY_LETTERS = ['ح', 'ن', 'ث', 'ع', 'خ'];
+const DAY_LETTERS = ['ح', 'ن', 'ث', 'ع', 'خ', 'ج', 'س']; // حسب getDay(): الأحد=0
 const DEFAULT_NAME_AR = 'مركز رؤية للتأهيل';
 
 const LEVEL_CLASSES: Record<number, string> = {
@@ -59,23 +60,52 @@ function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// 20 يوم دراسي (الأحد=0 .. الخميس=4) تبدأ من التاريخ المحدد
-function schoolDays(start: string): Date[] {
+// تقويم الدراسة من إعدادات النظام: أيام الإجازة الأسبوعية + العطل الرسمية.
+// التواريخ تُحسب في كل عرض (ما تُخزَّن) — تعديل الإعدادات يغيّر تواريخ الأشهر القائمة.
+interface SchoolCalendar {
+  offDays: Set<number>;          // getDay(): الأحد=0 .. السبت=6
+  holidays: [string, string][];  // [من, إلى] بصيغة YYYY-MM-DD
+}
+
+const WEEKDAY_INDEX: Record<WeekDay, number> = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6,
+};
+const DEFAULT_OFF_DAYS: WeekDay[] = ['friday', 'saturday'];
+
+function buildCalendar(settings: SiteSettings | undefined, holidays: Holiday[]): SchoolCalendar {
+  let off = settings?.weekly_off_days?.length ? settings.weekly_off_days : DEFAULT_OFF_DAYS;
+  if (off.length >= 7) off = DEFAULT_OFF_DAYS; // إعداد غير منطقي — ما فيه يوم دراسي
+  return {
+    offDays: new Set(off.map((d) => WEEKDAY_INDEX[d])),
+    holidays: holidays.map((h) => [h.start_date, h.end_date || h.start_date]),
+  };
+}
+
+function isSchoolDay(d: Date, cal: SchoolCalendar): boolean {
+  if (cal.offDays.has(d.getDay())) return false;
+  const iso = toISO(d);
+  return !cal.holidays.some(([from, to]) => iso >= from && iso <= to);
+}
+
+// 20 يوم دراسي تبدأ من التاريخ المحدد (أو أول يوم دراسي بعده)
+function schoolDays(start: string, cal: SchoolCalendar): Date[] {
   const d = parseISO(start);
   const out: Date[] = [];
-  while (out.length < DAYS) {
-    if (d.getDay() <= 4) out.push(new Date(d));
+  for (let guard = 0; out.length < DAYS && guard < 400; guard++) {
+    if (isSchoolDay(d, cal)) out.push(new Date(d));
     d.setDate(d.getDate() + 1);
   }
   return out;
 }
 
-function nextSchoolDay(d: Date): Date {
+function nextSchoolDay(d: Date, cal: SchoolCalendar): Date {
   const n = new Date(d);
   n.setDate(n.getDate() + 1);
-  while (n.getDay() > 4) n.setDate(n.getDate() + 1);
+  for (let guard = 0; !isSchoolDay(n, cal) && guard < 400; guard++) n.setDate(n.getDate() + 1);
   return n;
 }
+
+const dayLetter = (d: Date) => DAY_LETTERS[d.getDay()];
 
 const shortDate = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
 const fullDate = (d: Date) => `${d.getDate()} / ${d.getMonth() + 1} / ${d.getFullYear()}`;
@@ -151,7 +181,7 @@ td, th { border: 1px solid #000; padding: 3px 4px; }
   <tr><td><span class="lbl">تاريخ البدء:</span> ${fullDate(days[0])}</td><td><span class="lbl">تاريخ الانتهاء:</span> ${fullDate(days[DAYS - 1])}</td></tr>
 </table>
 <table class="grid" style="margin-top:-1px">
-  <thead><tr><th>#</th><th>${hasSubGoals ? 'الهدف الفرعي' : 'الهدف'}</th>${days.map((_, i) => `<th class="${i % 5 === 0 ? 'wk' : ''}">${DAY_LETTERS[i % 5]}</th>`).join('')}<th class="wk">تاريخ الإنجاز</th></tr></thead>
+  <thead><tr><th>#</th><th>${hasSubGoals ? 'الهدف الفرعي' : 'الهدف'}</th>${days.map((d, i) => `<th class="${i % 5 === 0 ? 'wk' : ''}">${dayLetter(d)}</th>`).join('')}<th class="wk">تاريخ الإنجاز</th></tr></thead>
   <tbody>${body}
   <tr class="dates"><td></td><td class="goal lbl">تاريخ اليوم</td>${days.map((d, i) => `<td class="${i % 5 === 0 ? 'wk' : ''}">${shortDate(d)}</td>`).join('')}<td class="wk"></td></tr>
   </tbody>
@@ -190,10 +220,17 @@ export default function GoalAnalysisPage() {
     queryFn: () => studentsApi.detail(studentId).then((r) => r.data),
   });
 
-  const { data: siteSettings } = useQuery<SiteSettings>({
+  const { data: siteSettings, isLoading: loadingSettings } = useQuery<SiteSettings>({
     queryKey: ['site-settings'],
     queryFn: () => siteSettingsApi.get().then((r) => r.data),
   });
+
+  const { data: holidays = [], isLoading: loadingHolidays } = useQuery<Holiday[]>({
+    queryKey: ['holidays'],
+    queryFn: () => holidaysApi.list().then((r) => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
+  });
+
+  const calendar = useMemo(() => buildCalendar(siteSettings, holidays), [siteSettings, holidays]);
 
   // المجالات بنفس ترتيب ظهورها في الخطة
   const domains = useMemo(() => {
@@ -254,11 +291,12 @@ export default function GoalAnalysisPage() {
   useEffect(() => {
     if (goalSheets.length) {
       const last = goalSheets[goalSheets.length - 1];
-      setNewStart(toISO(nextSchoolDay(schoolDays(last.start_date)[DAYS - 1])));
+      const lastDays = schoolDays(last.start_date, calendar);
+      setNewStart(toISO(nextSchoolDay(lastDays[lastDays.length - 1], calendar)));
     } else {
       setNewStart(goal?.start_date || toISO(new Date()));
     }
-  }, [goalSheets, goal]);
+  }, [goalSheets, goal, calendar]);
 
   const confirmDiscard = () => !dirty || window.confirm('فيه تعديلات ما انحفظت. تبغى تتركها؟');
 
@@ -296,6 +334,25 @@ export default function GoalAnalysisPage() {
     onError: () => toast.error('حدث خطأ أثناء الحفظ'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (sheetPk: number) => goalAnalysisApi.remove(studentId, planPk, sheetPk),
+    onSuccess: () => {
+      setSheetId(null);
+      setDirty(false);
+      queryClient.invalidateQueries({ queryKey: ['goal-analysis', id, planId] });
+      toast.success('تم حذف شهر المتابعة');
+    },
+    onError: () => toast.error('تعذّر حذف الشهر'),
+  });
+
+  const confirmDelete = () => {
+    if (!sheet) return;
+    const ds = schoolDays(sheet.start_date, calendar);
+    if (window.confirm(`حذف شهر المتابعة ${shortDate(ds[0])} — ${shortDate(ds[DAYS - 1])} بكل تقييماته؟ لا يمكن التراجع.`)) {
+      deleteMutation.mutate(sheet.id);
+    }
+  };
+
   const cycleCell = (rowKey: string, day: number) => {
     if (!canEdit || !draft) return;
     const row = [...(draft.ratings[rowKey] || emptyRow())];
@@ -310,7 +367,7 @@ export default function GoalAnalysisPage() {
     setDirty(true);
   };
 
-  if (loadingPlan || loadingSheets || !plan) {
+  if (loadingPlan || loadingSheets || loadingSettings || loadingHolidays || !plan) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="animate-spin w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full" />
@@ -320,7 +377,7 @@ export default function GoalAnalysisPage() {
 
   const studentName = student?.full_name || plan.student_name;
   const teacherName = plan.teacher_name || '—';
-  const days = sheet ? schoolDays(sheet.start_date) : [];
+  const days = sheet ? schoolDays(sheet.start_date, calendar) : [];
   const rows = Math.max(MIN_ROWS, items.length);
 
   const handlePrint = () => {
@@ -437,17 +494,30 @@ export default function GoalAnalysisPage() {
                   onChange={(e) => { if (confirmDiscard()) setSheetId(Number(e.target.value)); }}
                 >
                   {goalSheets.map((s) => {
-                    const ds = schoolDays(s.start_date);
+                    const ds = schoolDays(s.start_date, calendar);
                     return <option key={s.id} value={s.id}>{shortDate(ds[0])} — {shortDate(ds[DAYS - 1])} / {ds[0].getFullYear()}</option>;
                   })}
                 </select>
               </div>
             )}
+            {sheet && canEdit && (
+              <button
+                onClick={confirmDelete}
+                disabled={deleteMutation.isPending}
+                className="btn-secondary text-red-600 hover:text-red-700"
+              >
+                <Trash2 size={15} /> حذف الشهر
+              </button>
+            )}
             {canEdit && (
               <div className="flex items-end gap-2">
                 <div>
                   <label className="form-label">{goalSheets.length ? 'بداية شهر جديد' : 'بداية الشهر'}</label>
-                  <input type="date" dir="ltr" className="form-input" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
+                  <input
+                    type="date" dir="ltr" className="form-input"
+                    value={newStart}
+                    onChange={(e) => setNewStart(e.target.value)}
+                  />
                 </div>
                 <button
                   onClick={() => { if (confirmDiscard()) createMutation.mutate(); }}
@@ -499,8 +569,8 @@ export default function GoalAnalysisPage() {
                       <th rowSpan={2} className="border border-gray-300 border-r-2 border-r-gray-800 min-w-[130px] text-xs">تاريخ الإنجاز</th>
                     </tr>
                     <tr className="bg-[#8db3e2] text-gray-900">
-                      {days.map((_, i) => (
-                        <th key={i} className={`border border-gray-300 py-1 ${i % 5 === 0 ? 'border-r-2 border-r-gray-800' : ''}`}>{DAY_LETTERS[i % 5]}</th>
+                      {days.map((d, i) => (
+                        <th key={i} className={`border border-gray-300 py-1 ${i % 5 === 0 ? 'border-r-2 border-r-gray-800' : ''}`}>{dayLetter(d)}</th>
                       ))}
                     </tr>
                   </thead>
