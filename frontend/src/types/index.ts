@@ -593,6 +593,15 @@ export const INDIVIDUAL_PLAN_EVALUATIONS: { value: IndividualPlanEvaluation; lab
   { value: 'not_applicable', label: 'لم يطبق' },
 ];
 
+export interface IndividualPlanSubGoal {
+  id: number;
+  text: string;
+  post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_display?: string | null;
+  order: number;
+  achieved_date?: string | null;
+}
+
 export interface IndividualPlanGoal {
   id: number;
   domain: string;
@@ -601,8 +610,11 @@ export interface IndividualPlanGoal {
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
   post_evaluation_display?: string | null;
+  /** المختص اختار التقييم يدويًا بدل الحساب التلقائي من الأهداف الفرعية */
+  post_evaluation_manual: boolean;
   order: number;
   achieved_date?: string | null;
+  sub_goals: IndividualPlanSubGoal[];
 }
 
 export interface IndividualPlan {
@@ -625,10 +637,13 @@ export interface IndividualPlanGoalFormData {
   start_date: string | null;
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_manual: boolean;
   order: number;
+  sub_goals: { id?: number; text: string; post_evaluation: IndividualPlanEvaluation; order: number }[];
 }
 
-// نموذج تحليل الأهداف — شهر متابعة يومية (20 يوم دراسي) لأهداف مجال واحد
+// نموذج تحليل الأهداف — شهر متابعة يومية (20 يوم دراسي) لهدف واحد،
+// بنوده الأهداف الفرعية (أو الهدف نفسه بمفتاح "goal" لو ما له أهداف فرعية)
 export type GoalAnalysisLevel = 0 | 1 | 2 | 3 | 4;
 
 export const GOAL_ANALYSIS_LEVELS: { value: Exclude<GoalAnalysisLevel, 0>; label: string }[] = [
@@ -638,10 +653,12 @@ export const GOAL_ANALYSIS_LEVELS: { value: Exclude<GoalAnalysisLevel, 0>; label
   { value: 4, label: 'مساعدة جزئية' },
 ];
 
+export const GOAL_ANALYSIS_GOAL_ROW = 'goal';
+
 export interface GoalAnalysisSheet {
   id: number;
   plan: number;
-  domain: string;
+  goal: number;
   start_date: string;
   ratings: Record<string, GoalAnalysisLevel[]>;
   teaching_aids: string;

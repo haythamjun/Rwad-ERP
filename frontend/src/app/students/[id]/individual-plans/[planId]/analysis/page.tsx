@@ -10,7 +10,7 @@ import { individualPlansApi, goalAnalysisApi, studentsApi, siteSettingsApi } fro
 import { useAuthStore } from '@/store/authStore';
 import { mediaUrl } from '@/lib/utils';
 import Header from '@/components/layout/Header';
-import { GOAL_ANALYSIS_LEVELS } from '@/types';
+import { GOAL_ANALYSIS_LEVELS, GOAL_ANALYSIS_GOAL_ROW } from '@/types';
 import type {
   IndividualPlan, IndividualPlanGoal, GoalAnalysisSheet, GoalAnalysisLevel, Student, SiteSettings,
 } from '@/types';
@@ -26,6 +26,22 @@ const LEVEL_CLASSES: Record<number, string> = {
   3: 'bg-amber-100 text-amber-700',
   4: 'bg-red-100 text-red-700',
 };
+
+// بند في النموذج: هدف فرعي، أو الهدف نفسه لو ما له أهداف فرعية
+interface SheetRow {
+  key: string;
+  text: string;
+  achieved_date: string | null;
+}
+
+function goalRows(goal: IndividualPlanGoal | undefined): SheetRow[] {
+  if (!goal) return [];
+  const subs = [...(goal.sub_goals || [])].sort((a, b) => a.order - b.order);
+  if (subs.length === 0) {
+    return [{ key: GOAL_ANALYSIS_GOAL_ROW, text: goal.goal_text, achieved_date: goal.achieved_date || null }];
+  }
+  return subs.map((sg) => ({ key: String(sg.id), text: sg.text, achieved_date: sg.achieved_date || null }));
+}
 
 interface Draft {
   ratings: Record<string, GoalAnalysisLevel[]>;
@@ -72,9 +88,9 @@ function emptyRow(): GoalAnalysisLevel[] {
   return new Array(DAYS).fill(0) as GoalAnalysisLevel[];
 }
 
-function draftFrom(sheet: GoalAnalysisSheet, goals: IndividualPlanGoal[]): Draft {
+function draftFrom(sheet: GoalAnalysisSheet, rows: SheetRow[]): Draft {
   const achieved: Record<string, string> = {};
-  for (const g of goals) achieved[g.id] = g.achieved_date || '';
+  for (const r of rows) achieved[r.key] = r.achieved_date || '';
   return {
     ratings: { ...sheet.ratings },
     teaching_aids: sheet.teaching_aids || '',
@@ -85,22 +101,22 @@ function draftFrom(sheet: GoalAnalysisSheet, goals: IndividualPlanGoal[]): Draft
 
 // ── نسخة الطباعة — نفس تخطيط «نموذج جمع البيانات» الورقي ─────────────────────
 function buildSheetHTML(opts: {
-  studentName: string; teacherName: string; domain: string; days: Date[];
-  goals: IndividualPlanGoal[]; draft: Draft; centerNameAr: string; logoUrl: string | null;
+  studentName: string; teacherName: string; domain: string; goalText: string; hasSubGoals: boolean;
+  days: Date[]; items: SheetRow[]; draft: Draft; centerNameAr: string; logoUrl: string | null;
 }): string {
-  const { studentName, teacherName, domain, days, goals, draft, centerNameAr, logoUrl } = opts;
-  const rows = Math.max(MIN_ROWS, goals.length);
+  const { studentName, teacherName, domain, goalText, hasSubGoals, days, items, draft, centerNameAr, logoUrl } = opts;
+  const rows = Math.max(MIN_ROWS, items.length);
   const logo = logoUrl
     ? `<img src="${logoUrl}" alt="" style="width:100%;height:100%;object-fit:contain">`
     : `<span>${escapeHtml(centerNameAr)}</span>`;
 
   let body = '';
   for (let r = 0; r < rows; r++) {
-    const g = goals[r];
-    const vals = g ? (draft.ratings[g.id] || emptyRow()) : emptyRow();
-    body += `<tr><td class="num">${r + 1}</td><td class="goal">${g ? escapeHtml(g.goal_text) : ''}</td>`;
+    const it = items[r];
+    const vals = it ? (draft.ratings[it.key] || emptyRow()) : emptyRow();
+    body += `<tr><td class="num">${r + 1}</td><td class="goal">${it ? escapeHtml(it.text) : ''}</td>`;
     vals.forEach((v, i) => { body += `<td class="${i % 5 === 0 ? 'wk' : ''}">${v || ''}</td>`; });
-    const ach = g && draft.achieved[g.id] ? fullDate(parseISO(draft.achieved[g.id])) : '';
+    const ach = it && draft.achieved[it.key] ? fullDate(parseISO(draft.achieved[it.key])) : '';
     body += `<td class="wk ach">${ach}</td></tr>`;
   }
 
@@ -131,10 +147,11 @@ td, th { border: 1px solid #000; padding: 3px 4px; }
   <tr><td colspan="2" class="title">تحليل الأهداف</td></tr>
   <tr><td><span class="lbl">اسم المستفيد/ه:</span> ${escapeHtml(studentName)}</td><td><span class="lbl">اسم المعلمة:</span> ${escapeHtml(teacherName)}</td></tr>
   <tr><td colspan="2"><span class="lbl">مجال التدريب الرئيسي:</span> ${escapeHtml(domain)}</td></tr>
+  <tr><td colspan="2"><span class="lbl">الهدف:</span> ${escapeHtml(goalText)}</td></tr>
   <tr><td><span class="lbl">تاريخ البدء:</span> ${fullDate(days[0])}</td><td><span class="lbl">تاريخ الانتهاء:</span> ${fullDate(days[DAYS - 1])}</td></tr>
 </table>
 <table class="grid" style="margin-top:-1px">
-  <thead><tr><th>#</th><th>الهدف</th>${days.map((_, i) => `<th class="${i % 5 === 0 ? 'wk' : ''}">${DAY_LETTERS[i % 5]}</th>`).join('')}<th class="wk">تاريخ إنجاز الهدف</th></tr></thead>
+  <thead><tr><th>#</th><th>${hasSubGoals ? 'الهدف الفرعي' : 'الهدف'}</th>${days.map((_, i) => `<th class="${i % 5 === 0 ? 'wk' : ''}">${DAY_LETTERS[i % 5]}</th>`).join('')}<th class="wk">تاريخ الإنجاز</th></tr></thead>
   <tbody>${body}
   <tr class="dates"><td></td><td class="goal lbl">تاريخ اليوم</td>${days.map((d, i) => `<td class="${i % 5 === 0 ? 'wk' : ''}">${shortDate(d)}</td>`).join('')}<td class="wk"></td></tr>
   </tbody>
@@ -186,6 +203,7 @@ export default function GoalAnalysisPage() {
   }, [plan]);
 
   const [domain, setDomain] = useState<string>('');
+  const [goalId, setGoalId] = useState<number | null>(null);
   const [sheetId, setSheetId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -199,51 +217,60 @@ export default function GoalAnalysisPage() {
     () => (plan?.goals || []).filter((g) => g.domain === domain).sort((a, b) => a.order - b.order),
     [plan, domain],
   );
-  const domainSheets = useMemo(
-    () => sheets.filter((s) => s.domain === domain).sort((a, b) => a.start_date.localeCompare(b.start_date)),
-    [sheets, domain],
+
+  // كل هدف له نموذج خاص — عند تغيير المجال نختار أول هدف فيه
+  useEffect(() => {
+    if (!domainGoals.some((g) => g.id === goalId)) setGoalId(domainGoals.length ? domainGoals[0].id : null);
+  }, [domainGoals, goalId]);
+
+  const goal = domainGoals.find((g) => g.id === goalId);
+  const items = useMemo(() => goalRows(goal), [goal]);
+  const hasSubGoals = !!goal && (goal.sub_goals || []).length > 0;
+
+  const goalSheets = useMemo(
+    () => sheets.filter((s) => s.goal === goalId).sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    [sheets, goalId],
   );
-  const sheet = domainSheets.find((s) => s.id === sheetId) || null;
+  const sheet = goalSheets.find((s) => s.id === sheetId) || null;
 
-  // عند تغيير المجال أو تحميل النماذج: افتح آخر شهر للمجال
+  // عند تغيير الهدف أو تحميل النماذج: افتح آخر شهر للهدف
   useEffect(() => {
-    if (!domain) return;
-    if (!sheetId || !domainSheets.some((s) => s.id === sheetId)) {
-      setSheetId(domainSheets.length ? domainSheets[domainSheets.length - 1].id : null);
+    if (!goalId) return;
+    if (!sheetId || !goalSheets.some((s) => s.id === sheetId)) {
+      setSheetId(goalSheets.length ? goalSheets[goalSheets.length - 1].id : null);
     }
-  }, [domain, domainSheets, sheetId]);
+  }, [goalId, goalSheets, sheetId]);
 
   useEffect(() => {
-    if (sheet && plan) {
-      setDraft(draftFrom(sheet, plan.goals));
+    if (sheet) {
+      setDraft(draftFrom(sheet, items));
       setDirty(false);
     } else {
       setDraft(null);
     }
-  }, [sheet, plan]);
+  }, [sheet, items]);
 
-  // تاريخ مقترح للشهر الجديد: اليوم الدراسي التالي لنهاية آخر شهر، وإلا أقدم تاريخ بدء بأهداف المجال
+  // تاريخ مقترح للشهر الجديد: اليوم الدراسي التالي لنهاية آخر شهر، وإلا تاريخ بدء الهدف
   useEffect(() => {
-    if (domainSheets.length) {
-      const last = domainSheets[domainSheets.length - 1];
+    if (goalSheets.length) {
+      const last = goalSheets[goalSheets.length - 1];
       setNewStart(toISO(nextSchoolDay(schoolDays(last.start_date)[DAYS - 1])));
     } else {
-      const starts = domainGoals.map((g) => g.start_date).filter(Boolean) as string[];
-      setNewStart(starts.length ? starts.sort()[0] : toISO(new Date()));
+      setNewStart(goal?.start_date || toISO(new Date()));
     }
-  }, [domainSheets, domainGoals]);
+  }, [goalSheets, goal]);
 
   const confirmDiscard = () => !dirty || window.confirm('فيه تعديلات ما انحفظت. تبغى تتركها؟');
 
   const createMutation = useMutation({
-    mutationFn: () => goalAnalysisApi.create(studentId, planPk, { domain, start_date: newStart, ratings: {} }),
+    mutationFn: () => goalAnalysisApi.create(studentId, planPk, { goal: goalId, start_date: newStart, ratings: {} }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['goal-analysis', id, planId] });
       setSheetId(res.data.id);
       toast.success('تم فتح شهر متابعة جديد');
     },
     onError: (err: { response?: { data?: Record<string, string[]> } }) => {
-      const msg = err.response?.data?.start_date?.[0];
+      const msg = err.response?.data?.start_date?.[0] || err.response?.data?.goal?.[0];
       toast.error(msg || 'تعذّر فتح الشهر');
     },
   });
@@ -251,7 +278,7 @@ export default function GoalAnalysisPage() {
   const saveMutation = useMutation({
     mutationFn: () => {
       const achieved_dates: Record<string, string | null> = {};
-      for (const g of domainGoals) achieved_dates[g.id] = draft!.achieved[g.id] || null;
+      for (const it of items) achieved_dates[it.key] = draft!.achieved[it.key] || null;
       return goalAnalysisApi.update(studentId, planPk, sheet!.id, {
         ratings: draft!.ratings,
         teaching_aids: draft!.teaching_aids,
@@ -269,11 +296,11 @@ export default function GoalAnalysisPage() {
     onError: () => toast.error('حدث خطأ أثناء الحفظ'),
   });
 
-  const cycleCell = (goalId: number, day: number) => {
+  const cycleCell = (rowKey: string, day: number) => {
     if (!canEdit || !draft) return;
-    const row = [...(draft.ratings[goalId] || emptyRow())];
+    const row = [...(draft.ratings[rowKey] || emptyRow())];
     row[day] = ((row[day] + 1) % 5) as GoalAnalysisLevel;
-    setDraft({ ...draft, ratings: { ...draft.ratings, [goalId]: row } });
+    setDraft({ ...draft, ratings: { ...draft.ratings, [rowKey]: row } });
     setDirty(true);
   };
 
@@ -294,12 +321,12 @@ export default function GoalAnalysisPage() {
   const studentName = student?.full_name || plan.student_name;
   const teacherName = plan.teacher_name || '—';
   const days = sheet ? schoolDays(sheet.start_date) : [];
-  const rows = Math.max(MIN_ROWS, domainGoals.length);
+  const rows = Math.max(MIN_ROWS, items.length);
 
   const handlePrint = () => {
-    if (!sheet || !draft) return;
+    if (!sheet || !draft || !goal) return;
     const html = buildSheetHTML({
-      studentName, teacherName, domain, days, goals: domainGoals, draft,
+      studentName, teacherName, domain, goalText: goal.goal_text, hasSubGoals, days, items, draft,
       centerNameAr: siteSettings?.center_name_ar || DEFAULT_NAME_AR,
       logoUrl: mediaUrl(siteSettings?.logo),
     });
@@ -315,11 +342,11 @@ export default function GoalAnalysisPage() {
 
   let filled = 0, independent = 0;
   if (draft) {
-    for (const g of domainGoals) {
-      for (const v of draft.ratings[g.id] || []) { if (v) filled++; if (v === 1) independent++; }
+    for (const it of items) {
+      for (const v of draft.ratings[it.key] || []) { if (v) filled++; if (v === 1) independent++; }
     }
   }
-  const achievedCount = draft ? domainGoals.filter((g) => draft.achieved[g.id]).length : 0;
+  const achievedCount = draft ? items.filter((it) => draft.achieved[it.key]).length : 0;
 
   return (
     <div className="space-y-5">
@@ -359,7 +386,7 @@ export default function GoalAnalysisPage() {
               return (
                 <button
                   key={d}
-                  onClick={() => { if (d !== domain && confirmDiscard()) { setDomain(d); setSheetId(null); } }}
+                  onClick={() => { if (d !== domain && confirmDiscard()) { setDomain(d); setGoalId(null); setSheetId(null); } }}
                   className={`px-4 py-1.5 rounded-full text-sm border transition-colors ${
                     active ? 'bg-primary-600 border-primary-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-primary-400'
                   }`}
@@ -370,8 +397,38 @@ export default function GoalAnalysisPage() {
             })}
           </div>
 
+          <div className="card p-3 space-y-1.5">
+            <p className="text-xs text-gray-500 px-1">نماذج أهداف المجال — لكل هدف نموذج، وبنوده أهدافه الفرعية</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {domainGoals.map((g, i) => {
+                const active = g.id === goalId;
+                const subCount = (g.sub_goals || []).length;
+                const months = sheets.filter((s) => s.goal === g.id).length;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => { if (g.id !== goalId && confirmDiscard()) { setGoalId(g.id); setSheetId(null); } }}
+                    className={`flex items-start gap-2 text-right rounded-lg border px-3 py-2 transition-colors ${
+                      active ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-primary-300'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
+                      active ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+                    }`}>{i + 1}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] text-gray-800 leading-snug line-clamp-2">{g.goal_text}</span>
+                      <span className="block text-[11px] text-gray-400 mt-0.5">
+                        {subCount ? `${subCount} أهداف فرعية` : 'بدون أهداف فرعية'} · {months ? `${months} شهر متابعة` : 'لم تبدأ المتابعة'}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="card flex flex-wrap items-end gap-4">
-            {domainSheets.length > 0 && (
+            {goalSheets.length > 0 && (
               <div>
                 <label className="form-label">شهر المتابعة</label>
                 <select
@@ -379,7 +436,7 @@ export default function GoalAnalysisPage() {
                   value={sheetId ?? ''}
                   onChange={(e) => { if (confirmDiscard()) setSheetId(Number(e.target.value)); }}
                 >
-                  {domainSheets.map((s) => {
+                  {goalSheets.map((s) => {
                     const ds = schoolDays(s.start_date);
                     return <option key={s.id} value={s.id}>{shortDate(ds[0])} — {shortDate(ds[DAYS - 1])} / {ds[0].getFullYear()}</option>;
                   })}
@@ -389,15 +446,15 @@ export default function GoalAnalysisPage() {
             {canEdit && (
               <div className="flex items-end gap-2">
                 <div>
-                  <label className="form-label">{domainSheets.length ? 'بداية شهر جديد' : 'بداية الشهر'}</label>
+                  <label className="form-label">{goalSheets.length ? 'بداية شهر جديد' : 'بداية الشهر'}</label>
                   <input type="date" dir="ltr" className="form-input" value={newStart} onChange={(e) => setNewStart(e.target.value)} />
                 </div>
                 <button
                   onClick={() => { if (confirmDiscard()) createMutation.mutate(); }}
-                  disabled={!newStart || createMutation.isPending}
+                  disabled={!newStart || !goalId || createMutation.isPending}
                   className="btn-secondary"
                 >
-                  <Plus size={15} /> {domainSheets.length ? 'فتح شهر جديد' : 'بدء المتابعة'}
+                  <Plus size={15} /> {goalSheets.length ? 'فتح شهر جديد' : 'بدء المتابعة'}
                 </button>
               </div>
             )}
@@ -409,8 +466,8 @@ export default function GoalAnalysisPage() {
               <Grid3x3 size={36} className="mx-auto mb-2 text-gray-300" />
               <p className="text-sm">
                 {canEdit
-                  ? 'ما بدأت متابعة هذا المجال بعد. اختر بداية الشهر واضغط «بدء المتابعة».'
-                  : 'لا توجد متابعة مسجّلة لهذا المجال بعد.'}
+                  ? 'ما بدأت متابعة هذا الهدف بعد. اختر بداية الشهر واضغط «بدء المتابعة».'
+                  : 'لا توجد متابعة مسجّلة لهذا الهدف بعد.'}
               </p>
             </div>
           ) : (
@@ -421,6 +478,7 @@ export default function GoalAnalysisPage() {
                 <div className="px-3 py-2 border-b md:border-l border-gray-800"><b>اسم المستفيد/ه:</b> {studentName}</div>
                 <div className="px-3 py-2 border-b border-gray-800"><b>اسم المعلمة:</b> {teacherName}</div>
                 <div className="px-3 py-2 border-b border-gray-800 md:col-span-2"><b>مجال التدريب الرئيسي:</b> {domain}</div>
+                <div className="px-3 py-2 border-b border-gray-800 md:col-span-2"><b>الهدف:</b> {goal?.goal_text}</div>
                 <div className="px-3 py-2 border-b md:border-b-0 md:border-l border-gray-800"><b>تاريخ البدء:</b> {fullDate(days[0])}</div>
                 <div className="px-3 py-2"><b>تاريخ الانتهاء:</b> {fullDate(days[DAYS - 1])}</div>
               </div>
@@ -434,11 +492,11 @@ export default function GoalAnalysisPage() {
                   <thead>
                     <tr className="bg-[#8db3e2] text-gray-900">
                       <th rowSpan={2} className="border border-gray-300 w-8">#</th>
-                      <th rowSpan={2} className="border border-gray-300 min-w-[220px]">الهدف</th>
+                      <th rowSpan={2} className="border border-gray-300 min-w-[220px]">{hasSubGoals ? 'الهدف الفرعي' : 'الهدف'}</th>
                       {[0, 1, 2, 3].map((w) => (
                         <th key={w} colSpan={5} className="border border-gray-300 border-r-2 border-r-gray-800 text-xs py-1">الأسبوع {w + 1}</th>
                       ))}
-                      <th rowSpan={2} className="border border-gray-300 border-r-2 border-r-gray-800 min-w-[130px] text-xs">تاريخ إنجاز الهدف</th>
+                      <th rowSpan={2} className="border border-gray-300 border-r-2 border-r-gray-800 min-w-[130px] text-xs">تاريخ الإنجاز</th>
                     </tr>
                     <tr className="bg-[#8db3e2] text-gray-900">
                       {days.map((_, i) => (
@@ -448,12 +506,12 @@ export default function GoalAnalysisPage() {
                   </thead>
                   <tbody>
                     {Array.from({ length: rows }).map((_, r) => {
-                      const g = domainGoals[r];
-                      const vals = g ? (draft.ratings[g.id] || emptyRow()) : emptyRow();
+                      const it = items[r];
+                      const vals = it ? (draft.ratings[it.key] || emptyRow()) : emptyRow();
                       return (
                         <tr key={r}>
                           <td className="border border-gray-300 text-center font-bold">{r + 1}</td>
-                          <td className="border border-gray-300 px-2 py-1.5 text-right text-[13px] leading-snug">{g?.goal_text || ''}</td>
+                          <td className="border border-gray-300 px-2 py-1.5 text-right text-[13px] leading-snug">{it?.text || ''}</td>
                           {vals.map((v, c) => (
                             <td
                               key={c}
@@ -461,23 +519,23 @@ export default function GoalAnalysisPage() {
                             >
                               <button
                                 type="button"
-                                disabled={!g || !canEdit}
-                                onClick={() => g && cycleCell(g.id, c)}
-                                aria-label={g ? `${g.goal_text} — ${shortDate(days[c])}` : undefined}
-                                className={`w-full h-8 min-w-[30px] font-bold ${v ? LEVEL_CLASSES[v] : ''} ${g && canEdit ? 'hover:ring-2 hover:ring-inset hover:ring-primary-300' : 'cursor-default'}`}
+                                disabled={!it || !canEdit}
+                                onClick={() => it && cycleCell(it.key, c)}
+                                aria-label={it ? `${it.text} — ${shortDate(days[c])}` : undefined}
+                                className={`w-full h-8 min-w-[30px] font-bold ${v ? LEVEL_CLASSES[v] : ''} ${it && canEdit ? 'hover:ring-2 hover:ring-inset hover:ring-primary-300' : 'cursor-default'}`}
                               >
                                 {v || ''}
                               </button>
                             </td>
                           ))}
                           <td className="border border-gray-300 border-r-2 border-r-gray-800 px-1">
-                            {g && (
+                            {it && (
                               <input
                                 type="date" dir="ltr"
                                 disabled={!canEdit}
                                 className="w-full text-xs bg-transparent py-1 outline-none"
-                                value={draft.achieved[g.id] || ''}
-                                onChange={(e) => patchDraft({ achieved: { ...draft.achieved, [g.id]: e.target.value } })}
+                                value={draft.achieved[it.key] || ''}
+                                onChange={(e) => patchDraft({ achieved: { ...draft.achieved, [it.key]: e.target.value } })}
                               />
                             )}
                           </td>
@@ -499,10 +557,10 @@ export default function GoalAnalysisPage() {
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs">
-                <span className="badge bg-gray-100 text-gray-600">{domainGoals.length} أهداف في المجال</span>
-                <span className="badge bg-gray-100 text-gray-600">{filled} خانة مقيّمة من {domainGoals.length * DAYS}</span>
+                <span className="badge bg-gray-100 text-gray-600">{items.length} {hasSubGoals ? 'أهداف فرعية' : 'بند'}</span>
+                <span className="badge bg-gray-100 text-gray-600">{filled} خانة مقيّمة من {items.length * DAYS}</span>
                 <span className="badge bg-green-50 text-green-700">{independent} مرة «مستقل»</span>
-                <span className="badge bg-gray-100 text-gray-600">{achievedCount} هدف منجز</span>
+                <span className="badge bg-gray-100 text-gray-600">{achievedCount} من {items.length} منجز</span>
               </div>
 
               <div className="border border-gray-800 text-sm divide-y divide-gray-800">

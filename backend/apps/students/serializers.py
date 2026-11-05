@@ -6,7 +6,7 @@ from .models import (
     StudentMedicalProfile, MedicalVisit, Medication,
     DailyMedicalCheckIn, MedicationAdministration,
     Plan, PlanGoal, PlanAttachment,
-    IndividualPlan, IndividualPlanGoal, GoalAnalysisSheet,
+    IndividualPlan, IndividualPlanGoal, IndividualPlanSubGoal, GoalAnalysisSheet,
     QuarterlyPlan, QuarterlyPlanGoal, QuarterlyPlanSubGoal, StudentSpecialistAssignment,
 )
 from datetime import date
@@ -526,21 +526,76 @@ class PlanSerializer(serializers.ModelSerializer):
 
 # ── الخطة الفردية ─────────────────────────────────────────────────────────────
 
+class IndividualPlanSubGoalSerializer(serializers.ModelSerializer):
+    post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
+    # قابل للكتابة لنفس سبب id الهدف — تقييمات نموذج التحليل مربوطة بمعرّف الهدف الفرعي.
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model  = IndividualPlanSubGoal
+        fields = ['id', 'text', 'post_evaluation', 'post_evaluation_display', 'order', 'achieved_date']
+        read_only_fields = ['achieved_date']
+
+
 class IndividualPlanGoalSerializer(serializers.ModelSerializer):
     # domain صار نص حر — القيمة المخزَّنة هي نفسها نص العرض، بلا حاجة لحقل display منفصل.
     post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
     # قابل للكتابة حتى يُحدَّث الهدف القائم بمكانه بدل إعادة إنشائه — تقييمات
     # نموذج تحليل الأهداف مربوطة بمعرّف الهدف وتضيع لو تغيّر.
     id = serializers.IntegerField(required=False)
+    sub_goals = IndividualPlanSubGoalSerializer(many=True, required=False)
 
     class Meta:
         model  = IndividualPlanGoal
         fields = [
             'id', 'domain', 'goal_text',
-            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display', 'order',
-            'achieved_date',
+            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display',
+            'post_evaluation_manual', 'order', 'achieved_date', 'sub_goals',
         ]
         read_only_fields = ['achieved_date']
+
+
+def _apply_auto_evaluation(rec, sub_goals):
+    if sub_goals and not rec.get('post_evaluation_manual'):
+        rec['post_evaluation'] = IndividualPlanGoal.evaluation_from_sub_goals(
+            [s.get('post_evaluation', '') for s in sub_goals]
+        )
+    if not sub_goals:
+        rec['post_evaluation_manual'] = False
+
+
+def _save_individual_sub_goals(goal, sub_goals):
+    """يحدّث الأهداف الفرعية بمكانها (نفس منطق الأهداف). لو صار للهدف أهداف فرعية
+    لأول مرة، تنتقل تقييمات بند الهدف نفسه وتاريخ إنجازه للهدف الفرعي الأول."""
+    existing = {s.id: s for s in goal.sub_goals.all()}
+    had_subs = bool(existing)
+    kept, saved = set(), []
+    for rec in sub_goals:
+        sub = existing.get(rec.pop('id', None))
+        if sub is None:
+            sub = IndividualPlanSubGoal.objects.create(goal=goal, **rec)
+        else:
+            for field, value in rec.items():
+                setattr(sub, field, value)
+            sub.save()
+            kept.add(sub.id)
+        saved.append(sub)
+    goal.sub_goals.exclude(id__in=kept).filter(id__in=existing.keys()).delete()
+
+    if saved and not had_subs:
+        first = min(saved, key=lambda s: (s.order, s.id))
+        key = GoalAnalysisSheet.GOAL_ROW
+        for sheet in goal.analysis_sheets.all():
+            if key in (sheet.ratings or {}):
+                sheet.ratings[str(first.id)] = sheet.ratings.pop(key)
+                sheet.save(update_fields=['ratings', 'updated_at'])
+        if goal.achieved_date and not first.achieved_date:
+            first.achieved_date = goal.achieved_date
+            first.save(update_fields=['achieved_date'])
+
+
+def _clean_sub_goals(rec):
+    return [s for s in rec.pop('sub_goals', []) if s.get('text', '').strip()]
 
 
 class IndividualPlanSerializer(serializers.ModelSerializer):
@@ -579,7 +634,12 @@ class IndividualPlanSerializer(serializers.ModelSerializer):
         plan = IndividualPlan.objects.create(**validated_data)
         for rec in goals_data:
             rec.pop('id', None)
-            IndividualPlanGoal.objects.create(plan=plan, **rec)
+            subs = _clean_sub_goals(rec)
+            _apply_auto_evaluation(rec, subs)
+            goal = IndividualPlanGoal.objects.create(plan=plan, **rec)
+            for s in subs:
+                s.pop('id', None)
+                IndividualPlanSubGoal.objects.create(goal=goal, **s)
         return plan
 
     def update(self, instance, validated_data):
@@ -591,20 +651,26 @@ class IndividualPlanSerializer(serializers.ModelSerializer):
             existing = {g.id: g for g in instance.goals.all()}
             kept = set()
             for rec in goals_data:
+                subs = _clean_sub_goals(rec)
+                _apply_auto_evaluation(rec, subs)
                 goal = existing.get(rec.pop('id', None))
                 if goal is None:
-                    IndividualPlanGoal.objects.create(plan=instance, **rec)
+                    goal = IndividualPlanGoal.objects.create(plan=instance, **rec)
+                    for s in subs:
+                        s.pop('id', None)
+                    _save_individual_sub_goals(goal, subs)
                     continue
                 for field, value in rec.items():
                     setattr(goal, field, value)
                 goal.save()
                 kept.add(goal.id)
+                _save_individual_sub_goals(goal, subs)
             instance.goals.exclude(id__in=kept).filter(id__in=existing.keys()).delete()
         return instance
 
 
 class GoalAnalysisSheetSerializer(serializers.ModelSerializer):
-    # تواريخ الإنجاز تُحفظ على الأهداف نفسها: {"<goal_id>": "YYYY-MM-DD" | null}
+    # تواريخ الإنجاز تُحفظ على البنود نفسها: {"<sub_goal_id>" | "goal": "YYYY-MM-DD" | null}
     achieved_dates = serializers.DictField(
         child=serializers.DateField(allow_null=True), write_only=True, required=False,
     )
@@ -612,42 +678,56 @@ class GoalAnalysisSheetSerializer(serializers.ModelSerializer):
     class Meta:
         model  = GoalAnalysisSheet
         fields = [
-            'id', 'plan', 'domain', 'start_date', 'ratings',
+            'id', 'plan', 'goal', 'start_date', 'ratings',
             'teaching_aids', 'teacher_note', 'achieved_dates',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'plan', 'created_at', 'updated_at']
+        # التكرار (نفس الهدف + نفس الشهر) يُفحص في الـ view برسالة على start_date
+        validators = []
 
     def _plan(self):
         return self.instance.plan if self.instance else self.context['plan']
 
+    def validate_goal(self, goal):
+        if self.instance is not None and goal != self.instance.goal:
+            raise serializers.ValidationError('لا يمكن تغيير هدف النموذج بعد إنشائه.')
+        if goal.plan_id != self._plan().id:
+            raise serializers.ValidationError('الهدف ليس من هذه الخطة.')
+        return goal
+
     def validate(self, attrs):
-        plan = self._plan()
-        domain = attrs.get('domain', getattr(self.instance, 'domain', None))
-        goal_ids = {str(i) for i in plan.goals.filter(domain=domain).values_list('id', flat=True)}
+        goal = attrs.get('goal') or getattr(self.instance, 'goal', None)
+        if goal is None:
+            raise serializers.ValidationError({'goal': 'الهدف مطلوب.'})
+        subs = [str(i) for i in goal.sub_goals.values_list('id', flat=True)]
+        row_keys = set(subs or [GoalAnalysisSheet.GOAL_ROW])
 
         ratings = attrs.get('ratings')
         if ratings is not None:
             if not isinstance(ratings, dict):
                 raise serializers.ValidationError({'ratings': 'صيغة التقييمات غير صحيحة.'})
             clean = {}
-            for gid, days in ratings.items():
-                if str(gid) not in goal_ids:
-                    continue  # هدف حُذف من الخطة — نتجاهله
+            for key, days in ratings.items():
+                if str(key) not in row_keys:
+                    continue  # بند حُذف من الهدف — نتجاهله
                 if (not isinstance(days, list) or len(days) != GoalAnalysisSheet.DAYS
                         or any(not isinstance(v, int) or v not in (0, 1, 2, 3, 4) for v in days)):
-                    raise serializers.ValidationError({'ratings': 'كل هدف يحتاج 20 تقييم، قيمة كل واحد من 0 إلى 4.'})
-                clean[str(gid)] = days
+                    raise serializers.ValidationError({'ratings': 'كل بند يحتاج 20 تقييم، قيمة كل واحد من 0 إلى 4.'})
+                clean[str(key)] = days
             attrs['ratings'] = clean
 
         achieved = attrs.get('achieved_dates')
         if achieved:
-            attrs['achieved_dates'] = {k: v for k, v in achieved.items() if str(k) in goal_ids}
+            attrs['achieved_dates'] = {str(k): v for k, v in achieved.items() if str(k) in row_keys}
         return attrs
 
-    def _save_achieved(self, plan, achieved):
-        for gid, value in (achieved or {}).items():
-            plan.goals.filter(id=int(gid)).update(achieved_date=value)
+    def _save_achieved(self, goal, achieved):
+        for key, value in (achieved or {}).items():
+            if key == GoalAnalysisSheet.GOAL_ROW:
+                IndividualPlanGoal.objects.filter(pk=goal.pk).update(achieved_date=value)
+            else:
+                goal.sub_goals.filter(id=int(key)).update(achieved_date=value)
 
     def create(self, validated_data):
         achieved = validated_data.pop('achieved_dates', None)
@@ -658,14 +738,14 @@ class GoalAnalysisSheetSerializer(serializers.ModelSerializer):
             created_by=request.user if request and request.user.is_authenticated else None,
             **validated_data,
         )
-        self._save_achieved(plan, achieved)
+        self._save_achieved(sheet.goal, achieved)
         return sheet
 
     def update(self, instance, validated_data):
         achieved = validated_data.pop('achieved_dates', None)
-        validated_data.pop('domain', None)  # المجال ثابت بعد الإنشاء
+        validated_data.pop('goal', None)  # الهدف ثابت بعد الإنشاء
         instance = super().update(instance, validated_data)
-        self._save_achieved(instance.plan, achieved)
+        self._save_achieved(instance.goal, achieved)
         return instance
 
 

@@ -1456,7 +1456,7 @@ class IndividualPlanListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = IndividualPlan.objects.select_related('student__classroom__teacher', 'created_by').prefetch_related('goals')
+        qs = IndividualPlan.objects.select_related('student__classroom__teacher', 'created_by').prefetch_related('goals__sub_goals')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
@@ -1484,7 +1484,7 @@ class IndividualPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = IndividualPlan.objects.select_related('student__classroom__teacher', 'created_by').prefetch_related('goals')
+        qs = IndividualPlan.objects.select_related('student__classroom__teacher', 'created_by').prefetch_related('goals__sub_goals')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
@@ -1515,7 +1515,7 @@ class GoalAnalysisSheetListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         plan = _get_scoped_plan(self.request, self.kwargs['student_pk'], self.kwargs['plan_pk'])
-        return GoalAnalysisSheet.objects.filter(plan=plan)
+        return GoalAnalysisSheet.objects.filter(plan=plan).select_related('goal')
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
@@ -1525,12 +1525,12 @@ class GoalAnalysisSheetListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         plan = serializer.context['plan']
-        domain = serializer.validated_data['domain']
+        goal = serializer.validated_data['goal']
         start = serializer.validated_data['start_date']
-        if GoalAnalysisSheet.objects.filter(plan=plan, domain=domain, start_date=start).exists():
-            raise drf_serializers.ValidationError({'start_date': 'يوجد نموذج لهذا المجال يبدأ بنفس التاريخ.'})
+        if GoalAnalysisSheet.objects.filter(goal=goal, start_date=start).exists():
+            raise drf_serializers.ValidationError({'start_date': 'يوجد نموذج لهذا الهدف يبدأ بنفس التاريخ.'})
         sheet = serializer.save()
-        log_action(self.request, 'create', sheet, f'تحليل الأهداف — {plan.student} — {domain}')
+        log_action(self.request, 'create', sheet, f'تحليل الأهداف — {plan.student} — {goal.domain}')
 
 
 class GoalAnalysisSheetDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1547,7 +1547,7 @@ class GoalAnalysisSheetDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         sheet = serializer.save()
-        log_action(self.request, 'update', sheet, f'تحليل الأهداف — {sheet.plan.student} — {sheet.domain}')
+        log_action(self.request, 'update', sheet, f'تحليل الأهداف — {sheet.plan.student} — {sheet.goal.domain}')
 
 
 from .models import QuarterlyPlan, StudentSpecialistAssignment

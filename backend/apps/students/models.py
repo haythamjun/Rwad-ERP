@@ -653,8 +653,10 @@ class IndividualPlanGoal(models.Model):
     post_evaluation = models.CharField(
         max_length=20, choices=Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
     )
+    # التقييم يُحسب تلقائيًا من الأهداف الفرعية، إلا إذا اختاره المختص يدويًا.
+    post_evaluation_manual = models.BooleanField(default=False, verbose_name='تقييم يدوي')
     order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
-    # يُسجَّل من نموذج تحليل الأهداف — ثابت للهدف عبر كل الأشهر
+    # يُسجَّل من نموذج تحليل الأهداف — ثابت للهدف عبر كل الأشهر (للهدف بلا أهداف فرعية)
     achieved_date   = models.DateField(null=True, blank=True, verbose_name='تاريخ إنجاز الهدف')
 
     class Meta:
@@ -665,20 +667,66 @@ class IndividualPlanGoal(models.Model):
     def __str__(self):
         return f'{self.plan} — {self.domain} #{self.order}'
 
+    @classmethod
+    def evaluation_from_sub_goals(cls, evaluations):
+        """تقييم الهدف من تقييمات أهدافه الفرعية — None لو ما له أهداف فرعية.
+        نفس المنطق في الواجهة (evaluationFromSubGoals) حتى تتطابق المعاينة مع المحفوظ."""
+        if not evaluations:
+            return None
+        E = cls.Evaluation
+        rated = [e for e in evaluations if e]
+        applicable = [e for e in rated if e != E.NOT_APPLICABLE]
+        if not rated:
+            return ''
+        if not applicable:
+            return E.NOT_APPLICABLE if len(rated) == len(evaluations) else ''
+        if len(rated) == len(evaluations) and all(e == E.ACHIEVED for e in applicable):
+            return E.ACHIEVED
+        if any(e in (E.ACHIEVED, E.PARTIAL) for e in applicable):
+            return E.PARTIAL
+        return E.NOT_ACHIEVED
+
+
+class IndividualPlanSubGoal(models.Model):
+    """خطوة من خطوات الهدف — تصير بندًا في نموذج تحليل الهدف."""
+    goal            = models.ForeignKey(
+        IndividualPlanGoal, on_delete=models.CASCADE,
+        related_name='sub_goals', verbose_name='الهدف',
+    )
+    text            = models.TextField(verbose_name='الهدف الفرعي')
+    post_evaluation = models.CharField(
+        max_length=20, choices=IndividualPlanGoal.Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
+    )
+    order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
+    achieved_date   = models.DateField(null=True, blank=True, verbose_name='تاريخ الإنجاز')
+
+    class Meta:
+        verbose_name        = 'هدف فرعي لخطة فردية'
+        verbose_name_plural  = 'الأهداف الفرعية للخطط الفردية'
+        ordering             = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.goal} — فرعي #{self.order}'
+
 
 class GoalAnalysisSheet(models.Model):
-    """نموذج تحليل الأهداف — متابعة يومية لأهداف مجال واحد من الخطة الفردية لمدة
-    شهر (20 يوم دراسي، الأحد–الخميس، تبدأ من start_date). كل شهر جديد = صف جديد."""
+    """نموذج تحليل الأهداف — متابعة يومية لهدف واحد من الخطة الفردية لمدة شهر
+    (20 يوم دراسي، الأحد–الخميس، تبدأ من start_date). بنود النموذج هي الأهداف
+    الفرعية للهدف، أو الهدف نفسه لو ما له أهداف فرعية. كل شهر جديد = صف جديد."""
     DAYS = 20
     LEVELS = {1: 'مستقل (أنجز)', 2: 'إيمائية', 3: 'مساعدة لفظية', 4: 'مساعدة جزئية'}
+    GOAL_ROW = 'goal'  # مفتاح بند الهدف نفسه في ratings
 
     plan          = models.ForeignKey(
         IndividualPlan, on_delete=models.CASCADE,
         related_name='analysis_sheets', verbose_name='الخطة الفردية',
     )
-    domain        = models.CharField(max_length=100, verbose_name='المجال')
+    goal          = models.ForeignKey(
+        IndividualPlanGoal, on_delete=models.CASCADE,
+        related_name='analysis_sheets', verbose_name='الهدف',
+    )
     start_date    = models.DateField(verbose_name='بداية الشهر')
-    # {"<goal_id>": [0..4] × 20} — 0 = لم يُقيَّم بعد
+    # {"<sub_goal_id>" | "goal": [0..4] × 20} — 0 = لم يُقيَّم بعد
     ratings       = models.JSONField(default=dict, blank=True, verbose_name='التقييمات اليومية')
     teaching_aids = models.TextField(blank=True, verbose_name='الوسائل التعليمية المقترحة')
     teacher_note  = models.TextField(blank=True, verbose_name='ملاحظة المعلمة')
@@ -692,11 +740,16 @@ class GoalAnalysisSheet(models.Model):
     class Meta:
         verbose_name        = 'نموذج تحليل أهداف'
         verbose_name_plural  = 'نماذج تحليل الأهداف'
-        unique_together      = ('plan', 'domain', 'start_date')
-        ordering             = ['domain', 'start_date']
+        unique_together      = ('goal', 'start_date')
+        ordering             = ['goal__domain', 'goal__order', 'start_date']
 
     def __str__(self):
-        return f'{self.plan} — {self.domain} — {self.start_date}'
+        return f'{self.goal} — {self.start_date}'
+
+    def row_keys(self):
+        """مفاتيح بنود النموذج حسب أهداف الهدف الفرعية الحالية."""
+        subs = [str(s.id) for s in self.goal.sub_goals.all()]
+        return subs or [self.GOAL_ROW]
 
 
 # ── الخطة الفصلية (بوابة الأقسام التخصصية) ────────────────────────────────────
@@ -763,24 +816,8 @@ class QuarterlyPlanGoal(models.Model):
     def __str__(self):
         return f'{self.plan} — {self.domain} #{self.order}'
 
-    @classmethod
-    def evaluation_from_sub_goals(cls, evaluations):
-        """تقييم الهدف من تقييمات أهدافه الفرعية — None لو ما له أهداف فرعية.
-        نفس المنطق في الواجهة (QuarterlyPlanModal) حتى تتطابق المعاينة مع المحفوظ."""
-        if not evaluations:
-            return None
-        E = cls.Evaluation
-        rated = [e for e in evaluations if e]
-        applicable = [e for e in rated if e != E.NOT_APPLICABLE]
-        if not rated:
-            return ''
-        if not applicable:
-            return E.NOT_APPLICABLE if len(rated) == len(evaluations) else ''
-        if len(rated) == len(evaluations) and all(e == E.ACHIEVED for e in applicable):
-            return E.ACHIEVED
-        if any(e in (E.ACHIEVED, E.PARTIAL) for e in applicable):
-            return E.PARTIAL
-        return E.NOT_ACHIEVED
+    # نفس قيم التقييم ونفس منطق الحساب في الخطة الفردية
+    evaluation_from_sub_goals = IndividualPlanGoal.evaluation_from_sub_goals
 
 
 class QuarterlyPlanSubGoal(models.Model):
