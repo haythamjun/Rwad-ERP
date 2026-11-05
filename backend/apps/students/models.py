@@ -751,6 +751,8 @@ class QuarterlyPlanGoal(models.Model):
     post_evaluation = models.CharField(
         max_length=20, choices=Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
     )
+    # التقييم يُحسب تلقائيًا من الأهداف الفرعية، إلا إذا اختاره المختص يدويًا.
+    post_evaluation_manual = models.BooleanField(default=False, verbose_name='تقييم يدوي')
     order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
 
     class Meta:
@@ -760,6 +762,46 @@ class QuarterlyPlanGoal(models.Model):
 
     def __str__(self):
         return f'{self.plan} — {self.domain} #{self.order}'
+
+    @classmethod
+    def evaluation_from_sub_goals(cls, evaluations):
+        """تقييم الهدف من تقييمات أهدافه الفرعية — None لو ما له أهداف فرعية.
+        نفس المنطق في الواجهة (QuarterlyPlanModal) حتى تتطابق المعاينة مع المحفوظ."""
+        if not evaluations:
+            return None
+        E = cls.Evaluation
+        rated = [e for e in evaluations if e]
+        applicable = [e for e in rated if e != E.NOT_APPLICABLE]
+        if not rated:
+            return ''
+        if not applicable:
+            return E.NOT_APPLICABLE if len(rated) == len(evaluations) else ''
+        if len(rated) == len(evaluations) and all(e == E.ACHIEVED for e in applicable):
+            return E.ACHIEVED
+        if any(e in (E.ACHIEVED, E.PARTIAL) for e in applicable):
+            return E.PARTIAL
+        return E.NOT_ACHIEVED
+
+
+class QuarterlyPlanSubGoal(models.Model):
+    """خطوة من خطوات الهدف — مثلًا «يرمي الكرة» ثم «تدخل الكرة السلة»."""
+    goal            = models.ForeignKey(
+        QuarterlyPlanGoal, on_delete=models.CASCADE,
+        related_name='sub_goals', verbose_name='الهدف',
+    )
+    text            = models.TextField(verbose_name='الهدف الفرعي')
+    post_evaluation = models.CharField(
+        max_length=20, choices=QuarterlyPlanGoal.Evaluation.choices, blank=True, verbose_name='التقييم البعدي'
+    )
+    order           = models.PositiveSmallIntegerField(default=1, verbose_name='الترتيب')
+
+    class Meta:
+        verbose_name        = 'هدف فرعي لخطة فصلية'
+        verbose_name_plural  = 'الأهداف الفرعية للخطط الفصلية'
+        ordering             = ['order', 'id']
+
+    def __str__(self):
+        return f'{self.goal} — فرعي #{self.order}'
 
 
 # ── الملف الطبي ───────────────────────────────────────────────────────────────

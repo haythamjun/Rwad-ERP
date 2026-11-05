@@ -7,7 +7,7 @@ from .models import (
     DailyMedicalCheckIn, MedicationAdministration,
     Plan, PlanGoal, PlanAttachment,
     IndividualPlan, IndividualPlanGoal, GoalAnalysisSheet,
-    QuarterlyPlan, QuarterlyPlanGoal, StudentSpecialistAssignment,
+    QuarterlyPlan, QuarterlyPlanGoal, QuarterlyPlanSubGoal, StudentSpecialistAssignment,
 )
 from datetime import date
 
@@ -671,16 +671,40 @@ class GoalAnalysisSheetSerializer(serializers.ModelSerializer):
 
 # ── الخطة الفصلية ─────────────────────────────────────────────────────────────
 
+class QuarterlyPlanSubGoalSerializer(serializers.ModelSerializer):
+    post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
+
+    class Meta:
+        model  = QuarterlyPlanSubGoal
+        fields = ['id', 'text', 'post_evaluation', 'post_evaluation_display', 'order']
+        read_only_fields = ['id']
+
+
 class QuarterlyPlanGoalSerializer(serializers.ModelSerializer):
     post_evaluation_display = serializers.CharField(source='get_post_evaluation_display', read_only=True, default=None)
+    sub_goals = QuarterlyPlanSubGoalSerializer(many=True, required=False)
 
     class Meta:
         model  = QuarterlyPlanGoal
         fields = [
             'id', 'domain', 'goal_text',
-            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display', 'order',
+            'start_date', 'end_date', 'post_evaluation', 'post_evaluation_display',
+            'post_evaluation_manual', 'order', 'sub_goals',
         ]
         read_only_fields = ['id']
+
+
+def _create_quarterly_goal(plan, rec):
+    sub_goals = [s for s in rec.pop('sub_goals', []) if s.get('text', '').strip()]
+    if sub_goals and not rec.get('post_evaluation_manual'):
+        rec['post_evaluation'] = QuarterlyPlanGoal.evaluation_from_sub_goals(
+            [s.get('post_evaluation', '') for s in sub_goals]
+        )
+    goal = QuarterlyPlanGoal.objects.create(plan=plan, **rec)
+    QuarterlyPlanSubGoal.objects.bulk_create(
+        QuarterlyPlanSubGoal(goal=goal, **s) for s in sub_goals
+    )
+    return goal
 
 
 class QuarterlyPlanSerializer(serializers.ModelSerializer):
@@ -719,7 +743,7 @@ class QuarterlyPlanSerializer(serializers.ModelSerializer):
                 validated_data['specialist'] = request.user
         plan = QuarterlyPlan.objects.create(**validated_data)
         for rec in goals_data:
-            QuarterlyPlanGoal.objects.create(plan=plan, **rec)
+            _create_quarterly_goal(plan, rec)
         return plan
 
     def update(self, instance, validated_data):
@@ -729,7 +753,7 @@ class QuarterlyPlanSerializer(serializers.ModelSerializer):
             # نفس semantics الخطة الفردية — نستبدل كل الأهداف بالكامل.
             instance.goals.all().delete()
             for rec in goals_data:
-                QuarterlyPlanGoal.objects.create(plan=instance, **rec)
+                _create_quarterly_goal(instance, rec)
         return instance
 
 

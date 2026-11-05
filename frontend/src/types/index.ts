@@ -658,6 +658,14 @@ export interface IndividualPlanFormData {
 // ─────────────────────────────────────────────
 // الخطة الفصلية — نفس هيكل الخطة الفردية + فترة فصلية ومختص مسؤول
 // ─────────────────────────────────────────────
+export interface QuarterlyPlanSubGoal {
+  id?: number;
+  text: string;
+  post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_display?: string | null;
+  order: number;
+}
+
 export interface QuarterlyPlanGoal {
   id: number;
   domain: string;
@@ -666,7 +674,22 @@ export interface QuarterlyPlanGoal {
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
   post_evaluation_display?: string | null;
+  /** المختص اختار التقييم يدويًا بدل الحساب التلقائي من الأهداف الفرعية */
+  post_evaluation_manual: boolean;
   order: number;
+  sub_goals: QuarterlyPlanSubGoal[];
+}
+
+/** نفس منطق QuarterlyPlanGoal.evaluation_from_sub_goals في الخادم — null = لا أهداف فرعية */
+export function evaluationFromSubGoals(evals: IndividualPlanEvaluation[]): IndividualPlanEvaluation | null {
+  if (evals.length === 0) return null;
+  const rated = evals.filter(e => e);
+  const applicable = rated.filter(e => e !== 'not_applicable');
+  if (rated.length === 0) return '';
+  if (applicable.length === 0) return rated.length === evals.length ? 'not_applicable' : '';
+  if (rated.length === evals.length && applicable.every(e => e === 'achieved')) return 'achieved';
+  if (applicable.some(e => e === 'achieved' || e === 'partial')) return 'partial';
+  return 'not_achieved';
 }
 
 export interface QuarterlyPlan {
@@ -691,7 +714,9 @@ export interface QuarterlyPlanGoalFormData {
   start_date: string | null;
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_manual: boolean;
   order: number;
+  sub_goals: { text: string; post_evaluation: IndividualPlanEvaluation; order: number }[];
 }
 
 export interface QuarterlyPlanFormData {

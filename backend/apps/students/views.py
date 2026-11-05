@@ -1568,7 +1568,7 @@ class QuarterlyPlanListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals')
+        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals__sub_goals')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)
@@ -1596,7 +1596,7 @@ class QuarterlyPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         student_pk = self.kwargs.get('student_pk')
-        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals')
+        qs = QuarterlyPlan.objects.select_related('student', 'specialist', 'created_by').prefetch_related('goals__sub_goals')
         if student_pk:
             qs = qs.filter(student_id=student_pk)
         return _scope_by_student(self.request.user, qs)

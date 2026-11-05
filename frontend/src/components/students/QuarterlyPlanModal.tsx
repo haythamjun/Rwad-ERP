@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { X, Save, Plus, Trash2, FolderPlus } from 'lucide-react';
+import { X, Save, Plus, Trash2, FolderPlus, CornerDownLeft, RotateCcw } from 'lucide-react';
 import { authApi } from '@/lib/api';
-import { INDIVIDUAL_PLAN_DEFAULT_DOMAINS, INDIVIDUAL_PLAN_EVALUATIONS } from '@/types';
+import { INDIVIDUAL_PLAN_DEFAULT_DOMAINS, INDIVIDUAL_PLAN_EVALUATIONS, evaluationFromSubGoals } from '@/types';
 import type { QuarterlyPlan, IndividualPlanEvaluation, User } from '@/types';
 
 interface Props {
@@ -15,6 +15,13 @@ interface Props {
 }
 
 let tempKeyCounter = 0;
+const nextKey = () => `new-${++tempKeyCounter}`;
+
+interface SubGoalRow {
+  _key: string;
+  text: string;
+  post_evaluation: IndividualPlanEvaluation;
+}
 
 interface GoalRow {
   _key: string; // مفتاح React محلي فقط — ما يُرسل للخادم
@@ -23,12 +30,25 @@ interface GoalRow {
   start_date: string | null;
   end_date: string | null;
   post_evaluation: IndividualPlanEvaluation;
+  post_evaluation_manual: boolean;
   order: number;
+  sub_goals: SubGoalRow[];
 }
 
 function makeEmptyGoal(domain: string, order: number): GoalRow {
-  tempKeyCounter += 1;
-  return { _key: `new-${tempKeyCounter}`, domain, goal_text: '', start_date: null, end_date: null, post_evaluation: '', order };
+  return {
+    _key: nextKey(), domain, goal_text: '', start_date: null, end_date: null,
+    post_evaluation: '', post_evaluation_manual: false, order, sub_goals: [],
+  };
+}
+
+/** التقييم الفعلي: محسوب من الأهداف الفرعية ما لم يختره المختص يدويًا. */
+function effectiveEvaluation(g: GoalRow): { value: IndividualPlanEvaluation; auto: boolean } {
+  const auto = evaluationFromSubGoals(
+    g.sub_goals.filter(s => s.text.trim()).map(s => s.post_evaluation)
+  );
+  if (auto === null || g.post_evaluation_manual) return { value: g.post_evaluation, auto: false };
+  return { value: auto, auto: true };
 }
 
 export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: Props) {
@@ -44,7 +64,11 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
       start_date: g.start_date,
       end_date: g.end_date,
       post_evaluation: g.post_evaluation,
+      post_evaluation_manual: g.post_evaluation_manual,
       order: g.order,
+      sub_goals: (g.sub_goals || []).map(sg => ({
+        _key: `existing-sub-${sg.id}`, text: sg.text, post_evaluation: sg.post_evaluation,
+      })),
     }))
   );
   const [domains, setDomains] = useState<string[]>(() => {
@@ -88,6 +112,21 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
   const updateGoal = (key: string, patch: Partial<GoalRow>) =>
     setGoals(g => g.map(x => (x._key === key ? { ...x, ...patch } : x)));
 
+  const addSubGoal = (key: string) =>
+    setGoals(g => g.map(x => (x._key === key
+      ? { ...x, sub_goals: [...x.sub_goals, { _key: nextKey(), text: '', post_evaluation: '' as IndividualPlanEvaluation }] }
+      : x)));
+
+  const updateSubGoal = (key: string, subKey: string, patch: Partial<SubGoalRow>) =>
+    setGoals(g => g.map(x => (x._key === key
+      ? { ...x, sub_goals: x.sub_goals.map(sg => (sg._key === subKey ? { ...sg, ...patch } : sg)) }
+      : x)));
+
+  const removeSubGoal = (key: string, subKey: string) =>
+    setGoals(g => g.map(x => (x._key === key
+      ? { ...x, sub_goals: x.sub_goals.filter(sg => sg._key !== subKey) }
+      : x)));
+
   const submit = () => {
     onSave({
       specialist: specialist || null,
@@ -96,7 +135,19 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
       notes,
       goals: goals
         .filter(g => g.goal_text.trim())
-        .map(({ _key, ...rest }) => rest),
+        .map(g => {
+          const subs = g.sub_goals.filter(sg => sg.text.trim());
+          return {
+            domain: g.domain,
+            goal_text: g.goal_text,
+            start_date: g.start_date,
+            end_date: g.end_date,
+            order: g.order,
+            post_evaluation: effectiveEvaluation(g).value,
+            post_evaluation_manual: subs.length > 0 && g.post_evaluation_manual,
+            sub_goals: subs.map((sg, i) => ({ text: sg.text.trim(), post_evaluation: sg.post_evaluation, order: i + 1 })),
+          };
+        }),
     });
   };
 
@@ -166,49 +217,115 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
                   <p className="text-xs text-gray-400">لا توجد أهداف بهذا المجال بعد.</p>
                 ) : (
                   <div className="space-y-2">
-                    {domainGoals.map(g => (
-                      <div key={g._key} className="bg-gray-50 rounded-lg p-2 space-y-2">
-                        <div className="flex items-start gap-2">
-                          <textarea
-                            rows={2}
-                            className="form-input resize-none text-sm flex-1"
-                            placeholder="نص الهدف..."
-                            value={g.goal_text}
-                            onChange={e => updateGoal(g._key, { goal_text: e.target.value })}
-                          />
+                    {domainGoals.map(g => {
+                      const ev = effectiveEvaluation(g);
+                      const hasSubs = g.sub_goals.some(sg => sg.text.trim());
+                      return (
+                        <div key={g._key} className="bg-gray-50 rounded-lg p-2 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <textarea
+                              rows={2}
+                              className="form-input resize-none text-sm flex-1"
+                              placeholder="نص الهدف..."
+                              value={g.goal_text}
+                              onChange={e => updateGoal(g._key, { goal_text: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeGoal(g._key)}
+                              className="text-gray-400 hover:text-red-600 mt-1 flex-shrink-0"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <input
+                              type="date" dir="ltr"
+                              className="form-input text-xs py-1"
+                              value={g.start_date || ''}
+                              onChange={e => updateGoal(g._key, { start_date: e.target.value || null })}
+                            />
+                            <input
+                              type="date" dir="ltr"
+                              className="form-input text-xs py-1"
+                              value={g.end_date || ''}
+                              onChange={e => updateGoal(g._key, { end_date: e.target.value || null })}
+                            />
+                            <div className="flex items-center gap-1">
+                              <select
+                                className="form-input text-xs py-1 flex-1 min-w-0"
+                                value={ev.value}
+                                title={ev.auto ? 'محسوب تلقائيًا من الأهداف الفرعية' : undefined}
+                                onChange={e => updateGoal(g._key, {
+                                  post_evaluation: e.target.value as IndividualPlanEvaluation,
+                                  post_evaluation_manual: hasSubs,
+                                })}
+                              >
+                                {INDIVIDUAL_PLAN_EVALUATIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                              {hasSubs && !ev.auto && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateGoal(g._key, { post_evaluation_manual: false })}
+                                  className="text-gray-400 hover:text-primary-600 flex-shrink-0"
+                                  title="إرجاع للحساب التلقائي من الأهداف الفرعية"
+                                >
+                                  <RotateCcw size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {hasSubs && (
+                            <p className="text-[11px] text-gray-400">
+                              {ev.auto ? 'تقييم الهدف محسوب تلقائيًا من الأهداف الفرعية' : 'تقييم الهدف معدّل يدويًا'}
+                            </p>
+                          )}
+
+                          {g.sub_goals.length > 0 && (
+                            <div className="space-y-1.5 border-r-2 border-primary-100 pr-3 mr-1">
+                              {g.sub_goals.map((sg, i) => (
+                                <div key={sg._key} className="flex items-center gap-2">
+                                  <CornerDownLeft size={12} className="text-gray-300 flex-shrink-0" />
+                                  <span className="text-xs text-gray-400 w-4 flex-shrink-0">{i + 1}.</span>
+                                  <input
+                                    className="form-input text-xs py-1 flex-1 min-w-0"
+                                    placeholder="نص الهدف الفرعي..."
+                                    value={sg.text}
+                                    onChange={e => updateSubGoal(g._key, sg._key, { text: e.target.value })}
+                                  />
+                                  <select
+                                    className="form-input text-xs py-1 w-28 flex-shrink-0"
+                                    value={sg.post_evaluation}
+                                    onChange={e => updateSubGoal(g._key, sg._key, { post_evaluation: e.target.value as IndividualPlanEvaluation })}
+                                  >
+                                    {INDIVIDUAL_PLAN_EVALUATIONS.map(opt => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubGoal(g._key, sg._key)}
+                                    className="text-gray-400 hover:text-red-600 flex-shrink-0"
+                                    title="حذف الهدف الفرعي"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <button
                             type="button"
-                            onClick={() => removeGoal(g._key)}
-                            className="text-gray-400 hover:text-red-600 mt-1 flex-shrink-0"
+                            onClick={() => addSubGoal(g._key)}
+                            className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
                           >
-                            <Trash2 size={14} />
+                            <Plus size={12} /> هدف فرعي
                           </button>
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <input
-                            type="date" dir="ltr"
-                            className="form-input text-xs py-1"
-                            value={g.start_date || ''}
-                            onChange={e => updateGoal(g._key, { start_date: e.target.value || null })}
-                          />
-                          <input
-                            type="date" dir="ltr"
-                            className="form-input text-xs py-1"
-                            value={g.end_date || ''}
-                            onChange={e => updateGoal(g._key, { end_date: e.target.value || null })}
-                          />
-                          <select
-                            className="form-input text-xs py-1"
-                            value={g.post_evaluation}
-                            onChange={e => updateGoal(g._key, { post_evaluation: e.target.value as IndividualPlanEvaluation })}
-                          >
-                            {INDIVIDUAL_PLAN_EVALUATIONS.map(ev => (
-                              <option key={ev.value} value={ev.value}>{ev.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
