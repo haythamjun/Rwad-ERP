@@ -20,7 +20,7 @@ from apps.core.utils import log_action
 from apps.students.views import _scope_branch_ids, _teacher_classroom_ids
 
 from . import services, zoho
-from .models import SessionRecording, VirtualSession
+from .models import SessionRecording, VirtualSession, ZohoAccount
 from .serializers import SessionAttendanceSerializer, VirtualSessionSerializer
 from .storage import is_remote, recordings_storage
 
@@ -62,7 +62,7 @@ def _can_manage(user, classroom):
 
 def _scoped_sessions(user):
     qs = VirtualSession.objects.select_related(
-        'classroom', 'classroom__branch', 'classroom__teacher', 'created_by',
+        'classroom', 'classroom__branch', 'classroom__teacher', 'created_by', 'zoho_account',
     ).prefetch_related('recordings')
     ids = _visible_classroom_ids(user)
     return qs if ids is None else qs.filter(classroom_id__in=ids)
@@ -74,6 +74,13 @@ def _zoho_error_response(e):
         {'error': 'تعذّر التواصل مع Zoho Meeting، حاول مرة أخرى', 'detail': str(e)[:300]},
         status=status.HTTP_502_BAD_GATEWAY,
     )
+
+
+def _host_account(classroom):
+    """حساب Zoho اللي تُنشأ به حصة الفصل: حساب معلم الفصل لو ربطه، وإلا حساب المركز."""
+    if classroom.teacher_id:
+        return ZohoAccount.objects.filter(user_id=classroom.teacher_id).first()
+    return None
 
 
 def _archive_in_background(session_ids):
@@ -129,11 +136,13 @@ class VirtualSessionListCreateView(generics.ListCreateAPIView):
         if not zoho.is_configured():
             raise PermissionDenied('ربط Zoho Meeting غير مُعدّ على الخادم')
         d = serializer.validated_data
+        account = _host_account(classroom)
         meeting = zoho.create_meeting(
-            f'{d["title"]} — {classroom.name}', d['starts_at'], d['duration_minutes'],
+            f'{d["title"]} — {classroom.name}', d['starts_at'], d['duration_minutes'], account,
         )
         session = serializer.save(
             created_by=user,
+            zoho_account=account,
             zoho_meeting_key=str(meeting.get('meetingKey', '')),
             zoho_join_url=meeting.get('joinLink', ''),
             zoho_start_url=meeting.get('startLink', ''),
@@ -173,7 +182,7 @@ class VirtualSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
             if session.zoho_meeting_key:
                 zoho.update_meeting(
                     session.zoho_meeting_key, f'{d["title"]} — {session.classroom.name}',
-                    d['starts_at'], d['duration_minutes'],
+                    d['starts_at'], d['duration_minutes'], session.zoho_account,
                 )
         except zoho.ZohoError as e:
             return _zoho_error_response(e)
@@ -187,7 +196,7 @@ class VirtualSessionDetailView(generics.RetrieveUpdateDestroyAPIView):
         if session.status != VirtualSession.Status.CANCELLED and session.live_state == 'upcoming':
             try:
                 if session.zoho_meeting_key:
-                    zoho.delete_meeting(session.zoho_meeting_key)
+                    zoho.delete_meeting(session.zoho_meeting_key, session.zoho_account)
             except zoho.ZohoError as e:
                 if '→ 404' not in str(e):
                     return _zoho_error_response(e)
@@ -408,3 +417,113 @@ class ZohoRecordingsImportView(APIView):
         _archive_in_background([session.id])
         log_action(request, 'create', session, f'استيراد تسجيل Zoho للفصل {classroom.name}')
         return Response(VirtualSessionSerializer(session).data, status=status.HTTP_201_CREATED)
+
+
+# ── ربط حساب Zoho للمعلم (OAuth) ─────────────────────────────────────────────────
+# connect يرجع رابط موافقة Zoho ← المعلم يسجّل دخوله ← Zoho يرجع للـ callback (بلا JWT،
+# الهوية من state الموقَّع) ← نحفظ الحساب ونرجّعه لصفحة الفصول الافتراضية بالواجهة.
+
+_CONNECT_SALT = 'virtual-classes.zoho-connect'
+_CONNECT_MAX_AGE = 15 * 60
+
+
+def _return_origin(request):
+    """أصل الواجهة اللي بدأ منها الربط — فقط لو ضمن CORS_ALLOWED_ORIGINS (لا نعيد توجيه لأي موقع)."""
+    origin = request.headers.get('Origin') or ''
+    allowed = getattr(settings, 'CORS_ALLOWED_ORIGINS', []) or []
+    if origin in allowed:
+        return origin
+    return allowed[0] if allowed else ''
+
+
+def _account_payload(account):
+    if not account:
+        return {'connected': False}
+    return {'connected': True, 'email': account.email, 'connected_at': account.connected_at}
+
+
+class ZohoConnectView(APIView):
+    """GET حالة ربط حساب المستخدم الحالي، POST رابط بدء الربط، DELETE إلغاء الربط."""
+
+    def get(self, request):
+        account = ZohoAccount.objects.filter(user=request.user).first()
+        return Response({**_account_payload(account), 'available': zoho.web_client_configured()})
+
+    def post(self, request):
+        if not zoho.web_client_configured():
+            return Response({'error': 'ربط حسابات Zoho غير مُعدّ على الخادم'}, status=status.HTTP_400_BAD_REQUEST)
+        if not (request.user.email or '').strip():
+            return Response(
+                {'error': 'أضف إيميلك (نفس إيميل Zoho) في بيانات المستخدم أولًا'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        state = signing.dumps({'u': request.user.pk, 'o': _return_origin(request)}, salt=_CONNECT_SALT)
+        return Response({'url': zoho.authorize_url(state, settings.ZOHO_WEB_REDIRECT_URI)})
+
+    def delete(self, request):
+        account = ZohoAccount.objects.filter(user=request.user).first()
+        if account:
+            zoho.revoke(account.refresh_token)
+            account.delete()  # حصصه السابقة تبقى (zoho_account يصير null)
+            log_action(request, 'delete', None, f'إلغاء ربط حساب Zoho: {request.user}')
+        return Response({'connected': False})
+
+
+class ZohoCallbackView(APIView):
+    """GET /api/virtual-classes/zoho/callback/?code=&state= — يرجع له Zoho بعد الموافقة."""
+    authentication_classes = []
+    permission_classes = []
+
+    def _back(self, origin, result, message=''):
+        from django.http import HttpResponseRedirect
+        from urllib.parse import urlencode
+        query = urlencode({'zoho': result, **({'msg': message} if message else {})})
+        if not origin:
+            return HttpResponse(message or 'تم ربط حساب Zoho، ارجع للمنصة.', content_type='text/plain; charset=utf-8')
+        return HttpResponseRedirect(f'{origin}/virtual-classes?{query}')
+
+    def get(self, request):
+        from apps.accounts.models import User
+        try:
+            data = signing.loads(request.query_params.get('state', ''), salt=_CONNECT_SALT, max_age=_CONNECT_MAX_AGE)
+        except signing.BadSignature:
+            return HttpResponse('رابط الربط غير صالح أو انتهت مدته — ابدأ الربط من جديد من المنصة.',
+                                status=400, content_type='text/plain; charset=utf-8')
+        origin = data.get('o', '')
+        if request.query_params.get('error'):
+            return self._back(origin, 'error', 'تم إلغاء الربط من Zoho')
+        user = User.objects.filter(pk=data.get('u'), is_active=True).first()
+        code = request.query_params.get('code')
+        if not user or not code:
+            return self._back(origin, 'error', 'بيانات الربط ناقصة')
+        try:
+            refresh_token, access_token = zoho.exchange_code(code, settings.ZOHO_WEB_REDIRECT_URI)
+            details = zoho.user_details(access_token)
+        except zoho.ZohoError as e:
+            logger.warning('Zoho connect failed for user %s: %s', user.pk, e)
+            return self._back(origin, 'error', 'تعذّر إكمال الربط مع Zoho، حاول مرة أخرى')
+
+        email = (details.get('primaryEmail') or details.get('emailId') or '').strip().lower()
+        zuid = str(details.get('zuid') or '')
+        zsoid = str(details.get('zsoid') or '')
+        # الحساب لازم يكون نفس إيميل المعلم بالمنصة — حتى ما يُربط حساب شخص آخر
+        if not email or email != (user.email or '').strip().lower():
+            zoho.revoke(refresh_token)
+            return self._back(origin, 'mismatch', f'حساب Zoho ({email or "بلا إيميل"}) لا يطابق إيميلك في المنصة ({user.email})')
+        if not zuid:
+            zoho.revoke(refresh_token)
+            return self._back(origin, 'error', 'Zoho لم يرجع معرّف الحساب')
+        if zsoid and settings.ZOHO_ORG_ID and zsoid != str(settings.ZOHO_ORG_ID):
+            zoho.revoke(refresh_token)
+            return self._back(origin, 'error', 'حساب Zoho هذا ليس ضمن منظمة المركز')
+
+        old = ZohoAccount.objects.filter(user=user).first()
+        if old and old.refresh_token != refresh_token:
+            zoho.revoke(old.refresh_token)
+        account, _ = ZohoAccount.objects.update_or_create(user=user, defaults={
+            'zuid': zuid, 'zsoid': zsoid, 'email': email, 'refresh_token': refresh_token,
+        })
+        from django.core.cache import cache
+        cache.delete(f'{zoho._TOKEN_CACHE_KEY}:{account.pk}')
+        logger.info('Zoho account connected for user %s', user.pk)
+        return self._back(origin, 'connected')

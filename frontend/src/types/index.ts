@@ -162,6 +162,8 @@ export interface VirtualSession {
   attendance_count: number;
   student_count: number;
   created_by_name: string | null;
+  /** إيميل حساب Zoho المضيف، أو null = حساب المركز */
+  host_email?: string | null;
   created_at: string;
 }
 
@@ -1124,4 +1126,11 @@ export interface StudentFilters {
   registration_to?: string;
   page?: number;
   ordering?: string;
+}
+
+export interface ZohoConnectStatus {
+  connected: boolean;
+  available: boolean;
+  email?: string;
+  connected_at?: string;
 }

@@ -4,7 +4,7 @@ from .portal_views import PortalVirtualSessionJoinView, PortalVirtualSessionsVie
 from .views import (
     RecordingPlayView, RecordingStreamView,
     VirtualSessionAttendanceView, VirtualSessionDetailView, VirtualSessionListCreateView,
-    VirtualSessionStartView, VirtualSessionSyncView, ZohoRecordingsImportView,
+    VirtualSessionStartView, VirtualSessionSyncView, ZohoRecordingsImportView, ZohoConnectView, ZohoCallbackView,
 )
 
 urlpatterns = [
@@ -16,6 +16,8 @@ urlpatterns = [
     path('virtual-classes/recordings/<int:pk>/play/',     RecordingPlayView.as_view(),            name='vc-recording-play'),
     path('virtual-classes/recordings/stream/<str:token>/', RecordingStreamView.as_view(),         name='vc-recording-stream'),
     path('virtual-classes/zoho-recordings/',              ZohoRecordingsImportView.as_view(),     name='vc-zoho-recordings'),
+    path('virtual-classes/zoho/connect/',                 ZohoConnectView.as_view(),              name='vc-zoho-connect'),
+    path('virtual-classes/zoho/callback/',                ZohoCallbackView.as_view(),             name='vc-zoho-callback'),
     # بوابة أولياء الأمور
     path('portal/virtual-sessions/',                      PortalVirtualSessionsView.as_view(),    name='portal-virtual-sessions'),
     path('portal/virtual-sessions/<int:pk>/join/',        PortalVirtualSessionJoinView.as_view(), name='portal-virtual-session-join'),

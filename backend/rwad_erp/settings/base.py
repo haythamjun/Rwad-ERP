@@ -144,6 +144,14 @@ ZOHO_ORG_ID         = config('ZOHO_ORG_ID', default='')        # zsoid
 ZOHO_PRESENTER_ID   = config('ZOHO_PRESENTER_ID', default='')  # zuid حساب المركز المضيف
 ZOHO_ACCOUNTS_URL   = config('ZOHO_ACCOUNTS_URL', default='https://accounts.zoho.sa')
 ZOHO_MEETING_URL    = config('ZOHO_MEETING_URL', default='https://meeting.zoho.sa')
+# «Server-based» client — كل معلم يربط حسابه (apps/virtual_classes/views.py: ZohoConnect*)
+ZOHO_WEB_CLIENT_ID     = config('ZOHO_WEB_CLIENT_ID', default='')
+ZOHO_WEB_CLIENT_SECRET = config('ZOHO_WEB_CLIENT_SECRET', default='')
+# لازم يطابق «Authorized Redirect URIs» في api-console.zoho.sa حرفيًا
+ZOHO_WEB_REDIRECT_URI  = config(
+    'ZOHO_WEB_REDIRECT_URI',
+    default='https://roya-backend-production.up.railway.app/api/virtual-classes/zoho/callback/',
+)
 
 # تخزين التسجيلات — انظر apps/virtual_classes/storage.py
 RECORDINGS_BUCKET_NAME        = config('RECORDINGS_BUCKET_NAME', default='')

@@ -197,6 +197,10 @@ export const virtualClassesApi = {
   zohoRecordings: () => api.get('/virtual-classes/zoho-recordings/'),
   importRecording: (recording_id: string, classroom: number) =>
     api.post('/virtual-classes/zoho-recordings/', { recording_id, classroom }),
+  // ربط حساب Zoho للمعلم
+  zohoStatus:     () => api.get('/virtual-classes/zoho/connect/'),
+  zohoConnect:    () => api.post('/virtual-classes/zoho/connect/'),
+  zohoDisconnect: () => api.delete('/virtual-classes/zoho/connect/'),
 };
 
 // ─────────────────────────────────────────────

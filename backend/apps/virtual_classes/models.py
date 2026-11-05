@@ -5,6 +5,27 @@ from .storage import get_recordings_storage
 from . import zoho
 
 
+class ZohoAccount(models.Model):
+    """حساب Zoho Meeting لمعلم — يربطه المعلم بنفسه مرة (OAuth)، فتُنشأ حصص فصوله
+    وتسجيلاتها بحسابه (مضيف مستقل، وحصص متزامنة لمعلمين مختلفين)."""
+    user          = models.OneToOneField(
+        'accounts.User', on_delete=models.CASCADE,
+        related_name='zoho_account', verbose_name='المستخدم',
+    )
+    zuid          = models.CharField(max_length=30, verbose_name='معرّف Zoho')
+    zsoid         = models.CharField(max_length=30, blank=True, verbose_name='منظمة Zoho')
+    email         = models.EmailField(verbose_name='إيميل Zoho')
+    refresh_token = models.CharField(max_length=300)
+    connected_at  = models.DateTimeField(auto_now=True, verbose_name='تاريخ الربط')
+
+    class Meta:
+        verbose_name        = 'حساب Zoho لمعلم'
+        verbose_name_plural = 'حسابات Zoho للمعلمين'
+
+    def __str__(self):
+        return f'{self.user} — {self.email}'
+
+
 class VirtualSession(models.Model):
     """حصة أونلاين لفصل — يقابلها اجتماع في Zoho Meeting يُنشأ تلقائيًا عند الجدولة.
     الحالة المخزّنة مجدولة/ملغاة فقط؛ "جارية" و"منتهية" تُحسب من الوقت."""
@@ -28,6 +49,12 @@ class VirtualSession(models.Model):
     zoho_join_url    = models.URLField(max_length=500, blank=True, verbose_name='رابط الدخول')
     zoho_start_url   = models.URLField(max_length=500, blank=True, verbose_name='رابط بدء المضيف')
     zoho_password    = models.CharField(max_length=50, blank=True, verbose_name='كلمة مرور الاجتماع')
+    # الحساب المضيف — null = حساب المركز. يُثبَّت عند الإنشاء: التعديل والحذف وجلب
+    # التسجيلات لازم تتم بنفس الحساب اللي أُنشئ به الاجتماع.
+    zoho_account     = models.ForeignKey(
+        ZohoAccount, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sessions', verbose_name='حساب Zoho المضيف',
+    )
 
     recordings_checked_at = models.DateTimeField(null=True, blank=True, verbose_name='آخر فحص للتسجيلات')
 

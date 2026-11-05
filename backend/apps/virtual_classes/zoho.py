@@ -1,8 +1,11 @@
 """
 عميل Zoho Meeting — مركز البيانات السعودي (zoho.sa).
 
-المصادقة عبر Self Client: refresh token دائم في الإعدادات يُبدَّل بـ access token
-(صالح ساعة) ويُخزَّن مؤقتًا في الكاش. الصلاحيات المطلوبة (مُتحقَّق منها فعليًا):
+حسابان للمصادقة:
+- حساب المركز (Self Client): refresh token دائم في الإعدادات — الافتراضي.
+- حساب المعلم (ZohoAccount): كل معلم يربط حسابه مرة عبر OAuth («Server-based»
+  client: ZOHO_WEB_CLIENT_*) فتُنشأ حصصه وتسجيلاته بحسابه هو.
+كل access token صالح ساعة ويُخزَّن مؤقتًا في الكاش. الصلاحيات المطلوبة (مُتحقَّق منها فعليًا):
 ZohoMeeting.meeting.ALL, ZohoMeeting.recording.ALL, ZohoMeeting.manageOrg.READ,
 ZohoMeeting.meetinguds.READ, ZohoFiles.files.READ — آخر اثنتين شرط لتحميل ملف
 التسجيل، وبدونهما يرجع رابط التحميل 401/403.
@@ -20,6 +23,11 @@ from django.conf import settings
 from django.core.cache import cache
 
 _TOKEN_CACHE_KEY = 'zoho_meeting_access_token'
+# المطلوبة لحساب المعلم — نفس صلاحيات حساب المركز المتحقَّق منها
+USER_SCOPES = ','.join([
+    'ZohoMeeting.meeting.ALL', 'ZohoMeeting.recording.ALL', 'ZohoMeeting.manageOrg.READ',
+    'ZohoMeeting.meetinguds.READ', 'ZohoFiles.files.READ', 'WorkDrive.files.READ',
+])
 _MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -55,30 +63,92 @@ def _request(method, url, data=None, headers=None, form=False, timeout=30):
         raise ZohoError(f'تعذّر الاتصال بـ Zoho: {e.reason}') from e
 
 
-def _access_token():
-    token = cache.get(_TOKEN_CACHE_KEY)
-    if token:
-        return token
-    res = _request('POST', f'{settings.ZOHO_ACCOUNTS_URL}/oauth/v2/token', {
-        'refresh_token': settings.ZOHO_REFRESH_TOKEN,
-        'client_id':     settings.ZOHO_CLIENT_ID,
-        'client_secret': settings.ZOHO_CLIENT_SECRET,
+class ZohoAuthRevoked(ZohoError):
+    """حساب المعلم ألغى الربط من Zoho أو انتهت صلاحيته — يحتاج ربط من جديد."""
+
+
+def web_client_configured():
+    return bool(settings.ZOHO_WEB_CLIENT_ID and settings.ZOHO_WEB_CLIENT_SECRET)
+
+
+def _refresh(refresh_token, client_id, client_secret):
+    return _request('POST', f'{settings.ZOHO_ACCOUNTS_URL}/oauth/v2/token', {
+        'refresh_token': refresh_token,
+        'client_id':     client_id,
+        'client_secret': client_secret,
         'grant_type':    'refresh_token',
     }, form=True)
+
+
+def _access_token(account=None):
+    key = f'{_TOKEN_CACHE_KEY}:{account.pk}' if account else _TOKEN_CACHE_KEY
+    token = cache.get(key)
+    if token:
+        return token
+    if account:
+        res = _refresh(account.refresh_token, settings.ZOHO_WEB_CLIENT_ID, settings.ZOHO_WEB_CLIENT_SECRET)
+    else:
+        res = _refresh(settings.ZOHO_REFRESH_TOKEN, settings.ZOHO_CLIENT_ID, settings.ZOHO_CLIENT_SECRET)
     token = res.get('access_token')
     if not token:
+        if account:
+            raise ZohoAuthRevoked(f'ربط Zoho للمعلم انتهى أو أُلغي: {res}')
         raise ZohoError(f'فشل تجديد رمز Zoho: {res}')
     # أقل من الساعة بهامش أمان
-    cache.set(_TOKEN_CACHE_KEY, token, int(res.get('expires_in', 3600)) - 300)
+    cache.set(key, token, int(res.get('expires_in', 3600)) - 300)
     return token
 
 
-def _auth():
-    return {'Authorization': f'Zoho-oauthtoken {_access_token()}'}
+def _auth(account=None):
+    return {'Authorization': f'Zoho-oauthtoken {_access_token(account)}'}
 
 
-def _api(path):
-    return f'{settings.ZOHO_MEETING_URL}/api/v2/{settings.ZOHO_ORG_ID}{path}'
+def _api(path, account=None):
+    org = (account.zsoid if account and account.zsoid else None) or settings.ZOHO_ORG_ID
+    return f'{settings.ZOHO_MEETING_URL}/api/v2/{org}{path}'
+
+
+# ── ربط حساب المعلم (OAuth) ────────────────────────────────────────────────────
+
+def authorize_url(state, redirect_uri):
+    return f'{settings.ZOHO_ACCOUNTS_URL}/oauth/v2/auth?' + urllib.parse.urlencode({
+        'response_type': 'code',
+        'client_id':     settings.ZOHO_WEB_CLIENT_ID,
+        'scope':         USER_SCOPES,
+        'redirect_uri':  redirect_uri,
+        'access_type':   'offline',
+        'prompt':        'consent',  # حتى يرجع refresh token كل مرة
+        'state':         state,
+    })
+
+
+def exchange_code(code, redirect_uri):
+    """يرجع (refresh_token, access_token)."""
+    res = _request('POST', f'{settings.ZOHO_ACCOUNTS_URL}/oauth/v2/token', {
+        'grant_type':    'authorization_code',
+        'client_id':     settings.ZOHO_WEB_CLIENT_ID,
+        'client_secret': settings.ZOHO_WEB_CLIENT_SECRET,
+        'redirect_uri':  redirect_uri,
+        'code':          code,
+    }, form=True)
+    if not res.get('refresh_token'):
+        raise ZohoError(f'Zoho ما أرجع refresh token: {res.get("error") or res}')
+    return res['refresh_token'], res['access_token']
+
+
+def user_details(access_token):
+    """zuid والإيميل والمنظمة لصاحب الرمز."""
+    res = _request('GET', f'{settings.ZOHO_MEETING_URL}/api/v2/user.json',
+                   headers={'Authorization': f'Zoho-oauthtoken {access_token}'})
+    return res.get('userDetails', res)
+
+
+def revoke(refresh_token):
+    try:
+        _request('POST', f'{settings.ZOHO_ACCOUNTS_URL}/oauth/v2/token/revoke',
+                 {'token': refresh_token}, form=True)
+    except ZohoError:
+        pass  # إلغاء الربط من جهتنا يكفي حتى لو رفض Zoho
 
 
 def _format_start(dt):
@@ -88,46 +158,50 @@ def _format_start(dt):
             f'{local.strftime("%I:%M")} {"AM" if local.hour < 12 else "PM"}')
 
 
-def create_meeting(topic, starts_at, duration_minutes, presenter_id=None):
-    res = _request('POST', _api('/sessions.json'), {'session': {
+def _presenter(account):
+    return account.zuid if account else settings.ZOHO_PRESENTER_ID
+
+
+def create_meeting(topic, starts_at, duration_minutes, account=None):
+    res = _request('POST', _api('/sessions.json', account), {'session': {
         'topic':     topic[:200],
-        'presenter': presenter_id or settings.ZOHO_PRESENTER_ID,
+        'presenter': _presenter(account),
         'startTime': _format_start(starts_at),
         'duration':  duration_minutes * 60 * 1000,
         'timezone':  settings.TIME_ZONE,
-    }}, headers=_auth())
+    }}, headers=_auth(account))
     return res.get('session', res)
 
 
-def update_meeting(meeting_key, topic, starts_at, duration_minutes, presenter_id=None):
-    res = _request('PUT', _api(f'/sessions/{meeting_key}.json'), {'session': {
+def update_meeting(meeting_key, topic, starts_at, duration_minutes, account=None):
+    res = _request('PUT', _api(f'/sessions/{meeting_key}.json', account), {'session': {
         'topic':     topic[:200],
-        'presenter': presenter_id or settings.ZOHO_PRESENTER_ID,
+        'presenter': _presenter(account),
         'startTime': _format_start(starts_at),
         'duration':  duration_minutes * 60 * 1000,
         'timezone':  settings.TIME_ZONE,
-    }}, headers=_auth())
+    }}, headers=_auth(account))
     return res.get('session', res)
 
 
-def delete_meeting(meeting_key):
-    _request('DELETE', _api(f'/sessions/{meeting_key}.json'), headers=_auth())
+def delete_meeting(meeting_key, account=None):
+    _request('DELETE', _api(f'/sessions/{meeting_key}.json', account), headers=_auth(account))
 
 
-def get_meeting(meeting_key):
-    res = _request('GET', _api(f'/sessions/{meeting_key}.json'), headers=_auth())
+def get_meeting(meeting_key, account=None):
+    res = _request('GET', _api(f'/sessions/{meeting_key}.json', account), headers=_auth(account))
     return res.get('session', res)
 
 
 def list_recordings():
-    """كل تسجيلات الحساب — لاستيراد التسجيلات القديمة."""
+    """كل تسجيلات حساب المركز — لاستيراد التسجيلات القديمة."""
     url = f'{settings.ZOHO_MEETING_URL}/meeting/api/v2/{settings.ZOHO_ORG_ID}/recordings.json'
     return _request('GET', url, headers=_auth()).get('recordings', [])
 
 
-def meeting_recordings(meeting_key):
+def meeting_recordings(meeting_key, account=None):
     try:
-        res = _request('GET', _api(f'/recordings/{meeting_key}.json'), headers=_auth())
+        res = _request('GET', _api(f'/recordings/{meeting_key}.json', account), headers=_auth(account))
     except ZohoError as e:
         if '→ 404' in str(e):
             return []
@@ -135,10 +209,10 @@ def meeting_recordings(meeting_key):
     return res.get('recordings', [])
 
 
-def download_recording(download_url):
+def download_recording(download_url, account=None):
     """يحمّل ملف التسجيل على دفعات لملف مؤقت (التسجيل الواحد قد يتجاوز 300MB)
     ويرجع كائن الملف المفتوح — المستدعي مسؤول عن إغلاقه."""
-    req = urllib.request.Request(download_url, headers=_auth())
+    req = urllib.request.Request(download_url, headers=_auth(account))
     tmp = tempfile.TemporaryFile()
     try:
         with urllib.request.urlopen(req, timeout=600) as r:

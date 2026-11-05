@@ -27,7 +27,7 @@ def discover_recordings(session):
     if not session.zoho_meeting_key:
         return []
     found = []
-    for rec in zoho.meeting_recordings(session.zoho_meeting_key):
+    for rec in zoho.meeting_recordings(session.zoho_meeting_key, session.zoho_account):
         rid = rec.get('erecordingId')
         if not rid:
             continue
@@ -56,7 +56,7 @@ def archive_recording(recording):
         return True
     recording.attempts += 1
     try:
-        tmp = zoho.download_recording(recording.zoho_download_url)
+        tmp = zoho.download_recording(recording.zoho_download_url, recording.session.zoho_account)
         try:
             stamp = (recording.recorded_at or timezone.now()).strftime('%Y%m%d-%H%M')
             name = f'classroom{recording.session.classroom_id}_session{recording.session_id}_{stamp}.mp4'

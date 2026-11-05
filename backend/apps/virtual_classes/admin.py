@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import SessionAttendance, SessionRecording, VirtualSession
+from .models import SessionAttendance, SessionRecording, VirtualSession, ZohoAccount
+
+
+@admin.register(ZohoAccount)
+class ZohoAccountAdmin(admin.ModelAdmin):
+    list_display = ['user', 'email', 'zuid', 'connected_at']
+    search_fields = ['user__username', 'email']
+    exclude = ['refresh_token']
+    readonly_fields = ['user', 'zuid', 'zsoid', 'email', 'connected_at']
 
 
 class SessionRecordingInline(admin.TabularInline):

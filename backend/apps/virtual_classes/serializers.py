@@ -26,6 +26,8 @@ class VirtualSessionSerializer(serializers.ModelSerializer):
     recordings       = SessionRecordingSerializer(many=True, read_only=True)
     attendance_count = serializers.SerializerMethodField()
     student_count    = serializers.SerializerMethodField()
+    # إيميل حساب Zoho المضيف، أو null = حساب المركز
+    host_email       = serializers.CharField(source='zoho_account.email', read_only=True, default=None)
 
     class Meta:
         model  = VirtualSession
@@ -36,7 +38,7 @@ class VirtualSessionSerializer(serializers.ModelSerializer):
             'zoho_meeting_key', 'zoho_join_url', 'zoho_password',
             'recordings', 'recordings_checked_at',
             'attendance_count', 'student_count',
-            'created_by_name', 'created_at',
+            'created_by_name', 'created_at', 'host_email',
         ]
         read_only_fields = [
             'id', 'status', 'zoho_meeting_key', 'zoho_join_url', 'zoho_password',

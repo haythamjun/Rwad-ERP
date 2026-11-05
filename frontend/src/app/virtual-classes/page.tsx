@@ -1,17 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { virtualClassesApi, classroomsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import type {
-  Classroom, VirtualSession, SessionAttendanceRow, ZohoRecordingItem, SessionRecording,
+  Classroom, VirtualSession, SessionAttendanceRow, ZohoRecordingItem, SessionRecording, ZohoConnectStatus,
 } from '@/types';
 import Header from '@/components/layout/Header';
 import { cn, formatDateTime } from '@/lib/utils';
 import {
   Plus, Pencil, X, Save, Video, Play, Users, Ban, RefreshCw,
-  Copy, ExternalLink, CircleDot, Download, AlertTriangle, CheckCircle2, Clock,
+  Copy, ExternalLink, CircleDot, Download, AlertTriangle, CheckCircle2, Clock, Link2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -352,6 +352,83 @@ function RecordingChips({ session, onPlay }: { session: VirtualSession; onPlay: 
   );
 }
 
+// ── ربط حساب Zoho للمعلم ────────────────────────────────────────────────────────
+// حصص فصول المعلم تُنشأ بحسابه لو ربطه (مضيف مستقل، وحصص متزامنة لعدة معلمين)،
+// وإلا بحساب المركز.
+function ZohoAccountCard({ teachesClasses }: { teachesClasses: boolean }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery<ZohoConnectStatus>({
+    queryKey: ['zoho-connect'],
+    queryFn:  () => virtualClassesApi.zohoStatus().then(r => r.data),
+  });
+
+  // رجوع من صفحة موافقة Zoho: ?zoho=connected|mismatch|error&msg=
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('zoho');
+    if (!result) return;
+    const msg = params.get('msg');
+    if (result === 'connected') toast.success('تم ربط حساب Zoho — حصص فصولك تُنشأ الآن بحسابك');
+    else toast.error(msg || 'تعذّر ربط حساب Zoho', { duration: 8000 });
+    window.history.replaceState(null, '', window.location.pathname);
+    queryClient.invalidateQueries({ queryKey: ['zoho-connect'] });
+  }, [queryClient]);
+
+  const connectMutation = useMutation({
+    mutationFn: () => virtualClassesApi.zohoConnect().then(r => r.data),
+    onSuccess:  (d: { url: string }) => { window.location.href = d.url; },
+    onError:    (e) => toast.error(errMsg(e, 'تعذّر بدء الربط')),
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => virtualClassesApi.zohoDisconnect(),
+    onSuccess:  () => { queryClient.invalidateQueries({ queryKey: ['zoho-connect'] }); toast.success('تم إلغاء ربط حساب Zoho'); },
+    onError:    (e) => toast.error(errMsg(e, 'تعذّر إلغاء الربط')),
+  });
+
+  if (!data?.available || (!teachesClasses && !data.connected)) return null;
+
+  return (
+    <div className={cn('card flex items-center gap-4 flex-wrap',
+      data.connected ? 'border border-green-100' : 'border border-amber-200 bg-amber-50/40')}>
+      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+        data.connected ? 'bg-green-50' : 'bg-amber-100')}>
+        {data.connected ? <CheckCircle2 size={18} className="text-green-600" /> : <Link2 size={18} className="text-amber-700" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        {data.connected ? (
+          <>
+            <p className="text-sm font-semibold text-gray-800">حساب Zoho مربوط</p>
+            <p className="text-xs text-gray-500 mt-0.5" dir="ltr">{data.email}</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-gray-800">اربط حساب Zoho الخاص بك</p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              حتى تُنشأ حصص فصولك بحسابك وتبدأها كمضيف. سجّل الدخول بنفس إيميلك في المنصة.
+              قبل الربط تُنشأ بحساب المركز.
+            </p>
+          </>
+        )}
+      </div>
+      {data.connected ? (
+        <button
+          onClick={() => { if (confirm('إلغاء ربط حساب Zoho؟ الحصص الجديدة ستُنشأ بحساب المركز.')) disconnectMutation.mutate(); }}
+          disabled={disconnectMutation.isPending}
+          className="btn-secondary text-xs py-1.5"
+        >
+          إلغاء الربط
+        </button>
+      ) : (
+        <button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending} className="btn-primary text-sm">
+          <Link2 size={14}/> {connectMutation.isPending ? 'جارٍ التحويل...' : 'ربط حساب Zoho'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 type Tab = 'upcoming' | 'past' | 'import';
 
@@ -422,6 +499,8 @@ export default function VirtualClassesPage() {
     <div className="space-y-6 max-w-5xl">
       <Header title="الفصول الافتراضية" subtitle="حصص أونلاين عبر Zoho Meeting — مسجّلة ومؤرشفة تلقائيًا" />
 
+      <ZohoAccountCard teachesClasses={classrooms.some(c => c.teacher === user?.id)} />
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
           {tabs.map(t => (
@@ -483,6 +562,7 @@ export default function VirtualClassesPage() {
                       <div className="flex items-center gap-x-4 gap-y-1 mt-1 flex-wrap text-xs text-gray-500">
                         <span>{s.classroom_name} • {s.branch_name}</span>
                         <span>{formatDateTime(s.starts_at)} • {s.duration_minutes} دقيقة</span>
+                        <span title="حساب Zoho المضيف">المضيف: <span dir="ltr">{s.host_email || 'حساب المركز'}</span></span>
                         {s.live_state !== 'upcoming' && s.status !== 'cancelled' && (
                           <span>الحضور: {s.attendance_count}/{s.student_count}</span>
                         )}
