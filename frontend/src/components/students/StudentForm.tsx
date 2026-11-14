@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { branchesApi, busesApi, classroomsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import type { StudentFormData, Branch, Bus, Classroom, DisabilityEntry } from '@/types';
 
 const schema = z.object({
@@ -174,6 +175,10 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   // "قبول الطالب" (pending -> active) يتطلب صلاحية مدير فأعلى — عبر زر مخصص، وليس هذا النموذج.
   const canActivateFromPending = defaultValues?.status !== 'pending' || !!currentUser?.can_delete;
 
+  // أي تعديل بالنموذج (حقول، صورة، أنواع الإعاقة) — onChange على <form> يلتقطها كلها
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -233,7 +238,7 @@ export default function StudentForm({ onSubmit, loading, defaultValues, initialD
   };
 
   return (
-    <form onSubmit={handleSubmit(submit)} className="space-y-5">
+    <form onSubmit={handleSubmit(submit)} onChange={() => setTouched(true)} className="space-y-5">
 
       {/* ══ 1. البيانات الشخصية ══════════════════════════════════════════ */}
       <div className="card">

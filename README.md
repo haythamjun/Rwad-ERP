@@ -16,7 +16,9 @@
 - [فلاتر البحث](#فلاتر-البحث)
 - [استيراد وتصدير البيانات](#استيراد-وتصدير-البيانات)
 - [بوابة أولياء الأمور (Flutter)](#بوابة-أولياء-الأمور-flutter)
+- [الفصول الافتراضية (Zoho Meeting)](#الفصول-الافتراضية-zoho-meeting)
 - [الإعدادات والنشر](#إعدادات-jwt)
+- [سجل التحديثات](#سجل-التحديثات)
 
 ---
 
@@ -35,9 +37,11 @@ Rwad_ERP/
 │   │   ├── accounts/               ← المستخدمون، صلاحيات الوحدات، الملف المهني
 │   │   ├── students/               ← المستفيدون، الحضور، الجدول، الطبي، الخطط، بوابة أولياء الأمور
 │   │   ├── assessments/            ← مكتبة المقاييس وتقييمات الطلاب
-│   │   └── core/                   ← الفروع، الباصات، الفصول، الإعدادات، التقارير، سجل العمليات
+│   │   ├── core/                   ← الفروع، الباصات، الفصول، الإعدادات، التقارير، سجل العمليات
+│   │   └── virtual_classes/        ← الحصص الأونلاين عبر Zoho Meeting + أرشفة التسجيلات
 │   ├── manage.py
-│   ├── railway.json                ← أمر التشغيل على Railway
+│   ├── railway.json                ← أمر التشغيل على Railway (Config-as-code — يتوقف 2026-12-01)
+│   ├── railway.cron.json           ← خدمة جدولة أرشفة التسجيلات (مرجع؛ الإعداد الفعلي بلوحة Railway)
 │   └── requirements.txt
 │
 ├── frontend/                       ← Next.js Web App
@@ -103,12 +107,14 @@ Rwad_ERP/
 | الطلبات المرفوضة | `/students/rejected` | المستفيدون المرفوضون مع إمكانية الاسترجاع |
 | ملف المستفيد | `/students/{id}` | تبويبات: البيانات، أولياء الأمور، الدراسة الاجتماعية، المرفقات، الحضور، الجدول، الطبي، الخطط، المقاييس، الأخصائيون |
 | الحضور والغياب | `/attendance` | كشف يومي لكل الطلاب حسب الفرع |
-| الجدول الدراسي | `/schedules` | جدول أسبوعي (الأحد–الخميس، 8 حصص من 7:30 إلى 11:30) + إنشاء جماعي |
+| الجدول الدراسي | `/schedules` | جدول أسبوعي (الأحد–الخميس) بفترتين: صباحي 6:30–11:30 ومسائي 12:30–5:30، كل فترة 8 حصص + بريك + أعمال مكتبية، مع إنشاء جماعي |
 | القسم الطبي | `/medical` | كشف التشيك إن الطبي اليومي |
 | الخطط الشهرية | `/plans` | خطة لكل طالب بـ6 مجالات نمائية + مرفقات Word/Excel |
-| الخطة الفردية | `/individual-plans` | أهداف متعددة لكل مجال بتاريخ وتقييم بعدي |
-| تحليل الأهداف | `/students/{id}/individual-plans/{planId}/analysis` | متابعة يومية لأهداف الخطة الفردية لكل مجال لمدة شهر + طباعة بشكل النموذج الورقي |
-| الخطط الفصلية | `/quarterly-plans` | نفس هيكل الفردية بفترة فصلية وأخصائي مسؤول |
+| الخطة الفردية | `/individual-plans` | أهداف متعددة لكل مجال بتاريخ وتقييم بعدي، ولكل هدف أهداف فرعية (مستوى واحد) |
+| تحليل الأهداف | `/students/{id}/individual-plans/{planId}/analysis` | نموذج متابعة لكل هدف (بنوده أهدافه الفرعية) لمدة شهر + طباعة بشكل النموذج الورقي |
+| الخطط الفصلية | `/quarterly-plans` | نفس هيكل الفردية بفترة فصلية وأخصائي مسؤول، مع أهداف فرعية |
+| الفصول الافتراضية | `/virtual-classes` | حصص أونلاين عبر Zoho Meeting بحساب معلم الفصل، مسجّلة ومؤرشفة تلقائيًا على R2 |
+| باصي | `/my-bus` | للسائق/مشرف الباص فقط: أسماء طلاب فترته وعناوينهم |
 | المقاييس | `/assessments` | بناء مقاييس (بورتيج، تيتش...) بأقسام وأسئلة وتقديرات قبلي/بعدي |
 | الأقسام التخصصية | `/departments/{slug}` | بوابة الأقسام الخمسة وعهدة كل أخصائي |
 | الباصات | `/buses` | الباصات وفترات التشغيل (سائق + مشرف/ة لكل فترة) |
@@ -137,8 +143,14 @@ Rwad_ERP/
 | مشاهد | `viewer` | ❌ | ❌ | ❌ | ❌ |
 | سائق | `driver` | ❌ | ❌ | ❌ | ❌ |
 | مشرف/ة الباص | `bus_supervisor` | ❌ | ❌ | ❌ | ❌ |
+| مسؤول الحركة | `transport_officer` | ❌ | ❌ | ❌ | ❌ |
 
 > مدير النظام (`admin`) يتجاوز كل فحوصات الصلاحيات ويرى كل الطلاب.
+>
+> **طاقم النقل** (`driver` / `bus_supervisor` / `transport_officer` — `User.is_transport_staff`) ممنوع من كل بيانات المستفيدين على مستوى الخادم، **حتى لو مُنح صلاحيات وحدات بالخطأ**:
+> - السائق/المشرف يرى صفحة «باصي» فقط (`GET /api/buses/mine/`): الفترات اللي هو طاقمها، وأسماء طلابها وعناوين سكنهم — بلا ملفات ولا جوالات ولا هويات.
+> - مسؤول الحركة يرى صفحة الباصات فقط (البيانات وتواريخ الاستمارة والفحص والتأمين) بدون قوائم الطلاب.
+> - الطالب المسجّل على باص بلا فترة يظهر في الفترتين.
 
 ### 2. صلاحيات الوحدات (`UserModulePermission`)
 
@@ -156,6 +168,21 @@ Rwad_ERP/
 | `schedule` | الجدول الدراسي | التعديل لمن دوره لا يسمح |
 | `buses` | الباصات | تعديل الباصات (لا يوجد دور يمنحها افتراضيًا) |
 | `classrooms` | الفصول | تعديل الفصول (لا يوجد دور يمنحها افتراضيًا) |
+| `virtual_classes` | الفصول الافتراضية | عرض حصص فصول الفرع، الجدولة (`can_edit`)، استيراد تسجيلات Zoho القديمة (`can_import`) — معلم الفصل يدير فصله بدونها |
+| `confidential` | البيانات السرية | الاطلاع على الهويات وبيانات تواصل أولياء الأمر ودراسة الحالة — انظر أدناه |
+
+### 4. البيانات السرية
+
+بنود تُخفى (ترجع `null` من الـ API) عمّن ليس له `User.can_view_confidential`:
+
+- رقم هوية الطالب.
+- بيانات ولي الأمر: الجوال، الجوال الإضافي، البريد، العنوان، رقم الهوية (يبقى الاسم وصلة القرابة).
+- دراسة الحالة (`FamilyInfo`) كاملة.
+- مرفقات صورة الهوية وكرت العائلة (باقي المرفقات تظهر).
+
+**من يراها:** مدير النظام والمدير والاستقبال افتراضيًا، وغيرهم (المعلم، الأخصائي...) فقط بصلاحية وحدة `confidential` (`can_view`).
+
+**ما يحتاج الصلاحية أيضًا:** إضافة/تعديل/حذف ولي أمر، دراسة الحالة (قراءة وكتابة)، البحث برقم الهوية، تصدير الطلاب (Excel/CSV)، وتسجيل طالب جديد. من لا يملكها يعدّل باقي بيانات الطالب، ورقم الهوية يُتجاهل من طلبه فلا يُمسح.
 
 > **مهم:**
 > - صلاحية الأخصائي لإدخال المقاييس والخطط **لا تأتي من الدور**؛ لازم يمنحها مدير النظام من وحدات `assessments` / `individual_plans` / `quarterly_plans`.
@@ -171,7 +198,10 @@ Rwad_ERP/
 2. **أخصائي له تكليفات** ← طلاب عهدته فقط (`StudentSpecialistAssignment`).
 3. **مستخدم له فرع معيّن** ← طلاب الفرع.
 4. **مستخدم له مدينة معيّنة** ← طلاب فروع المدينة.
-5. غير ذلك ← كل الطلاب.
+5. **المدير (`manager`) بلا فرع/مدينة** ← كل الطلاب.
+6. غير ذلك ← **لا شيء** (المستخدم بلا فرع لا يرى أي طالب حتى يُعيَّن له فرع أو مدينة).
+
+طاقم النقل لا يرى أي طالب مهما كان فرعه (انظر أعلاه). المنطق في `apps/students/views.py`: `_apply_scope` / `_scope_branch_ids` / `_scope_by_student` / `_student_in_scope`.
 
 **تكليف الأخصائي:** من ملف الطالب ← بطاقة الأخصائيين، أخصائي واحد لكل قسم، **ومدير النظام فقط** يقدر يكلّف. القائمة تعرض فقط الأخصائيين اللي حقل «القسم التخصصي» عندهم مطابق للقسم، فلازم يُحدَّد القسم في بيانات المستخدم أولًا.
 
@@ -191,8 +221,9 @@ Student (1)
   ├── StudentSchedule (many)             ← حصص الجدول الأسبوعي
   ├── StudentSpecialistAssignment (≤5)   ← أخصائي لكل قسم
   ├── Plan (many) → PlanGoal, PlanAttachment
-  ├── IndividualPlan (many) → IndividualPlanGoal, GoalAnalysisSheet
-  ├── QuarterlyPlan (many) → QuarterlyPlanGoal
+  ├── IndividualPlan (many) → IndividualPlanGoal → IndividualPlanSubGoal
+  │                         └── GoalAnalysisSheet (واحد لكل هدف لكل شهر)
+  ├── QuarterlyPlan (many) → QuarterlyPlanGoal → QuarterlyPlanSubGoal
   ├── StudentAssessment (many) → StudentAssessmentAnswer
   ├── StudentMedicalProfile (1)
   ├── MedicalVisit (many)
@@ -200,8 +231,8 @@ Student (1)
   └── DailyMedicalCheckIn (many) → MedicationAdministration
 
 Branch (1) → Bus (many) → BusShift (صباحي/مسائي)
-Branch (1) → Classroom (many)
-User (1) → UserModulePermission (many), SpecialistCertificate (many)
+Branch (1) → Classroom (many) → VirtualSession (many) → SessionRecording, SessionAttendance
+User (1) → UserModulePermission (many), SpecialistCertificate (many), ZohoAccount (0..1)
 ```
 
 ### Student — المستفيد
@@ -217,6 +248,7 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | `photo` | ImageField | الصورة الشخصية |
 | `branch` / `bus` / `classroom` | FK | الفرع، الباص، الفصل |
 | `bus_shift` | CharField | فترة الباص: `morning` / `evening` |
+| `study_shift` | CharField | الفترة الدراسية: `morning` (افتراضي) / `evening` — تحدد أوقات جدوله. مستقلة عن فترة الباص (عُبّئت مبدئيًا منها) |
 | `residence_address` | TextField | عنوان سكن الطالب (مستقل عن ولي الأمر) |
 | `disability_type` | JSONField | قائمة أنواع الإعاقة، كل نوع بدرجته: `[{"type": "autism", "degree": "moderate"}]` |
 | `diagnosis` | TextField | التشخيص التفصيلي |
@@ -280,7 +312,19 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 
 ### StudentSchedule — الجدول الأسبوعي
 
-حصة واحدة لكل (طالب، يوم، وقت). الأيام: الأحد–الخميس. الأوقات الثابتة: 7:30، 8:00، 8:30، 9:00، 9:30، 10:00، 10:30، 11:00. الحقول: `subject` المادة، `specialist` الأخصائي، `notes`.
+حصة واحدة لكل (طالب، يوم، وقت). الأيام: الأحد–الخميس. الحقول: `subject` المادة، `specialist` الأخصائي، `notes`.
+
+الأوقات ثابتة مثل النموذج الورقي — `SCHEDULE_SHIFTS` في `apps/students/models.py`، ونسختها `SCHEDULE_SHIFTS` في `frontend/src/types/index.ts` (لازم تتطابقان):
+
+| الفترة | الحصص | بريك | أعمال مكتبية |
+|--------|-------|------|--------------|
+| صباحي | 6:30، 7:00، 7:30، 8:00، 9:00، 9:30، 10:00، 10:30 | 8:30 | 11:00 |
+| مسائي | 12:30، 1:00، 1:30، 2:00، 3:00، 3:30، 4:00، 4:30 | 2:30 | 5:00 |
+
+- الحجز يُقبل فقط في أوقات حصص **فترة الطالب الدراسية** — البريك والأعمال المكتبية والفترة الأخرى تُرفض (فردي وجماعي).
+- جدول الطالب يعرض فترته، و«جدولي» للمختص يعرض الفترتين بزرّين.
+- الحصص القديمة اللي وقتها صار خارج الأوقات المعتمدة لا تُحذف: تظهر تحت الجدول في «حصص خارج أوقات الحصص المعتمدة» لإعادة جدولتها، وتبقى قابلة للتعديل ما دام وقتها ما تغيّر.
+- الأوقات واحدة لكل الفروع حاليًا (نسخة مبدئية) — أوقات مرنة لكل فرع/مختص مؤجلة.
 
 ### الخطط
 
@@ -290,10 +334,24 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | `PlanGoal` | نص الأهداف لكل مجال من 6 ثابتة: الاجتماعي، الاستقلالي، المعرفي، التواصل، الإدراكي، الحركي |
 | `PlanAttachment` | ملف Word/Excel جاهز للخطة |
 | `IndividualPlan` | خطة فردية + ملاحظات |
-| `IndividualPlanGoal` | `domain` (نص حر)، `goal_text`، `start_date`، `end_date`، `post_evaluation`، `order`، `achieved_date` |
-| `GoalAnalysisSheet` | نموذج تحليل الأهداف: `domain`، `start_date`، `ratings`، `teaching_aids`، `teacher_note` |
+| `IndividualPlanGoal` | `domain` (نص حر)، `goal_text`، `start_date`، `end_date`، `post_evaluation`، `post_evaluation_manual`، `order`، `achieved_date` |
+| `IndividualPlanSubGoal` | هدف فرعي: `text`، `post_evaluation`، `order`، `achieved_date` (بند في نموذج التحليل) |
+| `GoalAnalysisSheet` | نموذج تحليل لهدف واحد: `goal`، `start_date`، `ratings`، `teaching_aids`، `teacher_note` — فريد لكل (هدف، تاريخ بداية) |
 | `QuarterlyPlan` | خطة فصلية: أخصائي مسؤول، تاريخ بداية ونهاية الفصل، ملاحظات |
-| `QuarterlyPlanGoal` | نفس حقول هدف الخطة الفردية |
+| `QuarterlyPlanGoal` | نفس حقول هدف الخطة الفردية (بدون `achieved_date`) |
+| `QuarterlyPlanSubGoal` | هدف فرعي: `text`، `post_evaluation`، `order` |
+
+**الأهداف الفرعية** (مستوى واحد): تحت كل هدف زر «+ هدف فرعي». تقييم الهدف الرئيسي **يُحسب تلقائيًا** من تقييمات أهدافه الفرعية، والمختص يقدر يعدّله يدويًا (`post_evaluation_manual=true`، وزر ↺ يرجعه للحساب التلقائي). قاعدة الحساب (`IndividualPlanGoal.evaluation_from_sub_goals` في الخادم = `evaluationFromSubGoals` في الواجهة):
+
+| تقييمات الأهداف الفرعية | تقييم الهدف |
+|------------------------|------------|
+| كلها «تحقق» (و«لم يطبق» لا يُحسب) | تحقق |
+| بعضها تحقق أو نوعًا ما | نوعًا ما |
+| ولا واحد تحقق | لم يتحقق |
+| كلها «لم يطبق» | لم يطبق |
+| ولا واحد مقيَّم | بدون تقييم |
+
+الهدف الفرعي غير المقيَّم يمنع «تحقق» الكامل. الأهداف الفرعية تُحدَّث بمعرّفاتها مثل الأهداف حتى تبقى بنود التحليل مربوطة بها.
 
 **المجالات الافتراضية** للخطة الفردية والفصلية (يمكن حذفها أو إضافة غيرها): الإدراكي، الحركي الدقيق، الحركي الكبير، الاجتماعي، الاستقلالي، الانتباه والتركيز، التخاطب.
 
@@ -303,13 +361,18 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 
 نموذج متابعة يومية للخطة الفردية، بنفس تخطيط «نموذج جمع البيانات» الورقي:
 
-- نموذج لكل مجال في الخطة، وصفوفه هي أهداف المجال (تنزل تلقائيًا من الخطة).
-- كل نموذج = شهر متابعة: 20 يوم دراسي (الأحد–الخميس) تبدأ من `start_date`، والتواريخ تُحسب تلقائيًا. بعد الشهر يُفتح نموذج جديد ويبقى السابق محفوظًا.
-- `ratings`: `{"<goal_id>": [20 قيمة]}`، كل قيمة: `0` لم يُقيَّم · `1` مستقل (أنجز) · `2` إيمائية · `3` مساعدة لفظية · `4` مساعدة جزئية.
-- تاريخ إنجاز الهدف يُحفظ على الهدف نفسه (`IndividualPlanGoal.achieved_date`).
+- **نموذج لكل هدف** (مجال فيه 7 أهداف = 7 نماذج). الصفحة: اختيار المجال ← بطاقات أهدافه المرقّمة ← نموذج الهدف.
+- **بنود النموذج = الأهداف الفرعية للهدف**، أو الهدف نفسه كبند وحيد لو ما له أهداف فرعية.
+- كل نموذج = شهر متابعة: 20 يوم دراسي تبدأ من `start_date` (أي يوم — الهدف قد يبدأ وسط الأسبوع). الأيام تتخطى **أيام الإجازة الأسبوعية والعطل الرسمية من الإعدادات** (`SiteSettings.weekly_off_days` و`Holiday`)، وحرف كل عمود (ح ن ث ع خ) يُؤخذ من تاريخه الفعلي. التواريخ تُحسب عند العرض، فتعديل الإعدادات يغيّرها للأشهر القائمة.
+- بعد الشهر يُفتح نموذج جديد (يبدأ من اليوم الدراسي التالي) ويبقى السابق محفوظًا. زر «حذف الشهر» يحذف شهرًا بتقييماته (لمن له تعديل الخطط الفردية) ويُسجَّل في سجل العمليات.
+- `ratings`: `{"<sub_goal_id>" | "goal": [20 قيمة]}` — المفتاح `goal` لبند الهدف نفسه. كل قيمة: `0` لم يُقيَّم · `1` مستقل (أنجز) · `2` إيمائية · `3` مساعدة لفظية · `4` مساعدة جزئية.
+- تاريخ الإنجاز لكل بند: على الهدف الفرعي (`IndividualPlanSubGoal.achieved_date`)، أو على الهدف لو كان بندًا وحيدًا.
+- **أول هدف فرعي يُضاف لهدف كان يُقيَّم:** تنتقل تقييماته (`goal`) وتاريخ إنجازه للهدف الفرعي الأول.
 - اسم المعلمة في الرأس: معلم/ة فصل الطالب، وإلا من أنشأ الخطة.
 
-> تعديل الخطة الفردية يُحدِّث الأهداف بمعرّفاتها (`id`) بدل حذفها وإعادة إنشائها، حتى تبقى تقييمات تحليل الأهداف مربوطة بأهدافها.
+> تعديل الخطة الفردية يُحدِّث الأهداف والأهداف الفرعية بمعرّفاتها (`id`) بدل حذفها وإعادة إنشائها، حتى تبقى تقييمات تحليل الأهداف مربوطة بها.
+>
+> النماذج القديمة (نموذج لكل مجال) قُسّمت بالـ migration `students.0030` إلى نموذج لكل هدف بنفس التقييمات والوسائل والملاحظة والتواريخ.
 
 ### المقاييس (`apps.assessments`)
 
@@ -345,7 +408,7 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | النموذج | الوصف |
 |---------|-------|
 | `Branch` | الفرع: الاسم، المدينة، الموقع، الهاتف |
-| `Bus` | الباص: رقم الهيكل واللوحة، الماركة، سنة الصنع، الفرع، انتهاء الاستمارة والفحص |
+| `Bus` | الباص: رقم الهيكل واللوحة، الماركة، سنة الصنع، الفرع، انتهاء الاستمارة والفحص، بداية وانتهاء التأمين (اختياري) — شارة «منتهي: ...» لأي تاريخ منتهٍ |
 | `BusShift` | فترة تشغيل (صباحي/مسائي) بسائق ومشرف/ة |
 | `Classroom` | الفصل: الاسم، الفرع، المعلم/ة |
 | `SiteSettings` | صف واحد: اسم المركز، التواصل، الشعار، أيام الإجازة الأسبوعية |
@@ -370,6 +433,8 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 ## API Endpoints
 
 كل المسارات تبدأ بـ `/api/`. المصادقة عبر الهيدر `Authorization: Bearer <access_token>`.
+
+**الترقيم:** القوائم 20 بالصفحة افتراضيًا، ويمكن طلب أكثر بـ `?page_size=` (حد أقصى 1000) — `apps/core/pagination.py`.
 
 ### المصادقة والمستخدمون — `/api/auth/`
 
@@ -442,7 +507,7 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | `plans/` | GET | كل الخطط الشهرية | `assessments` |
 | `students/{id}/individual-plans/` · `{pk}/` | GET, POST · GET, PATCH, DELETE | الخطة الفردية | `individual_plans` |
 | `individual-plans/` | GET | كل الخطط الفردية | `individual_plans` |
-| `students/{id}/individual-plans/{pid}/analysis-sheets/` · `{sid}/` | GET, POST · GET, PATCH, DELETE | نماذج تحليل الأهداف (PATCH يقبل `achieved_dates: {goal_id: date}`) | `individual_plans` |
+| `students/{id}/individual-plans/{pid}/analysis-sheets/` · `{sid}/` | GET, POST · GET, PATCH, DELETE | نماذج تحليل الأهداف — POST: `{goal, start_date}`، PATCH يقبل `achieved_dates: {"<sub_goal_id>"\|"goal": date}` | `individual_plans` |
 | `students/{id}/quarterly-plans/` · `{pk}/` | GET, POST · GET, PATCH, DELETE | الخطط الفصلية | `quarterly_plans` |
 | `quarterly-plans/` | GET | كل الخطط الفصلية | `quarterly_plans` |
 
@@ -461,6 +526,7 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 |--------|-------|-------|---------|
 | `branches/` · `{pk}/` | GET, POST · PATCH, DELETE | الفروع | تعديل: admin |
 | `buses/` · `{pk}/` | GET, POST · PATCH, DELETE | الباصات | تعديل: وحدة `buses` |
+| `buses/mine/` | GET | «باصي» — فترات السائق/المشرف وطلابها (الاسم والعنوان فقط) | مسجّل |
 | `buses/{id}/shifts/` · `{pk}/` | GET, POST · PATCH, DELETE | فترات التشغيل | تعديل: وحدة `buses` |
 | `classrooms/` · `{pk}/` | GET, POST · PATCH, DELETE | الفصول | تعديل: وحدة `classrooms` |
 | `settings/` | GET, PATCH | إعدادات المركز | تعديل: admin |
@@ -499,8 +565,8 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 
 | المسار | الوصف | الصلاحية |
 |--------|-------|---------|
-| `GET students/export/` | تصدير Excel | `students.can_export` |
-| `GET students/export/csv/` | تصدير CSV | `students.can_export` |
+| `GET students/export/` | تصدير Excel | `students.can_export` + البيانات السرية |
+| `GET students/export/csv/` | تصدير CSV | `students.can_export` + البيانات السرية |
 | `GET students/import/template/` | قالب Excel | مسجّل |
 | `GET students/import/csv/template/` | قالب CSV | مسجّل |
 | `POST students/import/` | استيراد Excel | `students.can_import` |
@@ -548,8 +614,66 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | GET | `portal/dashboard/` | ملخص |
 | GET | `portal/student/` | بيانات الطالب |
 | GET | `portal/attendance/` | سجل الحضور |
+| GET | `portal/virtual-sessions/` | الحصص الأونلاين الجارية والقادمة (14 يومًا) لفصل الطالب |
+| POST | `portal/virtual-sessions/{id}/join/` | رابط الدخول وكلمة المرور واسم العرض — ويسجّل حضور الطالب |
 
 رقم الجوال يُقبل بصيغة `05XXXXXXXX` أو `5XXXXXXXX`، ويُطابق مع `phone` أو `phone_alt` لأي ولي أمر مسجل للطالب.
+
+> **مؤجل:** صفحة ويب مؤقتة لأولياء الأمور (`frontend/src/app/parent/` + `frontend/src/lib/portalApi.ts`) موجودة محليًا **ولم تُرفع**، بانتظار قرار طريقة الدخول (جوال + رقم ملف أحد الأبناء، أو جوال + OTP) وعرض كل أبناء ولي الأمر بدخول واحد.
+
+---
+
+## الفصول الافتراضية (Zoho Meeting)
+
+حصص أونلاين لكل فصل، **مسجّلة إلزاميًا** (متطلب الوزارة)، والتسجيلات تُؤرشف خارج Zoho. الكود: `backend/apps/virtual_classes/`، الواجهة: `/virtual-classes`.
+
+### كيف تعمل
+
+1. **ربط حساب المعلم:** كل معلم فصل يضغط مرة «ربط حساب Zoho» بصفحة الفصول الافتراضية ← يسجّل دخول Zoho ويوافق ← يرجع للمنصة. يُرفض الربط لو إيميل حساب Zoho لا يطابق إيميله في المنصة، أو الحساب خارج منظمة المركز.
+2. **الجدولة:** تُنشأ الحصة لفصل **معلمه رابط حساب Zoho** فقط (لا رجوع لحساب المركز) — الاجتماع يُنشأ بحساب المعلم ويصير هو المضيف، فيمكن تشغيل حصص متزامنة لمعلمين مختلفين. الحساب المضيف يُثبَّت على الحصة (`VirtualSession.zoho_account`) ويُستخدم للتعديل والإلغاء وجلب التسجيلات. الحصص القديمة على حساب المركز (`zoho_account=null`) تبقى تعمل.
+3. **البدء:** «ابدأ الحصة» يفتح رابط المضيف — **المعلم يشغّل التسجيل بعد البدء**.
+4. **دخول الطلاب:** من تطبيق أولياء الأمور (زر «الحصص»)، نافذة الدخول من 10 دقائق قبل البداية إلى 15 دقيقة بعد النهاية، ويُسجَّل الحضور تلقائيًا (`SessionAttendance`).
+5. **الأرشفة:** خدمة الجدولة كل 15 دقيقة تكتشف التسجيلات (حالة `UPLOADED` في Zoho) وتحمّلها لتخزين التسجيلات، وزر «مزامنة» على الحصة يفعل نفس الشيء فورًا.
+6. **المشاهدة:** من «السابقة والتسجيلات» داخل المنصة برابط مؤقت موقّع (3 ساعات)، مع التقديم والتأخير.
+
+### النماذج
+
+| النموذج | الوصف |
+|---------|-------|
+| `ZohoAccount` | حساب Zoho لمعلم: `user` (1:1)، `zuid`، `zsoid`، `email`، `refresh_token` (لا يُعرض بأي شاشة) |
+| `VirtualSession` | الحصة: الفصل، العنوان، الموعد، المدة، الحالة (`scheduled`/`cancelled`)، بيانات اجتماع Zoho، `zoho_account` المضيف. `live_state` محسوب: upcoming / live / ended / cancelled |
+| `SessionRecording` | تسجيل: `zoho_recording_id`، الملف، الحجم، الحالة (`pending`/`archived`/`failed` بعد 5 محاولات)، `storage_backend` (`remote`/`local`) |
+| `SessionAttendance` | حضور الطالب للحصة: أول/آخر دخول، عدد مرات الدخول |
+
+### API — `/api/virtual-classes/`
+
+| الطريقة | المسار | الوصف |
+|---------|--------|-------|
+| GET, POST | `sessions/?when=upcoming\|past&classroom=` | قائمة الحصص / الجدولة (ينشئ اجتماع Zoho) |
+| GET, PATCH, DELETE | `sessions/{id}/` | تفاصيل / تعديل (يحدّث Zoho) / إلغاء (يحذف اجتماع Zoho لو لم يبدأ) |
+| POST | `sessions/{id}/start/` | رابط بدء المضيف (معلم الفصل أو الإدارة) |
+| POST | `sessions/{id}/sync/` | فحص التسجيلات فورًا وأرشفتها بالخلفية |
+| GET | `sessions/{id}/attendance/` | حضور طلاب الفصل للحصة |
+| GET | `recordings/{id}/play/` | رابط مشاهدة مؤقت |
+| GET, POST | `zoho-recordings/` | استيراد تسجيلات قديمة من حساب المركز (`virtual_classes.can_import`) |
+| GET, POST, DELETE | `zoho/connect/` | حالة ربط حساب المستخدم / رابط بدء الربط / إلغاء الربط |
+| GET | `zoho/callback/` | يرجع له Zoho بعد الموافقة (بلا JWT — الهوية من `state` موقَّع، صالح 15 دقيقة) |
+
+الصفوف المرئية: مدير النظام الكل، معلم الفصل فصوله، صاحب وحدة `virtual_classes` فصول فروعه. `GET /api/classrooms/` يرجع `teacher_zoho_linked` لتعطيل الفصول غير الجاهزة بنافذة الجدولة.
+
+### Zoho — ملاحظات تقنية
+
+- مركز البيانات **السعودي**: `accounts.zoho.sa` / `meeting.zoho.sa` / `files.zoho.sa`. المنظمة `zsoid=150000862044`، الخطة Workplace Standard (100 مشارك).
+- **عميلان في api-console.zoho.sa:**
+  - **Self Client** (`ZOHO_CLIENT_ID`/`ZOHO_CLIENT_SECRET`/`ZOHO_REFRESH_TOKEN`) — حساب المركز، للحصص القديمة واستيراد التسجيلات.
+  - **Server-based «Roya ERP»** (`ZOHO_WEB_CLIENT_ID`/`ZOHO_WEB_CLIENT_SECRET`) — ربط حسابات المعلمين. Redirect URI المسجّل: `https://roya-backend-production.up.railway.app/api/virtual-classes/zoho/callback/` (لازم يطابق `ZOHO_WEB_REDIRECT_URI`).
+- **الصلاحيات المطلوبة** (متحقَّق منها): `ZohoMeeting.meeting.ALL, ZohoMeeting.recording.ALL, ZohoMeeting.manageOrg.READ, ZohoMeeting.meetinguds.READ, ZohoFiles.files.READ, WorkDrive.files.READ` — بدون آخر ثلاث يفشل تحميل ملف التسجيل (401/403).
+- خانة المقدّم (`presenter`) في Zoho تقبل `zuid` رقمي فقط (الإيميل يُرفض)، وواجهات قائمة مستخدمي المنظمة غير متاحة لحساب المركز — لهذا اعتُمد ربط كل معلم لحسابه.
+
+### تخزين التسجيلات
+
+- **Cloudflare R2**، مخزن خاص `rwad-recordings` (Public access مقفول) — منفصل عن مخزن الملفات العامة `rwad-altaheel` لأن روابطه عامة. `apps/virtual_classes/storage.py`: وجود `RECORDINGS_BUCKET_NAME` يفعّل R2/S3 بروابط موقّعة، وغيابه = قرص الخادم (يُمسح مع كل نشر على Railway).
+- `python manage.py sync_zoho_recordings [--days 7] [--repair]` — `--repair` يعيد للأرشفة أي تسجيل «مؤرشف» ملفه مفقود من التخزين (يُحمَّل من Zoho من جديد)؛ مع R2 يفحص فقط ما حُفظ قبل تفعيله (`storage_backend != remote`).
 
 ---
 
@@ -585,6 +709,17 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 
 > قاعدة البيانات **لا تُحذف** عند التحديث — البيانات محفوظة.
 
+**خدمات Railway:**
+
+| الخدمة | الوصف |
+|--------|-------|
+| `ROYA-BACKEND` | الـ API — `roya-backend-production.up.railway.app` |
+| `Rwad-ERP` | الواجهة — `rwad-erp-production.up.railway.app` / `www.royaerp.com` |
+| `Postgres` | قاعدة البيانات |
+| `recordings-cron` | **Cron كل 15 دقيقة** (`*/15 * * * *`) — Root Directory `/backend`، Custom Start Command: `DJANGO_SETTINGS_MODULE=rwad_erp.settings.production python manage.py sync_zoho_recordings --repair`. متغيراتها مربوطة بالـ backend: `${{ROYA-BACKEND.VAR}}` (الأحرف الكبيرة مهمة) و`DATABASE_URL=${{Postgres.DATABASE_URL}}`، وتحتاج `SECRET_KEY` و`ZOHO_*` و`ZOHO_WEB_*` و`RECORDINGS_*`. التحقق: Cron Runs ← View logs |
+
+> **⚠️ Config-as-code (`railway.json`) يتوقف في Railway بتاريخ 2026-12-01.** قبلها انسخ أمر التشغيل أعلاه إلى **Settings ← Deploy ← Custom Start Command** لخدمة `ROYA-BACKEND` (وأمر الواجهة لخدمتها)، حتى لا يتعطل النشر.
+
 ### المتغيرات البيئية (Production)
 
 | المتغير | الوصف |
@@ -599,3 +734,47 @@ User (1) → UserModulePermission (many), SpecialistCertificate (many)
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | مفاتيح التخزين |
 | `AWS_S3_ENDPOINT_URL` | رابط R2 (لـ Cloudflare R2 فقط) |
 | `AWS_S3_REGION_NAME` / `AWS_S3_CUSTOM_DOMAIN` | اختياري |
+| `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` / `ZOHO_REFRESH_TOKEN` | Self Client لحساب المركز |
+| `ZOHO_ORG_ID` / `ZOHO_PRESENTER_ID` | `zsoid` المنظمة و`zuid` حساب المركز |
+| `ZOHO_WEB_CLIENT_ID` / `ZOHO_WEB_CLIENT_SECRET` | عميل Server-based لربط حسابات المعلمين |
+| `ZOHO_WEB_REDIRECT_URI` | اختياري — الافتراضي رابط الـ callback على `roya-backend-production` |
+| `ZOHO_ACCOUNTS_URL` / `ZOHO_MEETING_URL` | اختياري — الافتراضي `zoho.sa` |
+| `RECORDINGS_BUCKET_NAME` | مخزن التسجيلات الخاص (`rwad-recordings`) — بدونه تُحفظ على القرص وتُمسح مع النشر |
+| `RECORDINGS_ENDPOINT_URL` | `https://<Account ID>.r2.cloudflarestorage.com` |
+| `RECORDINGS_REGION_NAME` | `auto` لـ R2 |
+| `RECORDINGS_ACCESS_KEY_ID` / `RECORDINGS_SECRET_ACCESS_KEY` | توكن R2 بصلاحية Object Read & Write على `rwad-recordings` فقط |
+| `RECORDINGS_URL_EXPIRE_SECONDS` | اختياري — مدة رابط المشاهدة (الافتراضي 10800 = 3 ساعات) |
+
+---
+
+## سجل التحديثات
+
+### 3–5 نوفمبر 2026
+
+**الفصول الافتراضية**
+- بناء وحدة الحصص الأونلاين عبر Zoho Meeting: الجدولة من المنصة، رابط بدء المضيف، دخول الطلاب من تطبيق أولياء الأمور مع تسجيل الحضور، أرشفة التسجيلات وتشغيلها داخل المنصة، واستيراد التسجيلات القديمة.
+- نقل تخزين التسجيلات من قرص Railway (كان يُمسح مع كل نشر) إلى مخزن R2 خاص، مع استرجاع التسجيلات الممسوحة من Zoho (`--repair`) وخدمة Cron كل 15 دقيقة.
+- ربط حساب Zoho لكل معلم (OAuth) بشرط تطابق الإيميل؛ الجدولة صارت مشروطة بربط معلم الفصل لحسابه.
+
+**الخطط وتحليل الأهداف**
+- أهداف فرعية للخطة الفصلية والخطة الفردية، بتقييم تلقائي للهدف الرئيسي قابل للتعديل اليدوي.
+- تحليل الأهداف: نموذج لكل هدف بدل نموذج لكل مجال، بنوده الأهداف الفرعية، مع تقسيم النماذج القديمة تلقائيًا.
+- أيام التحليل تتخطى الإجازة الأسبوعية والعطل الرسمية من الإعدادات، والبداية من أي يوم بحروف أيام صحيحة، وزر «حذف الشهر».
+
+**الجدول الدراسي**
+- فترتان صباحي (6:30–11:30) ومسائي (12:30–5:30) مثل النموذج الورقي، بريك وأعمال مكتبية، «الفترة الدراسية» للطالب، وزرّا صباحي/مسائي في «جدولي».
+
+**الصلاحيات وحماية البيانات**
+- إصلاح قطع القوائم عند 20 صفًا (مستفيدو المختص، طلاب الباص والفصل، اختيار طلاب الحصة الجماعية).
+- طاقم النقل: دور «مسؤول الحركة» جديد، وصفحة «باصي» للسائق/المشرف، ومنع كامل لبيانات المستفيدين.
+- إغلاق ثغرة: المستخدم بلا فرع كان يرى كل الطلاب — صار لا يرى شيئًا (إلا المدير).
+- البيانات السرية: إخفاء الهويات وتواصل أولياء الأمر ودراسة الحالة وصور الهوية وكرت العائلة عمّن ليس له صلاحية «البيانات السرية».
+
+**الباصات**
+- تاريخ بداية وانتهاء التأمين مع تنبيه الانتهاء.
+
+**معلّق / للمتابعة**
+- إعادة توليد Client Secret لعميلي Zoho (ظهرا أثناء الإعداد).
+- نسخ أوامر التشغيل لإعدادات خدمات Railway قبل توقف Config-as-code (2026-12-01).
+- صفحة ولي الأمر المؤقتة وطريقة الدخول (غير مرفوعة).
+- من «متطلبات المنصة حاليًا» (الإدارة): تسمية «تكرار» و«التقرير الشهري الخاص بالمعلم»، دور المشرف التربوي، صلاحية مديرة فرع الزلفي إناث للإسناد، تكملة تحليل الأهداف (تاريخ انتهاء يدوي، تعديل يوم بعينه، مرفقات)، خطط وتقارير الأقسام مع PDF، جدول الجلسات، تصنيف الحالات (وزاري/مجاني/مدفوع)، نماذج الاجتماعي والطبي، بنك الأهداف، الأرشيف، التواصل مع الأهل والمكتبة، قسم التأهيل المهني، الشكاوى، وأوقات جدول مرنة لكل فرع/مختص.

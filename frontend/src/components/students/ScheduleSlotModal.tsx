@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import { X, Save, Trash2 } from 'lucide-react';
 import { authApi } from '@/lib/api';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { SCHEDULE_DAYS, scheduleTimeLabel } from '@/types';
 import type { ScheduleSlot, ScheduleSlotFormData, ScheduleDay, User } from '@/types';
 
@@ -28,7 +29,7 @@ interface Props {
 }
 
 export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSave, onDelete, loading }: Props) {
-  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, formState: { errors, isDirty } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       subject:    slot?.subject || '',
@@ -36,6 +37,9 @@ export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSav
       notes:      slot?.notes || '',
     },
   });
+
+  const confirmLeave = useUnsavedChanges(isDirty);
+  const close = () => { if (confirmLeave()) onClose(); };
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
@@ -69,7 +73,7 @@ export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSav
             <h3 className="font-semibold text-gray-800">{slot ? 'تعديل الحصة' : 'إضافة حصة'}</h3>
             <p className="text-xs text-gray-400 mt-0.5">{dayLabel} — {timeLabel}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <button onClick={close} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <form onSubmit={handleSubmit(submit)} className="p-5 space-y-4">
@@ -106,7 +110,7 @@ export default function ScheduleSlotModal({ day, startTime, slot, onClose, onSav
               </button>
             ) : <span />}
             <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="btn-secondary">إلغاء</button>
+              <button type="button" onClick={close} className="btn-secondary">إلغاء</button>
               <button type="submit" disabled={loading} className="btn-primary">
                 {loading ? 'جارٍ الحفظ...' : <><Save size={15} /> حفظ</>}
               </button>

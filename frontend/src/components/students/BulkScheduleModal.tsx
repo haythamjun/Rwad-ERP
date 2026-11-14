@@ -6,6 +6,7 @@ import { X, Save, Trash2, Search } from 'lucide-react';
 import { authApi, studentsApi } from '@/lib/api';
 import { SCHEDULE_DAYS, SCHEDULE_SHIFTS, shiftSessions } from '@/types';
 import type { BusShiftType, ScheduleClassGroup, ScheduleDay, User, Student, PaginatedResponse } from '@/types';
+import { useChangedSince, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
 interface Props {
   branchId: number;
@@ -38,6 +39,11 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
     new Set((classGroup?.students || []).map(m => m.student_id))
   );
   const [subjectError, setSubjectError] = useState('');
+
+  // البحث وتبديل الفترة وحدهما ما يُعتبران تعديلًا — المهم البيانات اللي تنحفظ
+  const dirty = useChangedSince({ day, startTime, subject, specialist, notes, selected: Array.from(selected).sort() });
+  const confirmLeave = useUnsavedChanges(dirty);
+  const close = () => { if (confirmLeave()) onClose(); };
 
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users'],
@@ -104,7 +110,7 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">{isEdit ? 'تعديل الحصة الجماعية' : 'إنشاء حصة جماعية'}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <button onClick={close} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -228,7 +234,7 @@ export default function BulkScheduleModal({ branchId, classGroup, onClose, onCre
               </button>
             ) : <span />}
             <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="btn-secondary">إلغاء</button>
+              <button type="button" onClick={close} className="btn-secondary">إلغاء</button>
               <button type="button" onClick={submit} disabled={loading} className="btn-primary">
                 {loading ? 'جارٍ الحفظ...' : <><Save size={15} /> حفظ</>}
               </button>

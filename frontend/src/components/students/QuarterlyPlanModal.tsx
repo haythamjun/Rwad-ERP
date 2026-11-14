@@ -6,6 +6,7 @@ import { X, Save, Plus, Trash2, FolderPlus, CornerDownLeft, RotateCcw } from 'lu
 import { authApi } from '@/lib/api';
 import { INDIVIDUAL_PLAN_DEFAULT_DOMAINS, INDIVIDUAL_PLAN_EVALUATIONS, evaluationFromSubGoals } from '@/types';
 import type { QuarterlyPlan, IndividualPlanEvaluation, User } from '@/types';
+import { useChangedSince, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 
 interface Props {
   plan?: QuarterlyPlan | null;
@@ -84,6 +85,10 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
   });
   const [newDomainName, setNewDomainName] = useState('');
 
+  const dirty = useChangedSince({ specialist, startDate, endDate, notes, goals, domains });
+  const confirmLeave = useUnsavedChanges(dirty);
+  const close = () => { if (confirmLeave()) onClose(); };
+
   const { data: users = [] } = useQuery<User[]>({
     queryKey: ['users', 'all'],
     queryFn: () => authApi.allUsers().then(r => { const d = r.data; return Array.isArray(d) ? d : (d.results ?? []); }),
@@ -156,7 +161,7 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">{plan ? 'تعديل الخطة الفصلية' : 'إضافة خطة فصلية'}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <button onClick={close} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -344,7 +349,7 @@ export default function QuarterlyPlanModal({ plan, onClose, onSave, loading }: P
         </div>
 
         <div className="flex justify-end gap-3 p-5 border-t border-gray-100">
-          <button type="button" onClick={onClose} className="btn-secondary">إلغاء</button>
+          <button type="button" onClick={close} className="btn-secondary">إلغاء</button>
           <button type="button" disabled={loading} onClick={submit} className="btn-primary">
             {loading ? 'جارٍ الحفظ...' : <><Save size={15} /> حفظ</>}
           </button>

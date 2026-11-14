@@ -15,6 +15,7 @@ import { studentsApi, guardiansApi, familyApi, attachmentsApi, branchesApi } fro
 import { canSeeConfidential } from '@/types';
 import type { Branch } from '@/types';
 import { useAuthStore } from '@/store/authStore';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import Header from '@/components/layout/Header';
 
 // ─── Zod schema for basic student data ───────────────────────────────────────
@@ -224,6 +225,10 @@ export default function NewStudentPage() {
 
   // ── Wizard step ──────────────────────────────────────────────────────────
   const [step, setStep] = useState(1);
+
+  // أي إدخال بأي خطوة (حقول، أولياء أمر، مرفقات) — onChange يلتقط كل الحقول تحت الصفحة
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
   const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   const STEP_1_FIELDS = ['first_name', 'middle_name', 'grandfather_name', 'family_name',
@@ -488,7 +493,7 @@ export default function NewStudentPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5 max-w-4xl" onChange={() => setTouched(true)}>
       <Header
         title="إضافة طالب جديد"
         subtitle={`الخطوة ${step} من ${STEPS.length} — ${STEPS[step - 1].label}`}

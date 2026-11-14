@@ -9,6 +9,7 @@ import { ArrowRight, Save, Printer, Plus, Grid3x3, Trash2 } from 'lucide-react';
 import { individualPlansApi, goalAnalysisApi, studentsApi, siteSettingsApi, holidaysApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { mediaUrl } from '@/lib/utils';
+import { useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import Header from '@/components/layout/Header';
 import { GOAL_ANALYSIS_LEVELS, GOAL_ANALYSIS_GOAL_ROW } from '@/types';
 import type {
@@ -298,7 +299,8 @@ export default function GoalAnalysisPage() {
     }
   }, [goalSheets, goal, calendar]);
 
-  const confirmDiscard = () => !dirty || window.confirm('فيه تعديلات ما انحفظت. تبغى تتركها؟');
+  // داخل الصفحة (تبديل مجال/هدف/شهر) وخارجها (روابط، إغلاق التبويب)
+  const confirmDiscard = useUnsavedChanges(dirty);
 
   const createMutation = useMutation({
     mutationFn: () => goalAnalysisApi.create(studentId, planPk, { goal: goalId, start_date: newStart, ratings: {} }),

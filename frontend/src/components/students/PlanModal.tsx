@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { X, Save, Paperclip, Upload, Trash2, FileText } from 'lucide-react';
 import { authApi, plansApi } from '@/lib/api';
 import { mediaUrl } from '@/lib/utils';
+import { useChangedSince, useUnsavedChanges } from '@/lib/useUnsavedChanges';
 import { PLAN_DOMAINS } from '@/types';
 import type { Plan, PlanAttachment, PlanDomain, User } from '@/types';
 
@@ -46,6 +47,11 @@ export default function PlanModal({ studentId, plan, onClose, onSave, onAttachme
   const [uploading, setUploading]     = useState(false);
   const [deletingId, setDeletingId]   = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // المرفقات تُرفع/تُحذف فورًا — ما تدخل في "غير محفوظ"
+  const dirty = useChangedSince({ teacher, startDate, endDate, goalsByDomain });
+  const confirmLeave = useUnsavedChanges(dirty);
+  const close = () => { if (confirmLeave()) onClose(); };
 
   const { data: teachers = [] } = useQuery<User[]>({
     queryKey: ['users-for-plans'],
@@ -110,7 +116,7 @@ export default function PlanModal({ studentId, plan, onClose, onSave, onAttachme
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <h3 className="font-semibold text-gray-800">{plan ? 'تعديل الخطة الشهرية' : 'إضافة خطة شهرية'}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <button onClick={close} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -214,7 +220,7 @@ export default function PlanModal({ studentId, plan, onClose, onSave, onAttachme
         </div>
 
         <div className="flex justify-end gap-3 p-5 border-t border-gray-100">
-          <button type="button" onClick={onClose} className="btn-secondary">إلغاء</button>
+          <button type="button" onClick={close} className="btn-secondary">إلغاء</button>
           <button type="button" disabled={loading} onClick={submit} className="btn-primary">
             {loading ? 'جارٍ الحفظ...' : <><Save size={15} /> حفظ</>}
           </button>
